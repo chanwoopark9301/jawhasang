@@ -3,6 +3,7 @@
 - 로그인 (세션 기반, ecrk.env의 APP_PASSWORD)
 - 데이터 암호화 저장 (Fernet / APP_PASSWORD로 키 유도)
 - Anthropic API 프록시
+- 저장소: PostgreSQL (DATABASE_URL) 또는 로컬 data.json 폴백
 """
 
 import os
@@ -21,7 +22,8 @@ from cryptography.fernet import Fernet, InvalidToken
 load_dotenv('ecrk.env')
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
 APP_PASSWORD      = os.getenv('APP_PASSWORD', '')
-DATA_FILE = 'data.json'
+DATABASE_URL      = os.getenv('DATABASE_URL', '')
+DATA_FILE         = 'data.json'
 
 app = Flask(__name__, static_folder='.')
 app.secret_key = hashlib.sha256((APP_PASSWORD + '_sk').encode()).hexdigest()
@@ -40,27 +42,76 @@ def _encrypt(data: dict) -> bytes:
 def _decrypt(raw: bytes) -> dict:
     return json.loads(_fernet().decrypt(raw).decode())
 
+# ---------------------------------------------------------------------------
+# 저장소 — PostgreSQL 또는 로컬 파일 폴백
+# ---------------------------------------------------------------------------
+
+EMPTY = lambda: {'students': [], 'sessions': [], 'aiResults': {}, 'my_topics': [], 'my_records': []}
+
+def _get_db_conn():
+    import psycopg2
+    return psycopg2.connect(DATABASE_URL, sslmode='require')
+
+def _ensure_table(conn):
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS app_storage (
+                id INTEGER PRIMARY KEY DEFAULT 1,
+                data BYTEA
+            )
+        """)
+    conn.commit()
+
 def read_data() -> dict:
-    empty = {'students': [], 'sessions': [], 'aiResults': {}, 'my_topics': [], 'my_records': []}
+    if DATABASE_URL:
+        try:
+            conn = _get_db_conn()
+            _ensure_table(conn)
+            with conn.cursor() as cur:
+                cur.execute("SELECT data FROM app_storage WHERE id = 1")
+                row = cur.fetchone()
+            conn.close()
+            if not row:
+                return EMPTY()
+            return _decrypt(bytes(row[0]))
+        except Exception as e:
+            print(f'DB read error: {e}')
+            return EMPTY()
+    # 로컬 파일 폴백
     if not os.path.exists(DATA_FILE):
-        return empty
+        return EMPTY()
     with open(DATA_FILE, 'rb') as f:
         raw = f.read()
     try:
         return _decrypt(raw)
     except (InvalidToken, Exception):
-        # 이전 비암호화 포맷이면 읽어서 암호화 재저장
         try:
             data = json.loads(raw.decode())
             data.setdefault('aiResults', {})
             write_data(data)
             return data
         except Exception:
-            return empty
+            return EMPTY()
 
 def write_data(data: dict):
+    encrypted = _encrypt(data)
+    if DATABASE_URL:
+        try:
+            conn = _get_db_conn()
+            _ensure_table(conn)
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO app_storage (id, data) VALUES (1, %s)
+                    ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
+                """, (encrypted,))
+            conn.commit()
+            conn.close()
+            return
+        except Exception as e:
+            print(f'DB write error: {e}')
+    # 로컬 파일 폴백
     with open(DATA_FILE, 'wb') as f:
-        f.write(_encrypt(data))
+        f.write(encrypted)
 
 # ---------------------------------------------------------------------------
 # 로그인
@@ -190,6 +241,10 @@ def analyze():
 if __name__ == '__main__':
     if not APP_PASSWORD:
         print('경고: APP_PASSWORD가 ecrk.env에 없습니다. 로그인이 불가능합니다.')
+    if DATABASE_URL:
+        print('저장소: PostgreSQL (Supabase)')
+    else:
+        print('저장소: 로컬 data.json')
     print('상담 일지 서버: http://localhost:5000')
     print('종료: Ctrl+C')
     app.run(port=5000, debug=False)
