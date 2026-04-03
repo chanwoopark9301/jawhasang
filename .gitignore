@@ -1,0 +1,26 @@
+# 환경변수 & API 키 (절대 커밋 금지)
+ecrk.env
+*.env
+
+# 암호화된 데이터 (개인정보)
+data.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+env/
+
+# Claude Code 내부 파일
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 에디터
+.vscode/
+.idea/

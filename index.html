@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>自畵像</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app" id="app">
+
+    <!-- 홈 화면 (오버레이) -->
+    <div id="home-view" class="home-view">
+      <div class="home-inner">
+        <div class="home-logo-area">
+          <div class="home-logo">自畵像</div>
+          <div class="home-tagline">기록이 쌓일수록, 성장이 보입니다</div>
+        </div>
+        <div class="home-cal-wrap" id="home-cal-wrap"></div>
+      </div>
+    </div>
+
+    <!-- 사이드바 -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="view-toggle">
+          <button class="home-nav-btn" onclick="showHome()" title="홈으로">自</button>
+          <div class="view-toggle-pills">
+            <button id="btn-sv" class="active" onclick="setView('student')">상담 기록</button>
+            <button id="btn-dv" onclick="setView('myrecords')">나의 기록</button>
+          </div>
+        </div>
+      </div>
+      <div class="sidebar-list" id="sidebar-list"></div>
+      <div class="sidebar-footer">
+        <button class="add-btn" id="add-btn" onclick="handleAdd()">+ 새 학생 추가</button>
+        <a href="/logout" class="logout-link">로그아웃</a>
+      </div>
+    </aside>
+
+    <div class="resize-handle" id="rh-1"></div>
+
+    <!-- 메인 컨텐츠 -->
+    <main class="main" id="main">
+      <div class="main-header">
+        <div>
+          <div class="main-title" id="main-title">自畵像</div>
+          <div class="main-sub" id="main-sub"></div>
+        </div>
+        <button class="btn-secondary" id="ns-btn" style="display:none;" onclick="handleNsBtn()">
+          + 회기 추가
+        </button>
+      </div>
+      <div class="main-content" id="main-content">
+        <div class="empty-state">왼쪽에서 학생을 선택하거나<br>새 학생을 추가해보세요</div>
+      </div>
+    </main>
+
+    <div class="resize-handle" id="rh-2"></div>
+
+    <!-- AI 분석 패널 -->
+    <aside class="ai-panel" id="ai-panel">
+      <div class="ai-header">
+        <span>학생 정보</span>
+        <span class="ai-header-note">현재 회기</span>
+      </div>
+      <div class="ai-content" id="ai-content">
+        <p class="ai-placeholder">회기를 선택하면<br>AI 분석을 요청할 수 있어요</p>
+      </div>
+      <div class="ai-footer">
+        <button class="analyze-btn" id="analyze-btn" disabled onclick="runAI()">
+          슈퍼비전 보고서 생성 ↗
+        </button>
+      </div>
+    </aside>
+
+    <!-- 모바일 하단 내비게이션 -->
+    <nav class="mobile-nav" id="mobile-nav">
+      <button class="mnav-btn active" id="mnav-list" onclick="setMobilePanel('sidebar')">
+        <span class="mnav-icon">☰</span>
+        <span class="mnav-label">목록</span>
+      </button>
+      <button class="mnav-btn" id="mnav-main" onclick="setMobilePanel('main')">
+        <span class="mnav-icon">◧</span>
+        <span class="mnav-label">상담</span>
+      </button>
+      <button class="mnav-btn" id="mnav-ai" onclick="setMobilePanel('ai')">
+        <span class="mnav-icon">✦</span>
+        <span class="mnav-label">AI</span>
+      </button>
+    </nav>
+
+    <!-- 캘린더 날짜 팝업 -->
+    <div class="cal-popup-overlay" id="cal-popup-overlay" style="display:none;" onclick="closeCalPopup()"></div>
+    <div class="cal-popup-modal" id="cal-popup-modal" style="display:none;"></div>
+
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
