@@ -1,0 +1,200 @@
+/* =============================================
+   自畵像 — AI 전체 패턴 분석
+   의존성: state.js, utils.js, data.js
+
+   수정 (버그픽스):
+   - runPatternAnalysis/runMyPatternAnalysis: try/finally로 loading 항상 초기화
+   ============================================= */
+
+// ---------------------------------------------------------------------------
+// 상담 기록 전체 패턴 분석
+// ---------------------------------------------------------------------------
+
+async function runPatternAnalysis() {
+  if (!state.selStudent || state.patternLoading) return;
+  const student = state.students.find(s => s.id === state.selStudent);
+  if (!student) return;
+
+  const sessions = state.sessions
+    .filter(s => s.studentId === state.selStudent)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (!sessions.length) { alert('분석할 회기가 없습니다.'); return; }
+
+  state.patternLoading = true;
+  renderAIPanel();
+
+  const sessionsText = sessions.map(s =>
+    `${s.sessionNum}회기 (${s.date}):\n${s.verbatim}` +
+    (s.memo    ? `\n[메모] ${s.memo}`          : '') +
+    (s.analysis ? `\n[슈퍼비전 요약] ${s.analysis.overall}` : '')
+  ).join('\n\n---\n\n');
+
+  const prompt = `당신은 학교상담 임상 슈퍼바이저입니다.
+${student.alias} (${student.grade}) 내담자의 전체 ${sessions.length}회기 기록입니다.
+가정: ${student.family || '정보 없음'} | 교우: ${student.peers || '정보 없음'} | 상황: ${student.situation || '정보 없음'}
+
+${sessionsText}
+
+위 전체 회기를 분석해 종합 패턴 보고서를 JSON으로 작성하세요.
+각 항목은 핵심만 2-4문장으로 간결하게. JSON으로만 응답.
+
+{
+  "clientPattern":    "전체 회기에서 보이는 내담자 핵심 패턴 (방어기제, 반복 주제, 감정 흐름 변화)",
+  "counselorPattern": "상담자의 반복 개입 패턴과 임상적 의미",
+  "progress":         "회기 경과에 따른 변화와 진전 수준",
+  "keyMoments":       "임상적으로 중요한 전환점 또는 주목할 장면",
+  "nextFocus":        "향후 상담 핵심 과제와 방향",
+  "overall":          "전체 사례 종합 임상 평가"
+}`;
+
+  try {
+    const text = await streamAnalyze(
+      { model: 'claude-sonnet-4-6', max_tokens: 8000,
+        messages: [{ role: 'user', content: prompt }] },
+      (acc) => {
+        const lbl = document.querySelector('#ai-content .ai-loading-label');
+        if (lbl) lbl.textContent = `패턴 분석 중... ${acc.length}자`;
+      }
+    );
+    const result   = parseJSON(text);
+    result.savedAt = new Date().toISOString().split('T')[0];
+    student.patternAnalysis = result;
+    saveData();
+    showPatternModal(result, false);
+  } catch (e) {
+    console.error('패턴 분석 오류:', e);
+    alert('패턴 분석 오류:\n' + e.message);
+  } finally {
+    state.patternLoading = false;
+  }
+  renderAIPanel();
+}
+
+// ---------------------------------------------------------------------------
+// 나의 기록 전체 패턴 분석
+// ---------------------------------------------------------------------------
+
+async function runMyPatternAnalysis() {
+  if (!state.selTopic || state.myPatternLoading) return;
+  const topic = state.myTopics.find(t => t.id === state.selTopic);
+  if (!topic) return;
+
+  const records = state.myRecords
+    .filter(r => r.topicId === state.selTopic)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (!records.length) { alert('분석할 기록이 없습니다.'); return; }
+
+  state.myPatternLoading = true;
+  renderAIPanel();
+
+  const aiRole      = topic.aiPrompt || '따뜻하게 경청하고 성찰을 돕는 코치';
+  const recordsText = records.map(r =>
+    `${r.recordNum}번째 기록 (${r.date}):\n${r.content}` +
+    (r.memo    ? `\n메모: ${r.memo}`              : '') +
+    (r.analysis ? `\n[보고서 요약] ${r.analysis.overall}` : '')
+  ).join('\n\n---\n\n');
+
+  const prompt = `당신은 ${aiRole} 역할입니다.
+'${topic.title}' 주제의 전체 ${records.length}개 기록입니다.
+
+${recordsText}
+
+위 전체 기록을 분석해 종합 패턴 보고서를 JSON으로 작성하세요.
+각 항목은 핵심만 2-4문장으로. JSON으로만 응답.
+
+{
+  "pattern":   "전체 기록에서 발견된 핵심 반복 패턴",
+  "growth":    "시간 경과에 따른 변화와 성장",
+  "recurring": "계속 돌아오는 미해결 주제나 감정",
+  "insight":   "전체 기록에서 가장 중요한 통찰",
+  "nextFocus": "앞으로 주목해야 할 방향과 질문",
+  "overall":   "전체 기록 종합 평가"
+}`;
+
+  try {
+    const text = await streamAnalyze(
+      { model: 'claude-sonnet-4-6', max_tokens: 6000,
+        messages: [{ role: 'user', content: prompt }] },
+      (acc) => {
+        const lbl = document.querySelector('#ai-content .ai-loading-label');
+        if (lbl) lbl.textContent = `패턴 분석 중... ${acc.length}자`;
+      }
+    );
+    const result   = parseJSON(text);
+    result.savedAt = new Date().toISOString().split('T')[0];
+    topic.patternAnalysis = result;
+    saveData();
+    showPatternModal(result, true);
+  } catch (e) {
+    console.error('패턴 분석 오류:', e);
+    alert('패턴 분석 오류:\n' + e.message);
+  } finally {
+    state.myPatternLoading = false;
+  }
+  renderAIPanel();
+}
+
+// ---------------------------------------------------------------------------
+// 패턴 분석 모달
+// ---------------------------------------------------------------------------
+
+function showPatternModal(result, isMy) {
+  const sections = isMy
+    ? [
+        { key: 'pattern',   label: '핵심 패턴',       cls: 'rpt-blue'   },
+        { key: 'growth',    label: '성장과 변화',      cls: 'rpt-green'  },
+        { key: 'recurring', label: '반복되는 주제',    cls: 'rpt-amber'  },
+        { key: 'insight',   label: '핵심 통찰',        cls: 'rpt-purple' },
+        { key: 'nextFocus', label: '앞으로의 방향',    cls: 'rpt-red'    },
+        { key: 'overall',   label: '종합 평가',        cls: 'rpt-purple' },
+      ]
+    : [
+        { key: 'clientPattern',    label: '내담자 핵심 패턴', cls: 'rpt-blue'   },
+        { key: 'counselorPattern', label: '상담자 개입 패턴', cls: 'rpt-amber'  },
+        { key: 'progress',         label: '진전과 변화',      cls: 'rpt-green'  },
+        { key: 'keyMoments',       label: '핵심 전환점',      cls: 'rpt-purple' },
+        { key: 'nextFocus',        label: '다음 과제',        cls: 'rpt-red'    },
+        { key: 'overall',          label: '종합 임상 평가',   cls: 'rpt-purple' },
+      ];
+
+  const accentColor = isMy ? '#1D9E75' : '#0F6E56';
+  const sectionsHTML = sections.map(s => `
+    <div class="rpt-section ${s.cls}">
+      <div class="rpt-label" onclick="this.closest('.rpt-section').classList.toggle('rpt-collapsed')">
+        <span>${s.label}</span><span class="rpt-chevron">▾</span>
+      </div>
+      <div class="rpt-body">${(result[s.key] || '—').replace(/\n/g, '<br>').replace(/ (\d+)\)/g, '<br>$1)')}</div>
+    </div>`).join('');
+
+  const overlay = document.getElementById('pattern-modal-overlay');
+  const modal   = document.getElementById('pattern-modal');
+  if (!overlay || !modal) return;
+
+  modal.innerHTML = `
+    <div class="popup-header" style="padding:14px 18px;">
+      <span style="font-weight:600;color:${accentColor};">전체 패턴 분석 · ${esc(result.savedAt || '')}</span>
+      <button class="popup-close-btn" onclick="closePatternModal()">×</button>
+    </div>
+    <div class="pattern-modal-body">${sectionsHTML}</div>`;
+
+  overlay.style.display = '';
+  modal.style.display   = '';
+}
+
+function closePatternModal() {
+  document.getElementById('pattern-modal-overlay').style.display = 'none';
+  document.getElementById('pattern-modal').style.display         = 'none';
+}
+
+function viewLastPatternAnalysis() {
+  const session  = state.selSession ? state.sessions.find(s => s.id === state.selSession) : null;
+  const student  = session
+    ? state.students.find(s => s.id === session.studentId)
+    : (state.selStudent ? state.students.find(s => s.id === state.selStudent) : null);
+  if (student?.patternAnalysis) showPatternModal(student.patternAnalysis, false);
+}
+
+function viewLastMyPatternAnalysis() {
+  const topic = state.selTopic ? state.myTopics.find(t => t.id === state.selTopic) : null;
+  if (topic?.patternAnalysis) showPatternModal(topic.patternAnalysis, true);
+}
