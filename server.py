@@ -15,6 +15,7 @@ from functools import wraps
 from flask import (
     Flask, request, jsonify, send_from_directory,
     session, redirect, render_template_string,
+    Response, stream_with_context,
 )
 from dotenv import load_dotenv
 from cryptography.fernet import Fernet, InvalidToken
@@ -221,6 +222,7 @@ def analyze():
     if not ANTHROPIC_API_KEY:
         return jsonify({'error': 'ANTHROPIC_API_KEY가 ecrk.env에 없습니다'}), 500
     payload = request.get_json()
+    use_stream = payload.get('stream', False)
     resp = requests.post(
         'https://api.anthropic.com/v1/messages',
         headers={
@@ -231,7 +233,17 @@ def analyze():
         },
         json=payload,
         timeout=120,
+        stream=use_stream,
     )
+    if use_stream:
+        def generate():
+            for chunk in resp.iter_content(chunk_size=None):
+                yield chunk
+        return Response(
+            stream_with_context(generate()),
+            status=resp.status_code,
+            content_type='text/event-stream',
+        )
     return (resp.content, resp.status_code, {'Content-Type': 'application/json'})
 
 # ---------------------------------------------------------------------------

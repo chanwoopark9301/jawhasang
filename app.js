@@ -28,6 +28,7 @@ const state = {
   myTab: 'content',
   myAiLoading: false,
   myChatLoading: false,
+  myPeriod: 'month',  // 'week' | 'month' | 'all'
 };
 
 let mobilePanel = 'sidebar'; // 'sidebar' | 'main' | 'ai'
@@ -488,30 +489,26 @@ function buildReportPrompt(session, student) {
   const peers     = student?.peers     || '정보 없음';
   const situation = student?.situation || '정보 없음';
 
-  return `당신은 경험 풍부한 학교상담 임상 슈퍼바이저입니다.
+  return `당신은 학교상담 임상 슈퍼바이저입니다. 아래 축어록을 검토하고 슈퍼비전 보고서를 JSON으로 작성하세요.
 
-【내담 학생 배경 (익명)】
-- 식별: ${alias} (${grade})
-- 가족/가정환경: ${family}
-- 교우관계: ${peers}
-- 현재 상황: ${situation}
+【내담 학생 (익명)】 ${alias} (${grade}) | 가정: ${family} | 교우: ${peers} | 상황: ${situation}
 
-【상담 축어록 — ${session.sessionNum}회기 (${session.date})】
+【${session.sessionNum}회기 축어록 (${session.date})】
 ${session.verbatim}
-${session.memo ? `\n【상담사 메모】\n${session.memo}` : ''}
+${session.memo ? `\n【메모】 ${session.memo}` : ''}
 
-위 축어록 전체를 임상적으로 검토하여 슈퍼비전 보고서를 작성해주세요.
+규칙:
+- 각 항목은 핵심만 2-4문장으로 간결하게
+- 발화 인용은 꼭 필요한 것 1개만
+- 번호 목록 앞에 \\n 포함
+- JSON으로만 응답 (다른 텍스트 없이)
 
-각 항목은 단편적인 메모가 아니라 완성된 문장과 문단으로 서술하세요.
-실제 발화를 인용할 때는 따옴표로 감싸 문장 속에 자연스럽게 녹여주세요.
-번호 목록을 쓸 때는 각 항목 앞에 반드시 줄바꿈(\n)을 넣어주세요.
-반드시 아래 JSON 형식으로만 응답하세요 (다른 텍스트 없이):
 {
-  "clientState": "내담자의 감정 흐름, 방어기제, 핵심 호소의 변화를 완성된 문단으로 서술. 실제 발화를 문장 속에 인용.",
-  "techniques": "상담자가 사용한 주요 기법들을 각각 완성된 문장으로 설명하고, 실제 발화를 인용하여 임상적 적절성을 평가.",
-  "strengths": "잘한 개입 3가지 이상을 각각 문단으로 서술. 구체적 발화 인용과 함께 왜 임상적으로 우수한지 충분히 설명.",
-  "improvements": "개선이 필요한 장면 2-3개를 각각 문단으로 서술. 실제 발화를 인용하고, 문제점을 설명한 뒤, 더 나은 대안 응답을 구체적으로 제시.",
-  "overall": "이 회기의 전반적 임상 평가를 완성된 글로 서술하고, 다음 회기의 핵심 과제를 구체적으로 안내."
+  "clientState": "내담자 감정·방어기제·핵심 호소를 2-3문장으로 요약. 발화 1개 인용.",
+  "techniques": "사용 기법과 임상적 적절성을 2-3문장으로.",
+  "strengths": "\\n1) 잘한 개입 첫 번째\\n2) 잘한 개입 두 번째\\n3) 잘한 개입 세 번째",
+  "improvements": "\\n1) 장면 인용 + 문제점 + 대안 응답\\n2) 장면 인용 + 문제점 + 대안 응답",
+  "overall": "전반적 평가와 다음 회기 핵심 과제를 2-3문장으로."
 }`;
 }
 
@@ -525,29 +522,15 @@ async function runAI() {
   renderAIPanel();
 
   try {
-    const res = await fetch('/api/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
-        max_tokens: 4000,
-        messages: [{ role: 'user', content: buildReportPrompt(session, student) }],
-      }),
-    });
-
-    if (!res.ok) {
-      const errBody = await res.text().catch(() => '');
-      throw new Error(`HTTP ${res.status}: ${errBody.slice(0, 200)}`);
-    }
-    const data = await res.json();
-    if (!data.content) throw new Error(`content 없음: ${JSON.stringify(data).slice(0, 300)}`);
-    const text = data.content.map(c => c.text || '').join('');
-    if (!text) throw new Error('AI 응답 텍스트가 비어 있습니다');
-    const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-    const jsonStart = cleaned.indexOf('{');
-    const jsonEnd = cleaned.lastIndexOf('}');
-    if (jsonStart === -1 || jsonEnd === -1) throw new Error(`JSON 없음. 응답: ${cleaned.slice(0, 200)}`);
-    const result = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1));
+    const text = await streamAnalyze(
+      { model: 'claude-sonnet-4-6', max_tokens: 8000,
+        messages: [{ role: 'user', content: buildReportPrompt(session, student) }] },
+      (acc) => {
+        const lbl = document.querySelector('#ai-content .ai-loading-label');
+        if (lbl) lbl.textContent = `작성 중... ${acc.length}자`;
+      }
+    );
+    const result = parseJSON(text);
     result.savedAt = new Date().toISOString().split('T')[0];
 
     session.analysis = result;
@@ -563,15 +546,106 @@ async function runAI() {
   render();
 }
 
-// -- 나의 기록 AI (3단계 구현) --
+// -- 나의 기록 AI --
+
+function setMyPeriod(period) {
+  state.myPeriod = period;
+  renderAIPanel();
+}
 
 async function runMyAI() {
-  // 3단계에서 구현됩니다
-  if (!state.selRecord) {
+  if (!state.selTopic || !state.selRecord) {
     alert('기록을 먼저 선택해주세요.');
     return;
   }
-  alert('AI 보고서 기능은 3단계에서 구현됩니다.\n기간별 기록을 분석해 성찰 보고서를 생성합니다.');
+  if (state.myAiLoading) return;
+
+  const topic = state.myTopics.find(t => t.id === state.selTopic);
+  if (!topic) return;
+
+  // 기간 계산
+  const today = new Date().toISOString().split('T')[0];
+  let periodStart = null;
+  if (state.myPeriod === 'week') {
+    const d = new Date();
+    d.setDate(d.getDate() - (d.getDay() === 0 ? 6 : d.getDay() - 1));
+    periodStart = d.toISOString().split('T')[0];
+  } else if (state.myPeriod === 'month') {
+    const now = new Date();
+    periodStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  }
+
+  // 기간 내 기록 수집
+  const records = state.myRecords
+    .filter(r => r.topicId === state.selTopic)
+    .filter(r => !periodStart || r.date >= periodStart)
+    .filter(r => r.date <= today)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (!records.length) {
+    alert('선택한 기간에 기록이 없습니다.');
+    return;
+  }
+
+  // 이전 보고서 요약 (기간 이전에 analysis가 있는 기록 중 가장 최근)
+  const prevReport = state.myRecords
+    .filter(r => r.topicId === state.selTopic && r.analysis && (!periodStart || r.date < periodStart))
+    .sort((a, b) => b.date.localeCompare(a.date))[0];
+  const prevSummary = prevReport ? prevReport.analysis.overall : null;
+
+  // 프롬프트 구성
+  const aiRole = topic.aiPrompt || '따뜻하게 경청하고 성찰을 돕는 코치';
+  const periodLabel = periodStart ? `${periodStart} ~ ${today}` : `전체 ~ ${today}`;
+  const recordsText = records.map(r =>
+    `${r.recordNum}번째 기록 (${r.date}):\n${r.content}${r.memo ? '\n메모: ' + r.memo : ''}`
+  ).join('\n\n');
+
+  const prompt = `당신은 ${aiRole} 역할입니다.
+${prevSummary ? `지난 분석 요약: ${prevSummary}\n` : ''}
+'${topic.title}' 기록 (${periodLabel}):
+
+${recordsText}
+
+위 기록을 분석해 보고서를 작성하세요.
+규칙: 각 항목은 핵심만 2-4문장으로 간결하게. 기록 인용은 꼭 필요한 것만. JSON으로만 응답.
+
+{
+  "pattern": "이 기간 반복된 패턴을 2-3문장으로.",
+  "strengths": "잘 된 것 또는 성장한 부분을 2-3문장으로.",
+  "improvements": "개선이 필요한 부분을 2-3문장으로.",
+  "questions": "다음을 위한 질문 2개를 간결하게.",
+  "overall": "전반적 평가와 방향을 2-3문장으로."
+}`;
+
+  state.myAiLoading = true;
+  renderAIPanel();
+
+  try {
+    const text = await streamAnalyze(
+      { model: 'claude-sonnet-4-6', max_tokens: 6000,
+        messages: [{ role: 'user', content: prompt }] },
+      (acc) => {
+        const lbl = document.querySelector('#ai-content .ai-loading-label');
+        if (lbl) lbl.textContent = `작성 중... ${acc.length}자`;
+      }
+    );
+    const result = parseJSON(text);
+    result.savedAt = today;
+    result.period  = periodLabel;
+
+    const record = state.myRecords.find(r => r.id === state.selRecord);
+    if (record) {
+      record.analysis = result;
+      saveData();
+      state.myTab = 'report';
+    }
+  } catch (e) {
+    console.error('보고서 생성 오류:', e);
+    alert('보고서 생성 오류:\n' + e.message);
+  }
+
+  state.myAiLoading = false;
+  render();
 }
 
 // ---------------------------------------------------------------------------
@@ -646,7 +720,7 @@ async function startSupervisionChat() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
+        model: 'claude-sonnet-4-6',
         max_tokens: 700,
         system: [{ type: 'text', text: sysCtx, cache_control: { type: 'ephemeral' } }],
         messages: [{
@@ -709,7 +783,7 @@ async function sendChatMessage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
+        model: 'claude-sonnet-4-6',
         max_tokens: 800,
         system: [{ type: 'text', text: sysCtx, cache_control: { type: 'ephemeral' } }],
         messages,
@@ -740,6 +814,139 @@ function clearSupervisionChat() {
   const session = state.sessions.find(s => s.id === state.selSession);
   if (!session) return;
   session.supervisionChat = [];
+  saveData();
+  renderMain();
+}
+
+// ---------------------------------------------------------------------------
+// 7-2. AI — 나의 기록 대화
+// ---------------------------------------------------------------------------
+
+function buildMyRecordContext(record, topic) {
+  const aiRole = topic?.aiPrompt || '따뜻하게 경청하고 성찰을 돕는 코치';
+  let reportPart = '';
+  if (record.analysis) {
+    const a = record.analysis;
+    reportPart = `\n【분석 보고서 요약】\n- 패턴: ${a.pattern}\n- 잘 된 것: ${a.strengths}\n- 개선점: ${a.improvements}\n- 종합: ${a.overall}`;
+  }
+  return `당신은 ${aiRole} 역할입니다.
+
+아래는 '${topic?.title || '기록'}' 주제로 작성된 기록입니다.
+날짜: ${record.date}
+
+【기록 본문】
+${record.content}
+${record.memo ? `\n【메모】\n${record.memo}` : ''}
+${reportPart}
+
+대화 원칙:
+- 상대방의 말을 충분히 듣고 반영하기
+- 판단하지 않기
+- 스스로 답을 찾도록 질문으로 안내하기
+- 한국어 존댓말 사용`;
+}
+
+async function startMyChat() {
+  const record = state.myRecords.find(r => r.id === state.selRecord);
+  if (!record || state.myChatLoading) return;
+
+  record.aiChat = [];
+  state.myChatLoading = true;
+  renderMain();
+
+  const topic  = state.myTopics.find(t => t.id === record.topicId);
+  const sysCtx = buildMyRecordContext(record, topic);
+
+  try {
+    const res = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 600,
+        system: [{ type: 'text', text: sysCtx, cache_control: { type: 'ephemeral' } }],
+        messages: [{ role: 'user', content: '이 기록을 읽었어요. 지금 이 순간 가장 마음에 걸리는 게 뭔지 먼저 물어봐주세요.' }],
+      }),
+    });
+    if (!res.ok) throw new Error(`${res.status}`);
+    const data = await res.json();
+    const text = data.content.map(c => c.text || '').join('').trim();
+    record.aiChat = [{ role: 'ai', text }];
+    saveData();
+  } catch (e) {
+    console.error('대화 시작 오류:', e);
+    record.aiChat = [{ role: 'ai', text: '오류가 발생했습니다. 다시 시도해주세요.' }];
+  }
+
+  state.myChatLoading = false;
+  renderMain();
+  requestAnimationFrame(() => {
+    const el = document.getElementById('my-chat-messages');
+    if (el) el.scrollTop = el.scrollHeight;
+  });
+}
+
+async function sendMyChatMessage() {
+  const input = document.getElementById('my-chat-input');
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text || state.myChatLoading) return;
+
+  const record = state.myRecords.find(r => r.id === state.selRecord);
+  if (!record) return;
+
+  input.value = '';
+  if (!record.aiChat) record.aiChat = [];
+  record.aiChat.push({ role: 'user', text });
+
+  state.myChatLoading = true;
+  renderMain();
+  requestAnimationFrame(() => {
+    const el = document.getElementById('my-chat-messages');
+    if (el) el.scrollTop = el.scrollHeight;
+  });
+
+  const topic    = state.myTopics.find(t => t.id === record.topicId);
+  const sysCtx   = buildMyRecordContext(record, topic);
+  const messages = record.aiChat.map(m => ({
+    role: m.role === 'ai' ? 'assistant' : 'user',
+    content: m.text,
+  }));
+
+  try {
+    const res = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 600,
+        system: [{ type: 'text', text: sysCtx, cache_control: { type: 'ephemeral' } }],
+        messages,
+      }),
+    });
+    if (!res.ok) throw new Error(`${res.status}`);
+    const data = await res.json();
+    const aiText = data.content.map(c => c.text || '').join('').trim();
+    record.aiChat.push({ role: 'ai', text: aiText });
+    saveData();
+  } catch (e) {
+    console.error('대화 오류:', e);
+    record.aiChat.push({ role: 'ai', text: '오류가 발생했습니다. 다시 시도해주세요.' });
+  }
+
+  state.myChatLoading = false;
+  renderMain();
+  requestAnimationFrame(() => {
+    const el = document.getElementById('my-chat-messages');
+    if (el) el.scrollTop = el.scrollHeight;
+  });
+}
+
+function clearMyChat() {
+  if (!confirm('대화를 초기화할까요?')) return;
+  const record = state.myRecords.find(r => r.id === state.selRecord);
+  if (!record) return;
+  record.aiChat = [];
   saveData();
   renderMain();
 }
@@ -1238,6 +1445,77 @@ function renderSupervisionReport(session) {
     </div>`).join('');
 }
 
+// -- 스트리밍 fetch 헬퍼 --
+// payload를 stream:true 로 전송하고 누적 텍스트를 반환.
+// onProgress(accumulated) 로 글자 수 실시간 전달.
+
+async function streamAnalyze(payload, onProgress) {
+  const res = await fetch('/api/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...payload, stream: true }),
+  });
+
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => '');
+    throw new Error(`HTTP ${res.status}: ${errBody.slice(0, 200)}`);
+  }
+
+  const reader  = res.body.getReader();
+  const decoder = new TextDecoder();
+  let accumulated = '';
+  let buf = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split('\n');
+    buf = lines.pop(); // 마지막 불완전 라인은 다음 청크로
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const raw = line.slice(6).trim();
+      if (!raw || raw === '[DONE]') continue;
+      try {
+        const ev = JSON.parse(raw);
+        if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
+          accumulated += ev.delta.text;
+          onProgress && onProgress(accumulated);
+        }
+      } catch {}
+    }
+  }
+
+  if (!accumulated) throw new Error('AI 응답 텍스트가 비어 있습니다');
+  return accumulated;
+}
+
+// -- JSON 파싱 헬퍼 --
+
+function parseJSON(text) {
+  const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+  const jsonStart = cleaned.indexOf('{');
+  const jsonEnd   = cleaned.lastIndexOf('}');
+  if (jsonStart === -1 || jsonEnd === -1)
+    throw new Error(`JSON 없음. 응답 일부: ${cleaned.slice(0, 200)}`);
+  const jsonStr = cleaned.slice(jsonStart, jsonEnd + 1);
+  try {
+    return JSON.parse(jsonStr);
+  } catch {
+    // AI가 문자열 값 안에 literal 줄바꿈을 넣으면 JSON.parse 실패 → 이스케이프 후 재시도
+    let fixed = '', inString = false, escape = false;
+    for (const c of jsonStr) {
+      if (escape)                      { fixed += c; escape = false; }
+      else if (c === '\\' && inString) { fixed += c; escape = true; }
+      else if (c === '"')              { fixed += c; inString = !inString; }
+      else if (inString && c === '\n') { fixed += '\\n'; }
+      else if (inString && c === '\r') { fixed += '\\r'; }
+      else                             { fixed += c; }
+    }
+    return JSON.parse(fixed);
+  }
+}
+
 // -- 마크다운 → HTML (채팅용 간이 렌더러) --
 
 function renderMd(text) {
@@ -1488,6 +1766,70 @@ function renderNewRecordForm() {
   </div>`;
 }
 
+// -- 나의 기록 — AI 대화 --
+
+function renderMyDialogue(record) {
+  const chat = record.aiChat || [];
+
+  if (!chat.length) {
+    return `<div class="chat-start">
+      <div class="chat-start-desc">기록을 읽고 AI와 대화를 시작합니다${record.analysis ? '<br><span style="font-size:11px;opacity:.7;">보고서 내용도 함께 참고합니다</span>' : ''}</div>
+      <button class="btn-primary-my" onclick="startMyChat()" ${state.myChatLoading ? 'disabled' : ''}>
+        ${state.myChatLoading ? '준비 중...' : 'AI와 대화 시작하기'}
+      </button>
+    </div>`;
+  }
+
+  const msgs = chat.map(m => `
+    <div class="chat-msg chat-${m.role}">
+      <div class="chat-bubble">${m.role === 'ai'
+        ? renderMd(m.text)
+        : m.text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\n/g, '<br>')
+      }</div>
+    </div>`).join('');
+
+  const loading = state.myChatLoading
+    ? `<div class="chat-msg chat-ai"><div class="chat-bubble">
+        <div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      </div></div>` : '';
+
+  return `<div class="chat-wrap">
+    <div class="chat-messages" id="my-chat-messages">${msgs}${loading}</div>
+    <div class="chat-input-row">
+      <textarea class="chat-input" id="my-chat-input" rows="2"
+        placeholder="답변을 입력하세요 (Enter 전송 · Shift+Enter 줄바꿈)"
+        ${state.myChatLoading ? 'disabled' : ''}
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMyChatMessage();}"></textarea>
+      <button class="chat-send" style="background:#1D9E75;" onclick="sendMyChatMessage()" ${state.myChatLoading ? 'disabled' : ''}>전송</button>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+      <span style="font-size:10px;color:var(--color-text-tertiary);">Enter로 전송 · Shift+Enter 줄바꿈</span>
+      <button class="btn-danger" style="font-size:11px;" onclick="clearMyChat()">대화 초기화</button>
+    </div>
+  </div>`;
+}
+
+// -- 나의 기록 — AI 보고서 렌더링 --
+
+function renderMyReport(record) {
+  const a = record.analysis;
+  const sections = [
+    { key: 'pattern',      label: '패턴 요약',        cls: 'rpt-blue'   },
+    { key: 'strengths',    label: '잘 된 것',           cls: 'rpt-green'  },
+    { key: 'improvements', label: '개선점',             cls: 'rpt-red'    },
+    { key: 'questions',    label: '다음을 위한 질문',   cls: 'rpt-amber'  },
+    { key: 'overall',      label: '종합 평가',          cls: 'rpt-purple' },
+  ];
+  return `<div class="rpt-date">작성일: ${a.savedAt || ''} · 기간: ${a.period || ''}</div>` +
+    sections.map(s => `<div class="rpt-section ${s.cls}">
+      <div class="rpt-label" onclick="this.closest('.rpt-section').classList.toggle('rpt-collapsed')">
+        <span>${s.label}</span>
+        <span class="rpt-chevron">▾</span>
+      </div>
+      <div class="rpt-body">${(a[s.key] || '—').replace(/\n/g, '<br>').replace(/ (\d+)\)/g, '<br>$1)')}</div>
+    </div>`).join('');
+}
+
 // -- 나의 기록 — 기록 상세 --
 
 function renderRecordDetail(record, totalRecords) {
@@ -1511,15 +1853,12 @@ function renderRecordDetail(record, totalRecords) {
       ? `<div class="my-content">${renderMd(record.content)}</div>`
       : '<div class="empty-state">내용이 없습니다</div>';
   } else if (state.myTab === 'report') {
-    body = `<div class="empty-state">
+    body = record.analysis ? renderMyReport(record) : `<div class="empty-state">
       오른쪽 패널에서 <strong>보고서 생성</strong>을 눌러주세요<br><br>
       <span style="font-size:12px;color:var(--color-text-tertiary);">기간별 기록을 분석해 성찰 보고서를 작성합니다</span>
     </div>`;
   } else {
-    body = `<div class="empty-state">
-      보고서 생성 후 AI와 대화를 시작할 수 있어요<br><br>
-      <span style="font-size:12px;color:var(--color-text-tertiary);">기록에 맞는 역할로 대화합니다</span>
-    </div>`;
+    body = renderMyDialogue(record);
   }
 
   return `
@@ -1543,8 +1882,6 @@ function renderMyAIPanel() {
   const content    = document.getElementById('ai-content');
   const analyzeBtn = document.getElementById('analyze-btn');
 
-  analyzeBtn.disabled    = false;
-  analyzeBtn.textContent = '보고서 생성 ↗';
   analyzeBtn.style.background = '#1D9E75';
   analyzeBtn.setAttribute('onclick', 'runMyAI()');
 
@@ -1553,10 +1890,32 @@ function renderMyAIPanel() {
     ? state.myTopics.find(t => t.id === record.topicId)
     : (state.selTopic ? state.myTopics.find(t => t.id === state.selTopic) : null);
 
+  if (state.myAiLoading) {
+    analyzeBtn.disabled    = true;
+    analyzeBtn.textContent = '분석 중...';
+    content.innerHTML = `<div class="ai-loading">
+      <div class="ai-loading-label">보고서 작성 중...</div>
+      <div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    </div>`;
+    return;
+  }
+
+  analyzeBtn.disabled    = !record;
+  analyzeBtn.textContent = record?.analysis ? '보고서 재생성 ↗' : '보고서 생성 ↗';
+
   if (!topic) {
     content.innerHTML = '<p class="ai-placeholder">주제를 선택하면<br>정보가 표시됩니다</p>';
     return;
   }
+
+  const periods = [
+    { key: 'week', label: '이번 주' },
+    { key: 'month', label: '이번 달' },
+    { key: 'all', label: '전체' },
+  ];
+  const periodBtns = periods.map(p =>
+    `<button class="period-btn${state.myPeriod === p.key ? ' active' : ''}" onclick="setMyPeriod('${p.key}')">${p.label}</button>`
+  ).join('');
 
   content.innerHTML = `
     <div class="ctx-alias" style="color:#1D9E75;">${topic.title}</div>
@@ -1568,7 +1927,11 @@ function renderMyAIPanel() {
       <div class="ctx-lbl">AI 역할</div>
       <div class="ctx-txt" style="color:var(--color-text-tertiary);">기본 성찰 코치</div>
     </div>`}
-    ${record ? `<div class="ctx-done" style="background:#e0f5ec;color:#0F6E56;">${record.recordNum}번째 기록 · ${record.date}</div>` : ''}`;
+    ${record ? `<div class="ctx-done" style="background:#e0f5ec;color:#0F6E56;">${record.recordNum}번째 기록 · ${record.date}</div>` : ''}
+    <div class="ctx-block" style="margin-top:10px;">
+      <div class="ctx-lbl">보고서 기간</div>
+      <div class="period-btns">${periodBtns}</div>
+    </div>`;
 }
 
 // -- AI 패널 (학생 정보 + 보고서 생성) --

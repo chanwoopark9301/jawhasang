@@ -1962,6 +1962,37 @@ body { height: 100svh; }
   color: #fff;
 }
 
+/* 기간 선택 버튼 */
+.period-btns {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 5px;
+}
+
+.period-btn {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 4px;
+  font-size: 11px;
+  font-family: var(--font);
+  border: 0.5px solid #1D9E75;
+  border-radius: 5px;
+  background: transparent;
+  color: #1D9E75;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.period-btn.active {
+  background: #1D9E75;
+  color: #fff;
+}
+
+.period-btn:hover:not(.active) {
+  background: rgba(29, 158, 117, 0.1);
+}
+
 @media (prefers-color-scheme: dark) {
   .cal-popup-modal {
     box-shadow: 0 8px 40px rgba(0, 0, 0, 0.45);
