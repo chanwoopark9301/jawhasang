@@ -122,14 +122,15 @@ _LOGIN_HTML = """<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>상담 일지 — 로그인</title>
+  <title>自畵像</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:-apple-system,BlinkMacSystemFont,'Noto Sans KR',sans-serif;
          background:#f0ece5;height:100vh;display:flex;align-items:center;justify-content:center}
     .card{background:#f8f5f0;border:0.5px solid rgba(100,80,55,.15);border-radius:14px;
           padding:38px 34px;width:320px;box-shadow:0 2px 18px rgba(0,0,0,.07)}
-    h1{font-size:18px;font-weight:500;color:#2c2820;margin-bottom:4px}
+    h1{font-size:22px;font-weight:600;color:#2c2820;margin-bottom:2px}
+    h2{font-size:13px;font-weight:400;color:#6a5f58;margin-bottom:22px}
     .sub{font-size:12px;color:#9a908a;margin-bottom:28px}
     label{font-size:12px;color:#7a706a;display:block;margin-bottom:5px}
     input{width:100%;padding:9px 11px;font-size:13px;
@@ -147,7 +148,8 @@ _LOGIN_HTML = """<!DOCTYPE html>
 <body>
   <div class="card">
     <div class="lock">🔒</div>
-    <h1>자화상 기록에 관한 앱</h1>
+    <h1>自畵像</h1>
+    <h2>기록에 관한 앱</h2>
     <p class="sub">개인정보 암호화 저장.</p>
     {% if error %}<div class="err">{{ error }}</div>{% endif %}
     <form method="post">
