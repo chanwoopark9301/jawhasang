@@ -1998,3 +1998,244 @@ body { height: 100svh; }
     box-shadow: 0 8px 40px rgba(0, 0, 0, 0.45);
   }
 }
+
+/* =============================================
+   추가 기능 스타일
+   ============================================= */
+
+/* --- 사이드바 검색 --- */
+.sidebar-search {
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px 10px;
+  font-family: var(--font);
+  font-size: 12px;
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: 0.5px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.sidebar-search:focus {
+  border-color: var(--color-accent);
+}
+.sidebar-search::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+/* --- 사이드바 푸터 행 --- */
+.sidebar-footer-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.sidebar-footer-row .logout-link {
+  display: inline;
+  text-align: left;
+  flex-shrink: 0;
+}
+
+/* --- 내보내기 버튼 --- */
+.export-btn {
+  flex: 1;
+  padding: 5px 8px;
+  font-family: var(--font);
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 0.5px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.export-btn:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text);
+}
+
+/* --- 사이드바 리스트 아이템 수정 버튼 --- */
+.list-item-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.list-item-edit {
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s, color 0.1s;
+  opacity: 0;
+}
+.list-item:hover .list-item-edit {
+  opacity: 1;
+}
+.list-item-edit:hover {
+  background: var(--color-accent-bg);
+  color: var(--color-accent);
+}
+
+/* --- 태그 배지 --- */
+.tag-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 10px;
+  background: var(--color-accent-bg);
+  color: var(--color-text-secondary);
+  border-radius: 20px;
+  border: 0.5px solid var(--color-border-strong);
+  white-space: nowrap;
+}
+.my-tag-badge {
+  background: #e0f5ec;
+  color: #0F6E56;
+  border-color: rgba(29,158,117,.25);
+}
+
+@media (prefers-color-scheme: dark) {
+  .my-tag-badge {
+    background: rgba(29,158,117,.15);
+    color: #1D9E75;
+    border-color: rgba(29,158,117,.3);
+  }
+}
+
+/* --- 카드 태그 영역 --- */
+.card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+/* --- 상세 뷰 태그 --- */
+.detail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* --- 태그 필터 바 --- */
+.tag-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 8px 0 10px;
+  border-bottom: 0.5px solid var(--color-border);
+  margin-bottom: 8px;
+}
+
+.tag-filter-btn {
+  padding: 3px 9px;
+  font-size: 11px;
+  font-family: var(--font);
+  background: var(--color-bg-secondary);
+  border: 0.5px solid var(--color-border-strong);
+  border-radius: 20px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.tag-filter-btn:hover {
+  background: var(--color-accent-bg);
+  color: var(--color-text);
+}
+.tag-filter-btn.active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+.my-tag-filter-btn.active {
+  background: #1D9E75;
+  border-color: #1D9E75;
+  color: #fff;
+}
+
+.tag-filter-clear {
+  padding: 3px 8px;
+  font-size: 11px;
+  font-family: var(--font);
+  background: transparent;
+  border: 0.5px solid var(--color-border-strong);
+  border-radius: 20px;
+  cursor: pointer;
+  color: var(--color-text-tertiary);
+  transition: color 0.12s;
+}
+.tag-filter-clear:hover { color: var(--color-text); }
+
+/* --- 전체 패턴 분석 --- */
+.pattern-section {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 0.5px solid var(--color-border);
+}
+
+.pattern-analysis-btn {
+  width: 100%;
+  padding: 8px 10px;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 600;
+  background: #0F6E56;
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.pattern-analysis-btn:hover:not(:disabled) { opacity: 0.85; }
+.pattern-analysis-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.pattern-last {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+}
+.pattern-view-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 10px;
+  font-family: var(--font);
+  color: #0F6E56;
+  padding: 0;
+  text-decoration: underline;
+}
+
+/* --- 패턴 분석 모달 --- */
+.pattern-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(680px, 92vw);
+  max-height: 85vh;
+  background: var(--color-bg);
+  border-radius: var(--radius-lg);
+  border: 0.5px solid var(--color-border-strong);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.2);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.pattern-modal-body {
+  padding: 14px 18px;
+  overflow-y: auto;
+  flex: 1;
+}

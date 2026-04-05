@@ -29,6 +29,11 @@ const state = {
   myAiLoading: false,
   myChatLoading: false,
   myPeriod: 'month',  // 'week' | 'month' | 'all'
+  editingId: null,
+  searchQuery: '',
+  filterTags: [],
+  patternLoading: false,
+  myPatternLoading: false,
 };
 
 let mobilePanel = 'sidebar'; // 'sidebar' | 'main' | 'ai'
@@ -180,6 +185,10 @@ function setView(view) {
   state.selStudent = null;
   state.selSession = null;
   state.mode = 'welcome';
+  state.filterTags = [];
+  state.searchQuery = '';
+  const searchEl = document.getElementById('sidebar-search');
+  if (searchEl) searchEl.value = '';
   document.getElementById('btn-sv').classList.toggle('active', view === 'student');
   document.getElementById('btn-dv').classList.toggle('active', view === 'myrecords');
   document.getElementById('add-btn').textContent =
@@ -201,6 +210,7 @@ function selectStudent(id) {
   state.selStudent = id;
   state.selSession = null;
   state.mode = 'list';
+  state.filterTags = [];
   mobilePanel = 'main';
   render();
 }
@@ -261,6 +271,7 @@ function selectTopic(id) {
   state.selTopic  = id;
   state.selRecord = null;
   state.myMode    = 'list';
+  state.filterTags = [];
   mobilePanel     = 'main';
   render();
 }
@@ -375,10 +386,14 @@ function saveSession() {
 
   const sessionNum = state.sessions.filter(s => s.studentId === studentId).length + 1;
 
+  const tagsEl  = document.getElementById('ftags');
+  const tagsStr = tagsEl ? tagsEl.value.trim() : '';
+
   const session = {
     id: 'ss' + Date.now(), studentId, date, sessionNum,
     verbatim,
     memo:             document.getElementById('fmemo').value.trim(),
+    tags:             tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : [],
     analysis:         null,
     supervisionChat:  [],
   };
@@ -442,10 +457,14 @@ function saveRecord() {
   const content = document.getElementById('fr-content').value.trim();
   if (!date || !content) { alert('날짜와 내용을 입력해주세요'); return; }
   const recordNum = state.myRecords.filter(r => r.topicId === state.selTopic).length + 1;
+  const rTagsEl  = document.getElementById('fr-tags');
+  const rTagsStr = rTagsEl ? rTagsEl.value.trim() : '';
+
   const record = {
     id: 'r' + Date.now(),
     topicId: state.selTopic, date, recordNum, content,
     memo:     document.getElementById('fr-memo').value.trim(),
+    tags:     rTagsStr ? rTagsStr.split(',').map(t => t.trim()).filter(Boolean) : [],
     analysis: null, aiChat: [],
   };
   state.myRecords.push(record);
@@ -476,6 +495,482 @@ function deleteRecord(id) {
     state.myMode    = state.selTopic ? 'list' : 'welcome';
   }
   saveData(); render();
+}
+
+// ---------------------------------------------------------------------------
+// 5-2. 수정 기능
+// ---------------------------------------------------------------------------
+
+function editStudent(id) {
+  state.editingId = id;
+  state.mode = 'edit-student';
+  mobilePanel = 'main';
+  render();
+}
+
+function updateStudent() {
+  const st = state.students.find(s => s.id === state.editingId);
+  if (!st) return;
+  const alias = document.getElementById('falias').value.trim();
+  if (!alias) { alert('식별 코드를 입력해주세요'); return; }
+  st.alias     = alias;
+  st.grade     = document.getElementById('fg').value;
+  st.gender    = document.getElementById('fgd').value;
+  st.family    = document.getElementById('ffamily').value.trim();
+  st.peers     = document.getElementById('fpeers').value.trim();
+  st.situation = document.getElementById('fsituation').value.trim();
+  st.notes     = document.getElementById('fnotes').value.trim();
+  state.editingId = null;
+  state.mode = 'list';
+  saveData(); render();
+}
+
+function editSession(id) {
+  state.editingId = id;
+  state.mode = 'edit-session';
+  mobilePanel = 'main';
+  render();
+}
+
+function updateSession() {
+  const session = state.sessions.find(s => s.id === state.editingId);
+  if (!session) return;
+  const date = document.getElementById('fd').value;
+  const verbatim = document.getElementById('fv').value.trim();
+  if (!date || !verbatim) { alert('날짜와 축어록을 입력해주세요'); return; }
+  session.date     = date;
+  session.verbatim = verbatim;
+  session.memo     = document.getElementById('fmemo').value.trim();
+  const tagsEl     = document.getElementById('ftags');
+  const tagsStr    = tagsEl ? tagsEl.value.trim() : '';
+  session.tags     = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : [];
+  state.editingId  = null;
+  state.selSession = session.id;
+  state.mode       = 'detail';
+  state.sessionTab = 'verbatim';
+  saveData(); render();
+}
+
+function editTopic(id) {
+  state.editingId = id;
+  state.myMode    = 'edit-topic';
+  mobilePanel     = 'main';
+  render();
+}
+
+function updateTopic() {
+  const topic = state.myTopics.find(t => t.id === state.editingId);
+  if (!topic) return;
+  const title = document.getElementById('ft-title').value.trim();
+  if (!title) { alert('주제 이름을 입력해주세요'); return; }
+  topic.title    = title;
+  topic.aiPrompt = document.getElementById('ft-prompt').value.trim();
+  state.editingId = null;
+  state.myMode    = 'list';
+  saveData(); render();
+}
+
+function editRecord(id) {
+  state.editingId = id;
+  state.myMode    = 'edit-record';
+  mobilePanel     = 'main';
+  render();
+}
+
+function updateRecord() {
+  const record = state.myRecords.find(r => r.id === state.editingId);
+  if (!record) return;
+  const date    = document.getElementById('fr-date').value;
+  const content = document.getElementById('fr-content').value.trim();
+  if (!date || !content) { alert('날짜와 내용을 입력해주세요'); return; }
+  record.date    = date;
+  record.content = content;
+  record.memo    = document.getElementById('fr-memo').value.trim();
+  const tagsEl   = document.getElementById('fr-tags');
+  const tagsStr  = tagsEl ? tagsEl.value.trim() : '';
+  record.tags    = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : [];
+  state.editingId  = null;
+  state.selRecord  = record.id;
+  state.myMode     = 'detail';
+  state.myTab      = 'content';
+  saveData(); render();
+}
+
+// ---------------------------------------------------------------------------
+// 5-3. 검색 / 태그 필터
+// ---------------------------------------------------------------------------
+
+function setSearchQuery(q) {
+  state.searchQuery = q;
+  renderSidebar();
+}
+
+function toggleFilterTag(tag) {
+  const idx = state.filterTags.indexOf(tag);
+  if (idx >= 0) state.filterTags.splice(idx, 1);
+  else state.filterTags.push(tag);
+  renderMain();
+}
+
+function clearFilterTags() {
+  state.filterTags = [];
+  renderMain();
+}
+
+// ---------------------------------------------------------------------------
+// 5-4. 데이터 내보내기
+// ---------------------------------------------------------------------------
+
+function exportData() {
+  const data = {
+    exportedAt:  new Date().toISOString(),
+    students:    state.students,
+    sessions:    state.sessions,
+    my_topics:   state.myTopics,
+    my_records:  state.myRecords,
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `자화상_백업_${new Date().toISOString().split('T')[0]}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ---------------------------------------------------------------------------
+// 5-5. 전체 패턴 분석
+// ---------------------------------------------------------------------------
+
+async function runPatternAnalysis() {
+  if (!state.selStudent || state.patternLoading) return;
+  const student  = state.students.find(s => s.id === state.selStudent);
+  if (!student) return;
+
+  const sessions = state.sessions
+    .filter(s => s.studentId === state.selStudent)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (!sessions.length) { alert('분석할 회기가 없습니다.'); return; }
+
+  state.patternLoading = true;
+  renderAIPanel();
+
+  const sessionsText = sessions.map(s =>
+    `${s.sessionNum}회기 (${s.date}):\n${s.verbatim}` +
+    (s.memo ? `\n[메모] ${s.memo}` : '') +
+    (s.analysis ? `\n[슈퍼비전 요약] ${s.analysis.overall}` : '')
+  ).join('\n\n---\n\n');
+
+  const prompt = `당신은 학교상담 임상 슈퍼바이저입니다.
+${student.alias} (${student.grade}) 내담자의 전체 ${sessions.length}회기 기록입니다.
+가정: ${student.family || '정보 없음'} | 교우: ${student.peers || '정보 없음'} | 상황: ${student.situation || '정보 없음'}
+
+${sessionsText}
+
+위 전체 회기를 분석해 종합 패턴 보고서를 JSON으로 작성하세요.
+각 항목은 핵심만 2-4문장으로 간결하게. JSON으로만 응답.
+
+{
+  "clientPattern":    "전체 회기에서 보이는 내담자 핵심 패턴 (방어기제, 반복 주제, 감정 흐름 변화)",
+  "counselorPattern": "상담자의 반복 개입 패턴과 임상적 의미",
+  "progress":         "회기 경과에 따른 변화와 진전 수준",
+  "keyMoments":       "임상적으로 중요한 전환점 또는 주목할 장면",
+  "nextFocus":        "향후 상담 핵심 과제와 방향",
+  "overall":          "전체 사례 종합 임상 평가"
+}`;
+
+  try {
+    const text = await streamAnalyze(
+      { model: 'claude-sonnet-4-6', max_tokens: 8000,
+        messages: [{ role: 'user', content: prompt }] },
+      (acc) => {
+        const lbl = document.querySelector('#ai-content .ai-loading-label');
+        if (lbl) lbl.textContent = `패턴 분석 중... ${acc.length}자`;
+      }
+    );
+    const result  = parseJSON(text);
+    result.savedAt = new Date().toISOString().split('T')[0];
+    student.patternAnalysis = result;
+    saveData();
+    showPatternModal(result, false);
+  } catch (e) {
+    console.error('패턴 분석 오류:', e);
+    alert('패턴 분석 오류:\n' + e.message);
+  }
+
+  state.patternLoading = false;
+  renderAIPanel();
+}
+
+async function runMyPatternAnalysis() {
+  if (!state.selTopic || state.myPatternLoading) return;
+  const topic = state.myTopics.find(t => t.id === state.selTopic);
+  if (!topic) return;
+
+  const records = state.myRecords
+    .filter(r => r.topicId === state.selTopic)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (!records.length) { alert('분석할 기록이 없습니다.'); return; }
+
+  state.myPatternLoading = true;
+  renderAIPanel();
+
+  const aiRole      = topic.aiPrompt || '따뜻하게 경청하고 성찰을 돕는 코치';
+  const recordsText = records.map(r =>
+    `${r.recordNum}번째 기록 (${r.date}):\n${r.content}` +
+    (r.memo ? `\n메모: ${r.memo}` : '') +
+    (r.analysis ? `\n[보고서 요약] ${r.analysis.overall}` : '')
+  ).join('\n\n---\n\n');
+
+  const prompt = `당신은 ${aiRole} 역할입니다.
+'${topic.title}' 주제의 전체 ${records.length}개 기록입니다.
+
+${recordsText}
+
+위 전체 기록을 분석해 종합 패턴 보고서를 JSON으로 작성하세요.
+각 항목은 핵심만 2-4문장으로. JSON으로만 응답.
+
+{
+  "pattern":   "전체 기록에서 발견된 핵심 반복 패턴",
+  "growth":    "시간 경과에 따른 변화와 성장",
+  "recurring": "계속 돌아오는 미해결 주제나 감정",
+  "insight":   "전체 기록에서 가장 중요한 통찰",
+  "nextFocus": "앞으로 주목해야 할 방향과 질문",
+  "overall":   "전체 기록 종합 평가"
+}`;
+
+  try {
+    const text = await streamAnalyze(
+      { model: 'claude-sonnet-4-6', max_tokens: 6000,
+        messages: [{ role: 'user', content: prompt }] },
+      (acc) => {
+        const lbl = document.querySelector('#ai-content .ai-loading-label');
+        if (lbl) lbl.textContent = `패턴 분석 중... ${acc.length}자`;
+      }
+    );
+    const result  = parseJSON(text);
+    result.savedAt = new Date().toISOString().split('T')[0];
+    topic.patternAnalysis = result;
+    saveData();
+    showPatternModal(result, true);
+  } catch (e) {
+    console.error('패턴 분석 오류:', e);
+    alert('패턴 분석 오류:\n' + e.message);
+  }
+
+  state.myPatternLoading = false;
+  renderAIPanel();
+}
+
+function showPatternModal(result, isMy) {
+  const sections = isMy
+    ? [
+        { key: 'pattern',   label: '핵심 패턴',       cls: 'rpt-blue'   },
+        { key: 'growth',    label: '성장과 변화',      cls: 'rpt-green'  },
+        { key: 'recurring', label: '반복되는 주제',    cls: 'rpt-amber'  },
+        { key: 'insight',   label: '핵심 통찰',        cls: 'rpt-purple' },
+        { key: 'nextFocus', label: '앞으로의 방향',    cls: 'rpt-red'    },
+        { key: 'overall',   label: '종합 평가',        cls: 'rpt-purple' },
+      ]
+    : [
+        { key: 'clientPattern',    label: '내담자 핵심 패턴', cls: 'rpt-blue'   },
+        { key: 'counselorPattern', label: '상담자 개입 패턴', cls: 'rpt-amber'  },
+        { key: 'progress',         label: '진전과 변화',      cls: 'rpt-green'  },
+        { key: 'keyMoments',       label: '핵심 전환점',      cls: 'rpt-purple' },
+        { key: 'nextFocus',        label: '다음 과제',        cls: 'rpt-red'    },
+        { key: 'overall',          label: '종합 임상 평가',   cls: 'rpt-purple' },
+      ];
+
+  const accentColor = isMy ? '#1D9E75' : '#0F6E56';
+  const sectionsHTML = sections.map(s => `
+    <div class="rpt-section ${s.cls}">
+      <div class="rpt-label" onclick="this.closest('.rpt-section').classList.toggle('rpt-collapsed')">
+        <span>${s.label}</span><span class="rpt-chevron">▾</span>
+      </div>
+      <div class="rpt-body">${(result[s.key] || '—').replace(/\n/g, '<br>').replace(/ (\d+)\)/g, '<br>$1)')}</div>
+    </div>`).join('');
+
+  const overlay = document.getElementById('pattern-modal-overlay');
+  const modal   = document.getElementById('pattern-modal');
+  if (!overlay || !modal) return;
+
+  modal.innerHTML = `
+    <div class="popup-header" style="padding:14px 18px;">
+      <span style="font-weight:600;color:${accentColor};">전체 패턴 분석 · ${result.savedAt || ''}</span>
+      <button class="popup-close-btn" onclick="closePatternModal()">×</button>
+    </div>
+    <div class="pattern-modal-body">${sectionsHTML}</div>`;
+
+  overlay.style.display = '';
+  modal.style.display   = '';
+}
+
+function closePatternModal() {
+  document.getElementById('pattern-modal-overlay').style.display = 'none';
+  document.getElementById('pattern-modal').style.display = 'none';
+}
+
+function viewLastPatternAnalysis() {
+  const session = state.selSession ? state.sessions.find(s => s.id === state.selSession) : null;
+  const student = session ? state.students.find(s => s.id === session.studentId)
+    : (state.selStudent ? state.students.find(s => s.id === state.selStudent) : null);
+  if (student?.patternAnalysis) showPatternModal(student.patternAnalysis, false);
+}
+
+function viewLastMyPatternAnalysis() {
+  const topic = state.selTopic ? state.myTopics.find(t => t.id === state.selTopic) : null;
+  if (topic?.patternAnalysis) showPatternModal(topic.patternAnalysis, true);
+}
+
+// ---------------------------------------------------------------------------
+// 5-6. 수정 폼 렌더링
+// ---------------------------------------------------------------------------
+
+function renderEditStudentForm(st) {
+  const grades = ['초1','초2','초3','초4','초5','초6','중1','중2','중3','고1','고2','고3'];
+  const genderOpts = [['', '미기재'], ['남', '남'], ['여', '여']];
+  return `<div>
+    <div class="form-notice">내담자 정보를 수정합니다.</div>
+    <div class="form-group">
+      <label class="form-label">식별 코드</label>
+      <input class="form-input" id="falias" value="${st.alias}" autocomplete="off" />
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">학년</label>
+        <select class="form-select" id="fg">
+          ${grades.map(g => `<option${g === st.grade ? ' selected' : ''}>${g}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">성별</label>
+        <select class="form-select" id="fgd">
+          ${genderOpts.map(([v, l]) => `<option value="${v}"${v === st.gender ? ' selected' : ''}>${l}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="form-section-title">배경 정보</div>
+    <div class="form-group">
+      <label class="form-label">가족관계 / 가정환경</label>
+      <textarea class="form-textarea" id="ffamily" style="min-height:50px;">${st.family || ''}</textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">교우관계 / 학교생활</label>
+      <textarea class="form-textarea" id="fpeers" style="min-height:50px;">${st.peers || ''}</textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">현재 상황 및 배경</label>
+      <textarea class="form-textarea" id="fsituation" style="min-height:50px;">${st.situation || ''}</textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">기타 메모</label>
+      <textarea class="form-textarea" id="fnotes">${st.notes || ''}</textarea>
+    </div>
+    <div class="btn-row">
+      <button class="btn-secondary" onclick="cancelEditStudent()">취소</button>
+      <button class="btn-primary" onclick="updateStudent()">저장</button>
+    </div>
+  </div>`;
+}
+
+function cancelEditStudent() {
+  state.editingId = null;
+  state.mode = state.selStudent ? 'list' : 'welcome';
+  render();
+}
+
+function renderEditSessionForm(session) {
+  const tagsVal = (session.tags || []).join(', ');
+  return `<div>
+    <div class="form-group">
+      <label class="form-label">날짜</label>
+      <input class="form-input" id="fd" type="date" value="${session.date}" />
+    </div>
+    <div class="form-group">
+      <div class="vt-input-header">
+        <label class="form-label" style="margin:0;">축어록</label>
+        <label class="file-btn">파일 불러오기 (.txt)
+          <input type="file" accept=".txt" style="display:none;" onchange="loadVerbatimFile(this)" />
+        </label>
+      </div>
+      <textarea class="form-textarea vt-textarea" id="fv">${session.verbatim || ''}</textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">메모 (선택)</label>
+      <textarea class="form-textarea" id="fmemo" style="min-height:50px;">${session.memo || ''}</textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">태그 <span style="color:var(--color-text-tertiary);font-weight:400;">(쉼표로 구분)</span></label>
+      <input class="form-input" id="ftags" placeholder="예: 불안, 가족갈등, CBT" value="${tagsVal}" autocomplete="off" />
+    </div>
+    <div class="btn-row">
+      <button class="btn-secondary" onclick="cancelEditSession()">취소</button>
+      <button class="btn-primary" onclick="updateSession()">저장</button>
+    </div>
+  </div>`;
+}
+
+function cancelEditSession() {
+  state.editingId  = null;
+  state.mode       = state.selSession ? 'detail' : (state.selStudent ? 'list' : 'welcome');
+  render();
+}
+
+function renderEditTopicForm(topic) {
+  return `<div>
+    <div class="form-group">
+      <label class="form-label">주제 이름</label>
+      <input class="form-input" id="ft-title" value="${topic.title}" autocomplete="off" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">AI 역할 설정 <span style="color:var(--color-text-tertiary);font-weight:400;">(선택)</span></label>
+      <textarea class="form-textarea" id="ft-prompt" style="min-height:110px;">${topic.aiPrompt || ''}</textarea>
+    </div>
+    <div class="btn-row">
+      <button class="btn-secondary" onclick="cancelEditTopic()">취소</button>
+      <button class="btn-primary-my" onclick="updateTopic()">저장</button>
+    </div>
+  </div>`;
+}
+
+function cancelEditTopic() {
+  state.editingId = null;
+  state.myMode    = state.selTopic ? 'list' : 'welcome';
+  render();
+}
+
+function renderEditRecordForm(record) {
+  const tagsVal = (record.tags || []).join(', ');
+  return `<div>
+    <div class="form-group">
+      <label class="form-label">날짜</label>
+      <input class="form-input" id="fr-date" type="date" value="${record.date}" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">내용</label>
+      <textarea class="form-textarea my-content-input" id="fr-content">${record.content || ''}</textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">메모 <span style="color:var(--color-text-tertiary);font-weight:400;">(선택)</span></label>
+      <textarea class="form-textarea" id="fr-memo" style="min-height:50px;">${record.memo || ''}</textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">태그 <span style="color:var(--color-text-tertiary);font-weight:400;">(쉼표로 구분)</span></label>
+      <input class="form-input" id="fr-tags" placeholder="예: 감정, 성찰, 수업" value="${tagsVal}" autocomplete="off" />
+    </div>
+    <div class="btn-row">
+      <button class="btn-secondary" onclick="cancelEditRecord()">취소</button>
+      <button class="btn-primary-my" onclick="updateRecord()">저장</button>
+    </div>
+  </div>`;
+}
+
+function cancelEditRecord() {
+  state.editingId = null;
+  state.myMode    = state.selRecord ? 'detail' : (state.selTopic ? 'list' : 'welcome');
+  render();
 }
 
 // ---------------------------------------------------------------------------
@@ -969,14 +1464,20 @@ function render() {
 // -- 사이드바 --
 
 function renderSidebar() {
-  const el = document.getElementById('sidebar-list');
+  const el    = document.getElementById('sidebar-list');
+  const query = state.searchQuery.toLowerCase().trim();
 
   if (state.view === 'myrecords') {
-    if (!state.myTopics.length) {
-      el.innerHTML = '<p class="ai-placeholder">주제가 없어요<br><span style="font-size:10px;opacity:.6;">+ 새 주제 추가로 시작하세요</span></p>';
+    const topics = query
+      ? state.myTopics.filter(t => t.title.toLowerCase().includes(query))
+      : state.myTopics;
+    if (!topics.length) {
+      el.innerHTML = query
+        ? '<p class="ai-placeholder">검색 결과 없음</p>'
+        : '<p class="ai-placeholder">주제가 없어요<br><span style="font-size:10px;opacity:.6;">+ 새 주제 추가로 시작하세요</span></p>';
       return;
     }
-    el.innerHTML = state.myTopics.map(t => {
+    el.innerHTML = topics.map(t => {
       const cnt    = state.myRecords.filter(r => r.topicId === t.id).length;
       const active = state.selTopic === t.id;
       return `<div class="list-item${active ? ' active my-active' : ''}">
@@ -984,18 +1485,31 @@ function renderSidebar() {
           <div class="list-item-name">${t.title}</div>
           <div class="list-item-sub">${cnt}개 기록</div>
         </div>
-        <button class="list-item-del" onclick="event.stopPropagation();deleteTopic('${t.id}')" title="삭제">×</button>
+        <div class="list-item-actions">
+          <button class="list-item-edit" onclick="event.stopPropagation();editTopic('${t.id}')" title="수정">✎</button>
+          <button class="list-item-del" onclick="event.stopPropagation();deleteTopic('${t.id}')" title="삭제">×</button>
+        </div>
       </div>`;
     }).join('');
     return;
   }
 
   // view === 'student'
-  if (!state.students.length) {
-    el.innerHTML = '<p class="ai-placeholder">내담자가 없어요</p>';
+  const students = query
+    ? state.students.filter(st =>
+        st.alias.toLowerCase().includes(query) ||
+        st.grade.toLowerCase().includes(query) ||
+        (st.situation || '').toLowerCase().includes(query)
+      )
+    : state.students;
+
+  if (!students.length) {
+    el.innerHTML = query
+      ? '<p class="ai-placeholder">검색 결과 없음</p>'
+      : '<p class="ai-placeholder">내담자가 없어요</p>';
     return;
   }
-  el.innerHTML = state.students.map(st => {
+  el.innerHTML = students.map(st => {
     const cnt    = state.sessions.filter(s => s.studentId === st.id).length;
     const active = state.selStudent === st.id;
     return `<div class="list-item${active ? ' active' : ''}">
@@ -1003,7 +1517,10 @@ function renderSidebar() {
         <div class="list-item-name">${st.alias}</div>
         <div class="list-item-sub">${st.grade} · ${cnt}회기</div>
       </div>
-      <button class="list-item-del" onclick="event.stopPropagation();deleteStudent('${st.id}')" title="삭제">×</button>
+      <div class="list-item-actions">
+        <button class="list-item-edit" onclick="event.stopPropagation();editStudent('${st.id}')" title="수정">✎</button>
+        <button class="list-item-del" onclick="event.stopPropagation();deleteStudent('${st.id}')" title="삭제">×</button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -1033,6 +1550,29 @@ function renderMain() {
     return;
   }
 
+  if (state.mode === 'edit-student') {
+    const st = state.students.find(s => s.id === state.editingId);
+    if (st) {
+      titleEl.textContent = '내담자 정보 수정';
+      subEl.textContent   = st.alias;
+      nsBtn.style.display = 'none';
+      content.innerHTML   = renderEditStudentForm(st);
+      return;
+    }
+  }
+
+  if (state.mode === 'edit-session') {
+    const session = state.sessions.find(s => s.id === state.editingId);
+    if (session) {
+      const st = state.students.find(s => s.id === session.studentId);
+      titleEl.textContent = '회기 수정';
+      subEl.textContent   = st ? st.alias : '';
+      nsBtn.style.display = 'none';
+      content.innerHTML   = renderEditSessionForm(session);
+      return;
+    }
+  }
+
   if (state.mode === 'detail' && state.selSession) {
     const session = state.sessions.find(s => s.id === state.selSession);
     if (session) {
@@ -1054,6 +1594,29 @@ function renderMain() {
       nsBtn.style.display = 'none';
       content.innerHTML   = renderNewTopicForm();
       return;
+    }
+    // 주제 수정 폼
+    if (state.myMode === 'edit-topic') {
+      const t = state.myTopics.find(t => t.id === state.editingId);
+      if (t) {
+        titleEl.textContent = '주제 수정';
+        subEl.textContent   = '';
+        nsBtn.style.display = 'none';
+        content.innerHTML   = renderEditTopicForm(t);
+        return;
+      }
+    }
+    // 기록 수정 폼
+    if (state.myMode === 'edit-record') {
+      const r = state.myRecords.find(r => r.id === state.editingId);
+      if (r) {
+        const t = state.myTopics.find(t => t.id === r.topicId);
+        titleEl.textContent = '기록 수정';
+        subEl.textContent   = t ? t.title : '';
+        nsBtn.style.display = 'none';
+        content.innerHTML   = renderEditRecordForm(r);
+        return;
+      }
     }
     // 새 기록 폼
     if (state.myMode === 'new-record' && state.selTopic) {
@@ -1100,22 +1663,42 @@ function renderMain() {
       </div>`;
       return;
     }
-    content.innerHTML = all.map(r => {
-      const firstLine = r.content ? r.content.split('\n')[0].substring(0, 60) : '';
-      const hasRpt    = !!r.analysis;
-      const hasDlg    = r.aiChat && r.aiChat.length > 0;
-      return `<div class="record-card${r.id === state.selRecord ? ' active' : ''}" onclick="selectRecord('${r.id}')">
-        <div class="session-meta">
-          <span class="record-num">${r.recordNum}번째</span>
-          <span style="display:flex;gap:5px;align-items:center;">
-            ${hasRpt ? '<span class="session-badge my-badge">보고서</span>' : ''}
-            ${hasDlg ? '<span class="session-badge my-badge-dlg">대화</span>' : ''}
-            <span class="session-date">${r.date}</span>
-          </span>
-        </div>
-        <div class="session-preview">${firstLine || r.memo || '—'}</div>
-      </div>`;
-    }).join('');
+    // 태그 필터 바 (나의 기록)
+    const allRecordTags = [...new Set(all.flatMap(r => r.tags || []))];
+    const recordTagBar = allRecordTags.length ? `
+      <div class="tag-filter-bar my-tag-filter-bar">
+        ${state.filterTags.length ? `<button class="tag-filter-clear my-tag-filter-clear" onclick="clearFilterTags()">× 필터 해제</button>` : ''}
+        ${allRecordTags.map(tag => `<button class="tag-filter-btn my-tag-filter-btn${state.filterTags.includes(tag) ? ' active my-active' : ''}"
+          onclick="toggleFilterTag('${tag}')">${tag}</button>`).join('')}
+      </div>` : '';
+
+    const filteredRecs = state.filterTags.length
+      ? all.filter(r => state.filterTags.every(t => (r.tags || []).includes(t)))
+      : all;
+
+    const recCardsHTML = filteredRecs.length
+      ? filteredRecs.map(r => {
+          const firstLine = r.content ? r.content.split('\n')[0].substring(0, 60) : '';
+          const hasRpt    = !!r.analysis;
+          const hasDlg    = r.aiChat && r.aiChat.length > 0;
+          const tagsHTML  = (r.tags && r.tags.length)
+            ? `<div class="card-tags">${r.tags.map(t => `<span class="tag-badge my-tag-badge">${t}</span>`).join('')}</div>` : '';
+          return `<div class="record-card${r.id === state.selRecord ? ' active' : ''}" onclick="selectRecord('${r.id}')">
+            <div class="session-meta">
+              <span class="record-num">${r.recordNum}번째</span>
+              <span style="display:flex;gap:5px;align-items:center;">
+                ${hasRpt ? '<span class="session-badge my-badge">보고서</span>' : ''}
+                ${hasDlg ? '<span class="session-badge my-badge-dlg">대화</span>' : ''}
+                <span class="session-date">${r.date}</span>
+              </span>
+            </div>
+            <div class="session-preview">${firstLine || r.memo || '—'}</div>
+            ${tagsHTML}
+          </div>`;
+        }).join('')
+      : '<div class="empty-state" style="padding:30px 0;">해당 태그의 기록이 없습니다</div>';
+
+    content.innerHTML = recordTagBar + recCardsHTML;
     return;
   }
 
@@ -1142,22 +1725,42 @@ function renderMain() {
     return;
   }
 
-  content.innerHTML = all.map(s => {
-    const firstLine = s.verbatim ? s.verbatim.split('\n')[0].substring(0, 60) : '';
-    const hasRpt    = !!s.analysis;
-    const hasDlg    = s.supervisionChat && s.supervisionChat.length > 0;
-    return `<div class="session-card${s.id === state.selSession ? ' active' : ''}" onclick="selectSession('${s.id}')">
-      <div class="session-meta">
-        <span class="session-num">${s.sessionNum}회기</span>
-        <span style="display:flex;gap:5px;align-items:center;">
-          ${hasRpt ? '<span class="session-badge">보고서</span>' : ''}
-          ${hasDlg ? '<span class="session-badge session-badge-dialogue">대화</span>' : ''}
-          <span class="session-date">${s.date}</span>
-        </span>
-      </div>
-      <div class="session-preview">${firstLine || s.memo || '—'}</div>
-    </div>`;
-  }).join('');
+  // 태그 필터 바
+  const allTags = [...new Set(all.flatMap(s => s.tags || []))];
+  const tagFilterBar = allTags.length ? `
+    <div class="tag-filter-bar">
+      ${state.filterTags.length ? `<button class="tag-filter-clear" onclick="clearFilterTags()">× 필터 해제</button>` : ''}
+      ${allTags.map(tag => `<button class="tag-filter-btn${state.filterTags.includes(tag) ? ' active' : ''}"
+        onclick="toggleFilterTag('${tag}')">${tag}</button>`).join('')}
+    </div>` : '';
+
+  const filtered = state.filterTags.length
+    ? all.filter(s => state.filterTags.every(t => (s.tags || []).includes(t)))
+    : all;
+
+  const cardsHTML = filtered.length
+    ? filtered.map(s => {
+        const firstLine = s.verbatim ? s.verbatim.split('\n')[0].substring(0, 60) : '';
+        const hasRpt    = !!s.analysis;
+        const hasDlg    = s.supervisionChat && s.supervisionChat.length > 0;
+        const tagsHTML  = (s.tags && s.tags.length)
+          ? `<div class="card-tags">${s.tags.map(t => `<span class="tag-badge">${t}</span>`).join('')}</div>` : '';
+        return `<div class="session-card${s.id === state.selSession ? ' active' : ''}" onclick="selectSession('${s.id}')">
+          <div class="session-meta">
+            <span class="session-num">${s.sessionNum}회기</span>
+            <span style="display:flex;gap:5px;align-items:center;">
+              ${hasRpt ? '<span class="session-badge">보고서</span>' : ''}
+              ${hasDlg ? '<span class="session-badge session-badge-dialogue">대화</span>' : ''}
+              <span class="session-date">${s.date}</span>
+            </span>
+          </div>
+          <div class="session-preview">${firstLine || s.memo || '—'}</div>
+          ${tagsHTML}
+        </div>`;
+      }).join('')
+    : '<div class="empty-state" style="padding:30px 0;">해당 태그의 회기가 없습니다</div>';
+
+  content.innerHTML = tagFilterBar + cardsHTML;
 }
 
 // -- 홈 화면 --
@@ -1595,10 +2198,14 @@ function renderSessionDetail(session, totalSessions) {
   else if (state.sessionTab === 'report')   body = renderSupervisionReport(session);
   else                                   body = renderSupervisionDialogue(session);
 
+  const sessionTagsHTML = (session.tags && session.tags.length)
+    ? `<div class="detail-tags">${session.tags.map(t => `<span class="tag-badge">${t}</span>`).join('')}</div>` : '';
+
   return `
     <div class="detail-meta">
       <span class="session-num">${session.sessionNum}회기</span>
       <span style="font-size:12px;color:var(--color-text-secondary);">${session.date}</span>
+      ${sessionTagsHTML}
       <span style="flex:1;"></span>
       <button class="btn-secondary detail-back" onclick="backFromDetail()">← 목록</button>
     </div>
@@ -1606,7 +2213,10 @@ function renderSessionDetail(session, totalSessions) {
     <div class="tab-content">${body}</div>
     <div class="detail-footer-note">
       <span>전체 ${totalSessions}회기 중 ${session.sessionNum}회기</span>
-      <button class="btn-danger" onclick="deleteSession('${session.id}')">삭제</button>
+      <div style="display:flex;gap:6px;">
+        <button class="btn-secondary" onclick="editSession('${session.id}')">수정</button>
+        <button class="btn-danger" onclick="deleteSession('${session.id}')">삭제</button>
+      </div>
     </div>`;
 }
 
@@ -1703,6 +2313,10 @@ function renderNewSessionForm() {
       <textarea class="form-textarea" id="fmemo" style="min-height:50px;"
         placeholder="회기 특이사항, 비언어적 반응 등"></textarea>
     </div>
+    <div class="form-group">
+      <label class="form-label">태그 <span style="color:var(--color-text-tertiary);font-weight:400;">(선택, 쉼표로 구분)</span></label>
+      <input class="form-input" id="ftags" placeholder="예: 불안, 가족갈등, CBT" autocomplete="off" />
+    </div>
     <div class="btn-row">
       <button class="btn-secondary" onclick="cancelForm()">취소</button>
       <button class="btn-primary" onclick="saveSession()">저장</button>
@@ -1758,6 +2372,10 @@ function renderNewRecordForm() {
       <label class="form-label">메모 <span style="color:var(--color-text-tertiary);font-weight:400;">(선택)</span></label>
       <textarea class="form-textarea" id="fr-memo" style="min-height:50px;"
         placeholder="짧은 메모"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">태그 <span style="color:var(--color-text-tertiary);font-weight:400;">(선택, 쉼표로 구분)</span></label>
+      <input class="form-input" id="fr-tags" placeholder="예: 감정, 성찰, 수업" autocomplete="off" />
     </div>
     <div class="btn-row">
       <button class="btn-secondary" onclick="cancelMyForm()">취소</button>
@@ -1861,10 +2479,14 @@ function renderRecordDetail(record, totalRecords) {
     body = renderMyDialogue(record);
   }
 
+  const recordTagsHTML = (record.tags && record.tags.length)
+    ? `<div class="detail-tags">${record.tags.map(t => `<span class="tag-badge my-tag-badge">${t}</span>`).join('')}</div>` : '';
+
   return `
     <div class="detail-meta">
       <span class="record-num">${record.recordNum}번째</span>
       <span style="font-size:12px;color:var(--color-text-secondary);">${record.date}</span>
+      ${recordTagsHTML}
       <span style="flex:1;"></span>
       <button class="btn-secondary detail-back" onclick="backFromMyDetail()">← 목록</button>
     </div>
@@ -1872,7 +2494,10 @@ function renderRecordDetail(record, totalRecords) {
     <div class="tab-content">${body}</div>
     <div class="detail-footer-note">
       <span>전체 ${totalRecords}개 중 ${record.recordNum}번째</span>
-      <button class="btn-danger" onclick="deleteRecord('${record.id}')">삭제</button>
+      <div style="display:flex;gap:6px;">
+        <button class="btn-secondary" onclick="editRecord('${record.id}')">수정</button>
+        <button class="btn-danger" onclick="deleteRecord('${record.id}')">삭제</button>
+      </div>
     </div>`;
 }
 
@@ -1917,9 +2542,21 @@ function renderMyAIPanel() {
     `<button class="period-btn${state.myPeriod === p.key ? ' active' : ''}" onclick="setMyPeriod('${p.key}')">${p.label}</button>`
   ).join('');
 
+  const topicRecordCount = state.myRecords.filter(r => r.topicId === topic.id).length;
+  const myPatternBtnHTML = topicRecordCount > 0 ? `
+    <div class="pattern-section" style="border-top-color:rgba(29,158,117,.2);">
+      <button class="pattern-analysis-btn" style="background:#1D9E75;" onclick="runMyPatternAnalysis()" ${state.myPatternLoading ? 'disabled' : ''}>
+        ${state.myPatternLoading ? '분석 중...' : '전체 패턴 분석 ↗'}
+      </button>
+      ${topic.patternAnalysis
+        ? `<div class="pattern-last">마지막 분석: ${topic.patternAnalysis.savedAt}
+            <button class="pattern-view-btn" style="color:#1D9E75;" onclick="viewLastMyPatternAnalysis()">보기</button></div>`
+        : ''}
+    </div>` : '';
+
   content.innerHTML = `
     <div class="ctx-alias" style="color:#1D9E75;">${topic.title}</div>
-    <div class="ctx-meta">${state.myRecords.filter(r => r.topicId === topic.id).length}개 기록</div>
+    <div class="ctx-meta">${topicRecordCount}개 기록</div>
     ${topic.aiPrompt ? `<div class="ctx-block">
       <div class="ctx-lbl">AI 역할</div>
       <div class="ctx-txt">${topic.aiPrompt}</div>
@@ -1931,7 +2568,8 @@ function renderMyAIPanel() {
     <div class="ctx-block" style="margin-top:10px;">
       <div class="ctx-lbl">보고서 기간</div>
       <div class="period-btns">${periodBtns}</div>
-    </div>`;
+    </div>
+    ${myPatternBtnHTML}`;
 }
 
 // -- AI 패널 (학생 정보 + 보고서 생성) --
@@ -1962,9 +2600,40 @@ function renderAIPanel() {
   }
 
   if (!session || !student) {
+    // 학생은 선택됐지만 세션이 없는 경우 — 패턴 분석 버튼만 표시
+    const curStudent = state.selStudent ? state.students.find(s => s.id === state.selStudent) : null;
+    if (curStudent) {
+      const curSessions = state.sessions.filter(s => s.studentId === curStudent.id);
+      content.innerHTML = `
+        <div class="ctx-alias">${curStudent.alias}</div>
+        <div class="ctx-meta">${curStudent.grade}${curStudent.gender ? ' · ' + curStudent.gender : ''}</div>
+        <p class="ai-placeholder" style="margin-top:12px;">회기를 선택하면<br>보고서를 생성할 수 있어요</p>
+        ${curSessions.length > 0 ? `<div class="pattern-section">
+          <button class="pattern-analysis-btn" onclick="runPatternAnalysis()" ${state.patternLoading ? 'disabled' : ''}>
+            ${state.patternLoading ? '분석 중...' : '전체 패턴 분석 ↗'}
+          </button>
+          ${curStudent.patternAnalysis
+            ? `<div class="pattern-last">마지막 분석: ${curStudent.patternAnalysis.savedAt}
+                <button class="pattern-view-btn" onclick="viewLastPatternAnalysis()">보기</button></div>`
+            : ''}
+        </div>` : ''}`;
+      return;
+    }
     content.innerHTML = '<p class="ai-placeholder">회기를 선택하면<br>내담자 정보가 표시됩니다</p>';
     return;
   }
+
+  const studentSessions = state.sessions.filter(s => s.studentId === student.id);
+  const patternBtnHTML = studentSessions.length > 0 ? `
+    <div class="pattern-section">
+      <button class="pattern-analysis-btn" onclick="runPatternAnalysis()" ${state.patternLoading ? 'disabled' : ''}>
+        ${state.patternLoading ? '분석 중...' : '전체 패턴 분석 ↗'}
+      </button>
+      ${student.patternAnalysis
+        ? `<div class="pattern-last">마지막 분석: ${student.patternAnalysis.savedAt}
+            <button class="pattern-view-btn" onclick="viewLastPatternAnalysis()">보기</button></div>`
+        : ''}
+    </div>` : '';
 
   content.innerHTML = `
     <div class="ctx-alias">${student.alias}</div>
@@ -1973,7 +2642,8 @@ function renderAIPanel() {
     ${student.peers ? `<div class="ctx-block"><div class="ctx-lbl">교우관계</div><div class="ctx-txt">${student.peers}</div></div>` : ''}
     ${student.situation ? `<div class="ctx-block"><div class="ctx-lbl">현재 상황</div><div class="ctx-txt">${student.situation}</div></div>` : ''}
     ${student.notes ? `<div class="ctx-block"><div class="ctx-lbl">메모</div><div class="ctx-txt">${student.notes}</div></div>` : ''}
-    ${session.analysis ? `<div class="ctx-done">보고서 작성됨 · ${session.analysis.savedAt}</div>` : ''}`;
+    ${session.analysis ? `<div class="ctx-done">보고서 작성됨 · ${session.analysis.savedAt}</div>` : ''}
+    ${patternBtnHTML}`;
 }
 
 // ---------------------------------------------------------------------------

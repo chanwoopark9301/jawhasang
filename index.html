@@ -33,11 +33,16 @@
             <button id="btn-dv" onclick="setView('myrecords')">나의 기록</button>
           </div>
         </div>
+        <input class="sidebar-search" id="sidebar-search" type="search"
+          placeholder="검색..." oninput="setSearchQuery(this.value)" autocomplete="off" />
       </div>
       <div class="sidebar-list" id="sidebar-list"></div>
       <div class="sidebar-footer">
         <button class="add-btn" id="add-btn" onclick="handleAdd()">+ 새 학생 추가</button>
-        <a href="/logout" class="logout-link">로그아웃</a>
+        <div class="sidebar-footer-row">
+          <button class="export-btn" onclick="exportData()" title="JSON 백업 다운로드">↓ 내보내기</button>
+          <a href="/logout" class="logout-link">로그아웃</a>
+        </div>
       </div>
     </aside>
 
@@ -96,6 +101,10 @@
     <!-- 캘린더 날짜 팝업 -->
     <div class="cal-popup-overlay" id="cal-popup-overlay" style="display:none;" onclick="closeCalPopup()"></div>
     <div class="cal-popup-modal" id="cal-popup-modal" style="display:none;"></div>
+
+    <!-- 전체 패턴 분석 모달 -->
+    <div class="cal-popup-overlay" id="pattern-modal-overlay" style="display:none;" onclick="closePatternModal()"></div>
+    <div class="pattern-modal" id="pattern-modal" style="display:none;"></div>
 
   </div>
   <script src="app.js"></script>
