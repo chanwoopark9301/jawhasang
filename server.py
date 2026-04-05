@@ -148,7 +148,7 @@ _LOGIN_HTML = """<!DOCTYPE html>
   <div class="card">
     <div class="lock">🔒</div>
     <h1>상담 일지</h1>
-    <p class="sub">개인정보 암호화 저장 · 전문상담교사 전용</p>
+    <p class="sub">자화상 기록에 관한 앱.</p>
     {% if error %}<div class="err">{{ error }}</div>{% endif %}
     <form method="post">
       <label>비밀번호</label>
