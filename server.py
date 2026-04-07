@@ -7,6 +7,7 @@
 """
 
 import os
+import re
 import json
 import hashlib
 import base64
@@ -30,10 +31,24 @@ app = Flask(__name__, static_folder='.')
 app.secret_key = hashlib.sha256((APP_PASSWORD + '_sk').encode()).hexdigest()
 
 # ---------------------------------------------------------------------------
-# 암호화 — APP_PASSWORD로 Fernet 키 유도
+# 암호화 — APP_PASSWORD로 Fernet 키 유도 (PBKDF2 강화)
 # ---------------------------------------------------------------------------
 
+# 솔트: APP_PASSWORD 기반 고정값 (단일 사용자 앱 — 키 변경 없이 일관성 유지)
+_SALT = hashlib.sha256(b'jwhwa_salt_v1').digest()
+
 def _fernet():
+    """PBKDF2-HMAC-SHA256 기반 키 유도 (iterations=200_000)"""
+    key_bytes = hashlib.pbkdf2_hmac(
+        'sha256',
+        APP_PASSWORD.encode(),
+        _SALT,
+        iterations=200_000,
+    )
+    return Fernet(base64.urlsafe_b64encode(key_bytes))
+
+def _fernet_legacy():
+    """구버전 단순 SHA256 키 — 마이그레이션 폴백용"""
     key = base64.urlsafe_b64encode(hashlib.sha256(APP_PASSWORD.encode()).digest())
     return Fernet(key)
 
@@ -41,7 +56,13 @@ def _encrypt(data: dict) -> bytes:
     return _fernet().encrypt(json.dumps(data, ensure_ascii=False).encode())
 
 def _decrypt(raw: bytes) -> dict:
-    return json.loads(_fernet().decrypt(raw).decode())
+    try:
+        return json.loads(_fernet().decrypt(raw).decode())
+    except InvalidToken:
+        # 구버전 키로 복호화 후 신버전으로 재암호화 (자동 마이그레이션)
+        data = json.loads(_fernet_legacy().decrypt(raw).decode())
+        write_data(data)   # 신버전 키로 다시 저장
+        return data
 
 # ---------------------------------------------------------------------------
 # 저장소 — PostgreSQL 또는 로컬 파일 폴백
@@ -215,6 +236,71 @@ def save_data_route():
     return jsonify({'ok': True})
 
 # ---------------------------------------------------------------------------
+# PII 스크러빙 — AI 호출 전 개인식별정보 마스킹
+# ---------------------------------------------------------------------------
+
+# 마스킹 패턴 (한국 기준)
+_PII_PATTERNS = [
+    # 주민등록번호: 000000-0000000
+    (re.compile(r'\d{6}-[1-4]\d{6}'), '[주민번호]'),
+    # 전화번호: 010-0000-0000, 010 0000 0000, 01000000000
+    (re.compile(r'01[016789][-\s]?\d{3,4}[-\s]?\d{4}'), '[전화번호]'),
+    # 일반 전화: 02-0000-0000, 031-000-0000 등
+    (re.compile(r'0\d{1,2}[-\s]\d{3,4}[-\s]\d{4}'), '[전화번호]'),
+    # 이메일
+    (re.compile(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}'), '[이메일]'),
+    # 학교명 + 학생 실명 패턴 방어: "홍길동 학생" 형식은 alias로 대체하도록 프롬프트에서 처리
+]
+
+def _scrub_pii(text: str) -> str:
+    """텍스트에서 개인식별정보 패턴을 마스킹한다."""
+    if not isinstance(text, str):
+        return text
+    for pattern, replacement in _PII_PATTERNS:
+        text = pattern.sub(replacement, text)
+    return text
+
+def _scrub_payload(payload: dict) -> dict:
+    """AI 요청 페이로드의 모든 텍스트 필드에 PII 스크러빙 적용."""
+    if not isinstance(payload, dict):
+        return payload
+
+    result = dict(payload)
+
+    # system 프롬프트 스크러빙
+    if isinstance(result.get('system'), str):
+        result['system'] = _scrub_pii(result['system'])
+    elif isinstance(result.get('system'), list):
+        result['system'] = [
+            {**item, 'text': _scrub_pii(item['text'])}
+            if isinstance(item, dict) and 'text' in item else item
+            for item in result['system']
+        ]
+
+    # messages 배열 스크러빙
+    if isinstance(result.get('messages'), list):
+        scrubbed_messages = []
+        for msg in result['messages']:
+            if not isinstance(msg, dict):
+                scrubbed_messages.append(msg)
+                continue
+            content = msg.get('content')
+            if isinstance(content, str):
+                scrubbed_messages.append({**msg, 'content': _scrub_pii(content)})
+            elif isinstance(content, list):
+                new_content = [
+                    {**blk, 'text': _scrub_pii(blk['text'])}
+                    if isinstance(blk, dict) and 'text' in blk else blk
+                    for blk in content
+                ]
+                scrubbed_messages.append({**msg, 'content': new_content})
+            else:
+                scrubbed_messages.append(msg)
+        result['messages'] = scrubbed_messages
+
+    return result
+
+# ---------------------------------------------------------------------------
 # Anthropic API 프록시
 # ---------------------------------------------------------------------------
 
@@ -225,6 +311,10 @@ def analyze():
         return jsonify({'error': 'ANTHROPIC_API_KEY가 ecrk.env에 없습니다'}), 500
     payload = request.get_json()
     use_stream = payload.get('stream', False)
+
+    # AI 호출 전 PII 스크러빙
+    payload = _scrub_payload(payload)
+
     resp = requests.post(
         'https://api.anthropic.com/v1/messages',
         headers={

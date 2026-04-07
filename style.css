@@ -1207,12 +1207,14 @@ body {
 .rpt-green  { border: 0.5px solid #a8ccaa; }
 .rpt-red    { border: 0.5px solid #dba8a8; }
 .rpt-purple { border: 0.5px solid #c8b0dc; }
+.rpt-teal   { border: 0.5px solid #9acfc8; }
 
 .rpt-blue   .rpt-label { background: #e5edf5; color: #2c5f8a; }
 .rpt-amber  .rpt-label { background: #f5ece0; color: #7a5215; }
 .rpt-green  .rpt-label { background: #e5f0e5; color: #2d6330; }
 .rpt-red    .rpt-label { background: #f5e5e5; color: #8a2c2c; }
 .rpt-purple .rpt-label { background: #ede5f5; color: #5a3a8a; }
+.rpt-teal   .rpt-label { background: #e0f2ef; color: #1a5a54; }
 
 @media (prefers-color-scheme: dark) {
   .rpt-blue   { border-color: #1a3550; }
@@ -1220,11 +1222,13 @@ body {
   .rpt-green  { border-color: #1a3520; }
   .rpt-red    { border-color: #3a1a1a; }
   .rpt-purple { border-color: #281a38; }
+  .rpt-teal   { border-color: #0f2e2a; }
   .rpt-blue   .rpt-label { background: #1a3550; color: #90bcd8; }
   .rpt-amber  .rpt-label { background: #352510; color: #c8a060; }
   .rpt-green  .rpt-label { background: #1a3520; color: #90c890; }
   .rpt-red    .rpt-label { background: #3a1a1a; color: #d88888; }
   .rpt-purple .rpt-label { background: #281a38; color: #c0a0d8; }
+  .rpt-teal   .rpt-label { background: #0f2e2a; color: #70c8c0; }
 }
 
 /* --- 슈퍼비전 대화 --- */
@@ -2238,4 +2242,76 @@ body { height: 100svh; }
   padding: 14px 18px;
   overflow-y: auto;
   flex: 1;
+}
+
+/* =============================================
+   패널 접기/펼치기
+   ============================================= */
+
+.panel-collapse-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  padding: 3px 5px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  line-height: 1;
+  transition: color 0.15s, background 0.15s;
+}
+.panel-collapse-btn:hover {
+  color: var(--color-text-secondary);
+  background: var(--color-bg-tertiary);
+}
+
+/* 사이드바 접힘 */
+.sidebar.collapsed {
+  width: 28px !important;
+  min-width: 28px !important;
+}
+.sidebar.collapsed .view-toggle-pills,
+.sidebar.collapsed .home-nav-btn,
+.sidebar.collapsed .sidebar-search,
+.sidebar.collapsed .sidebar-list,
+.sidebar.collapsed .sidebar-footer {
+  display: none;
+}
+.sidebar.collapsed .view-toggle {
+  justify-content: center;
+  padding: 2px 0;
+}
+.sidebar.collapsed .sidebar-header {
+  padding: 8px 4px;
+}
+.sidebar.collapsed #sidebar-collapse-btn {
+  font-size: 12px;
+  padding: 4px 6px;
+}
+
+/* AI 패널 접힘 */
+.ai-panel.collapsed {
+  width: 28px !important;
+  min-width: 28px !important;
+}
+.ai-panel.collapsed #ai-header-title,
+.ai-panel.collapsed #ai-header-note,
+.ai-panel.collapsed .ai-content,
+.ai-panel.collapsed .ai-footer {
+  display: none;
+}
+.ai-panel.collapsed .ai-header {
+  justify-content: center;
+  padding: 10px 4px;
+}
+.ai-panel.collapsed #ai-collapse-btn {
+  font-size: 12px;
+  padding: 4px 6px;
+}
+
+/* 접힌 상태에서 리사이즈 핸들 전환 유지 */
+.sidebar.collapsed + .resize-handle,
+.resize-handle:has(+ .ai-panel.collapsed) {
+  pointer-events: none;
+  opacity: 0;
 }

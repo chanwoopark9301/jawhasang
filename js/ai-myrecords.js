@@ -57,20 +57,34 @@ async function runMyAI() {
   ).join('\n\n');
 
   const prompt = `당신은 ${aiRole} 역할입니다.
-${prevSummary ? `지난 분석 요약: ${prevSummary}\n` : ''}
-'${topic.title}' 기록 (${periodLabel}):
 
+'${topic.title}' 주제의 기록을 분석해 보고서를 작성하세요.
+${prevSummary ? `이전 분석 요약: ${prevSummary}\n` : ''}
+기간: ${periodLabel}
+
+【기록 내용】
 ${recordsText}
 
-위 기록을 분석해 보고서를 작성하세요.
-규칙: 각 항목은 핵심만 2-4문장으로 간결하게. 기록 인용은 꼭 필요한 것만. JSON으로만 응답.
+보고서 작성 규칙:
+1. 당신의 역할(${aiRole})에 맞게 보고서 항목명과 구성을 자유롭게 결정하세요.
+   - 감정 일기 코치라면: "감정_흐름", "핵심_패턴", "성장_지점", "다음_질문" 등
+   - 헬스/운동 코치라면: "운동_패턴", "잘된_점", "개선_포인트", "다음_목표" 등
+   - 학습/공부 코치라면: "학습_패턴", "이해도", "취약_영역", "다음_전략" 등
+   - 업무/진로 코치라면: "업무_패턴", "강점", "개선_과제", "다음_액션" 등
+2. 항목 수는 4~6개, 항목명은 한국어로, 밑줄(_) 대신 공백 사용 가능
+3. "overall" 항목은 반드시 포함 (종합 평가 및 다음 방향)
+4. 각 항목: 2~4문장으로 간결하게, 실제 기록 내용을 근거로 인용
+5. JSON으로만 응답 (다른 텍스트 없이)
 
+JSON 예시 (역할에 맞게 항목명 변경 필수):
 {
-  "pattern": "이 기간 반복된 패턴을 2-3문장으로.",
-  "strengths": "잘 된 것 또는 성장한 부분을 2-3문장으로.",
-  "improvements": "개선이 필요한 부분을 2-3문장으로.",
-  "questions": "다음을 위한 질문 2개를 간결하게.",
-  "overall": "전반적 평가와 방향을 2-3문장으로."
+  "항목명1": "내용...",
+  "항목명2": "내용...",
+  "항목명3": "내용...",
+  "항목명4": "내용...",
+  "overall": "종합 평가와 다음 방향...",
+  "savedAt": "${today}",
+  "period": "${periodLabel}"
 }`;
 
   state.myAiLoading = true;
@@ -86,8 +100,9 @@ ${recordsText}
       }
     );
     const result   = parseJSON(text);
-    result.savedAt = today;
-    result.period  = periodLabel;
+    // AI가 포함하지 않은 경우 보장
+    result.savedAt = result.savedAt || today;
+    result.period  = result.period  || periodLabel;
     const record   = state.myRecords.find(r => r.id === state.selRecord);
     if (record) {
       record.analysis = result;
@@ -143,13 +158,15 @@ async function startMyChat() {
   const sysCtx = buildMyRecordContext(record, topic);
 
   try {
+    const aiRole = topic?.aiPrompt || '따뜻하게 경청하고 성찰을 돕는 코치';
+    const startMsg = `기록을 읽었어요. 당신은 "${aiRole}" 역할입니다. 이 역할에 맞게 자연스럽게 대화를 시작해주세요. 판단하지 말고, 상대방이 스스로 생각하거나 느끼도록 유도하는 첫 마디를 해주세요.`;
     const res = await fetch('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6', max_tokens: 600,
         system: [{ type: 'text', text: sysCtx, cache_control: { type: 'ephemeral' } }],
-        messages: [{ role: 'user', content: '이 기록을 읽었어요. 지금 이 순간 가장 마음에 걸리는 게 뭔지 먼저 물어봐주세요.' }],
+        messages: [{ role: 'user', content: startMsg }],
       }),
     });
     if (!res.ok) throw new Error(`${res.status}`);

@@ -7,19 +7,28 @@
 // 나의 기록 — AI 보고서 렌더링
 // ---------------------------------------------------------------------------
 
+// AI가 반환하는 동적 키를 순서대로 렌더링 (overall은 항상 마지막)
+const _RPT_COLORS = ['rpt-blue', 'rpt-green', 'rpt-amber', 'rpt-red', 'rpt-purple', 'rpt-teal'];
+const _META_KEYS  = new Set(['savedAt', 'period']);
+
 function renderMyReport(record) {
   const a = record.analysis;
-  const sections = [
-    { key: 'pattern',      label: '패턴 요약',        cls: 'rpt-blue'   },
-    { key: 'strengths',    label: '잘 된 것',           cls: 'rpt-green'  },
-    { key: 'improvements', label: '개선점',             cls: 'rpt-red'    },
-    { key: 'questions',    label: '다음을 위한 질문',   cls: 'rpt-amber'  },
-    { key: 'overall',      label: '종합 평가',          cls: 'rpt-purple' },
-  ];
+
+  // overall을 마지막으로 보내고, 메타 키 제외
+  const keys = Object.keys(a)
+    .filter(k => !_META_KEYS.has(k) && k !== 'overall' && a[k]);
+  if (a.overall) keys.push('overall');
+
+  const sections = keys.map((key, i) => ({
+    key,
+    label: key === 'overall' ? '종합 평가' : key.replace(/_/g, ' '),
+    cls:   key === 'overall' ? 'rpt-purple' : _RPT_COLORS[i % (_RPT_COLORS.length - 1)],
+  }));
+
   return `<div class="rpt-date">작성일: ${esc(a.savedAt || '')} · 기간: ${esc(a.period || '')}</div>` +
     sections.map(s => `<div class="rpt-section ${s.cls}">
       <div class="rpt-label" onclick="this.closest('.rpt-section').classList.toggle('rpt-collapsed')">
-        <span>${s.label}</span>
+        <span>${esc(s.label)}</span>
         <span class="rpt-chevron">▾</span>
       </div>
       <div class="rpt-body">${(a[s.key] || '—').replace(/\n/g, '<br>').replace(/ (\d+)\)/g, '<br>$1)')}</div>

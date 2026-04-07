@@ -32,6 +32,7 @@
             <button id="btn-sv" class="active" onclick="setView('student')">상담 기록</button>
             <button id="btn-dv" onclick="setView('myrecords')">나의 기록</button>
           </div>
+          <button id="sidebar-collapse-btn" class="panel-collapse-btn" onclick="toggleSidebar()" title="사이드바 접기">◀</button>
         </div>
         <input class="sidebar-search" id="sidebar-search" type="search"
           placeholder="검색..." oninput="setSearchQuery(this.value)" autocomplete="off" />
@@ -69,8 +70,9 @@
     <!-- AI 분석 패널 -->
     <aside class="ai-panel" id="ai-panel">
       <div class="ai-header">
-        <span>학생 정보</span>
-        <span class="ai-header-note">현재 회기</span>
+        <button id="ai-collapse-btn" class="panel-collapse-btn" onclick="toggleAIPanel()" title="AI 패널 접기">▶</button>
+        <span id="ai-header-title">학생 정보</span>
+        <span class="ai-header-note" id="ai-header-note">현재 회기</span>
       </div>
       <div class="ai-content" id="ai-content">
         <p class="ai-placeholder">회기를 선택하면<br>AI 분석을 요청할 수 있어요</p>
