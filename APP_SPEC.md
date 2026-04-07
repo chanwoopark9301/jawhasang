@@ -3,6 +3,17 @@
 > 중등 전문상담교사를 위한 상담 기록 + AI 슈퍼비전 웹 앱.
 > 순수 HTML/CSS/Vanilla JS 프론트엔드 + Python Flask 백엔드.
 
+> **최근 변경 (2026-04-07)**
+> - 나의 기록 AI 보고서: 외부 정보 수집 기록(인터뷰·강의 메모 등)에 자기평가 항목 미적용 — 기록 성격 자동 파악 후 구조 결정
+> - 나의 기록 AI 보고서 섹션 레이블 한국어화 (`pattern`→패턴 요약 등)
+> - `buildMyRecordContext()`: 동적 보고서 키 참조로 수정 (하드코딩 제거)
+> - 보고서 rpt-body XSS 방어: `esc()` 적용 (render-session.js, render-myrecords-view.js)
+> - `render-session.js` 중복 함수 제거 (utils.js로 일원화)
+> - `closePatternModal()` null 체크 추가
+> - FileReader onerror 핸들러 추가
+> - TEST_SPEC.md: 배포 환경 테스트 섹션(5) 추가
+> - CLAUDE.md: 완료된 TODO 섹션 제거
+
 ---
 
 ## 1. 아키텍처 개요

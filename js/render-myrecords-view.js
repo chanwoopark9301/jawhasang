@@ -10,6 +10,13 @@
 // AI가 반환하는 동적 키를 순서대로 렌더링 (overall은 항상 마지막)
 const _RPT_COLORS = ['rpt-blue', 'rpt-green', 'rpt-amber', 'rpt-red', 'rpt-purple', 'rpt-teal'];
 const _META_KEYS  = new Set(['savedAt', 'period']);
+const _KEY_LABELS = {
+  pattern:      '패턴 요약',
+  strengths:    '잘 된 것',
+  improvements: '개선점',
+  questions:    '다음을 위한 질문',
+  overall:      '종합 평가',
+};
 
 function renderMyReport(record) {
   const a = record.analysis;
@@ -21,7 +28,7 @@ function renderMyReport(record) {
 
   const sections = keys.map((key, i) => ({
     key,
-    label: key === 'overall' ? '종합 평가' : key.replace(/_/g, ' '),
+    label: _KEY_LABELS[key] || key.replace(/_/g, ' '),
     cls:   key === 'overall' ? 'rpt-purple' : _RPT_COLORS[i % (_RPT_COLORS.length - 1)],
   }));
 
@@ -31,7 +38,7 @@ function renderMyReport(record) {
         <span>${esc(s.label)}</span>
         <span class="rpt-chevron">▾</span>
       </div>
-      <div class="rpt-body">${(a[s.key] || '—').replace(/\n/g, '<br>').replace(/ (\d+)\)/g, '<br>$1)')}</div>
+      <div class="rpt-body">${esc(a[s.key] || '—').replace(/\n/g, '<br>').replace(/ (\d+)\)/g, '<br>$1>')}</div>
     </div>`).join('');
 }
 

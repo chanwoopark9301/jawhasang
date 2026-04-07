@@ -160,6 +160,7 @@ function loadVerbatimFile(input) {
     const el = document.getElementById('fv');
     if (el) el.value = e.target.result;
   };
+  reader.onerror = () => alert('파일을 읽을 수 없습니다.');
   reader.readAsText(file, 'UTF-8');
 }
 

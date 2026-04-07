@@ -1,65 +1,8 @@
 /* =============================================
    自畵像 — 회기 상세 렌더링 (축어록·보고서·대화)
    의존성: state.js, utils.js
+   (renderMd, parseVerbatim, speakerType, renderVerbatimView → utils.js)
    ============================================= */
-
-// ---------------------------------------------------------------------------
-// 마크다운 → HTML (채팅용 간이 렌더러)
-// ---------------------------------------------------------------------------
-
-function renderMd(text) {
-  return text
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/^---+$/gm, '<hr style="border:none;border-top:0.5px solid var(--color-border);margin:8px 0;">')
-    .replace(/\n/g, '<br>');
-}
-
-// ---------------------------------------------------------------------------
-// 축어록 파싱 및 렌더링
-// ---------------------------------------------------------------------------
-
-function parseVerbatim(text) {
-  const turns = [];
-  for (const line of text.split('\n')) {
-    const t = line.trim();
-    if (!t) continue;
-    const m = t.match(/^(?:\[[\d:]+\]\s*)?([^:：\[\]]{1,20})[：:]\s*(.+)$/);
-    if (m && m[2]) {
-      turns.push({ speaker: m[1].trim(), text: m[2].trim() });
-    } else if (turns.length > 0) {
-      turns[turns.length - 1].text += ' ' + t;
-    } else {
-      turns.push({ speaker: '', text: t });
-    }
-  }
-  return turns;
-}
-
-function speakerType(label, allSpeakers) {
-  if (!label || typeof label !== 'string') return 'client';
-  const ci = ['상담', '교사', '선생', 'T'];
-  const cl = ['내담', '학생', 'C', '아동'];
-  if (ci.some(k => label.includes(k))) return 'counselor';
-  if (cl.some(k => label.includes(k))) return 'client';
-  return allSpeakers.indexOf(label) === 0 ? 'counselor' : 'client';
-}
-
-function renderVerbatimView(verbatim) {
-  if (!verbatim) return '<div class="empty-state">축어록이 없습니다</div>';
-  const turns = parseVerbatim(verbatim);
-  if (!turns.length) return `<pre class="vt-raw">${esc(verbatim)}</pre>`;
-
-  const allSpeakers = [...new Set(turns.map(t => t.speaker).filter(Boolean))];
-  return `<div class="vt-container">${turns.map(t => {
-    const type = t.speaker ? speakerType(t.speaker, allSpeakers) : 'client';
-    return `<div class="vt-turn vt-${type}">
-      ${t.speaker ? `<div class="vt-speaker">${esc(t.speaker)}</div>` : ''}
-      <div class="vt-text">${esc(t.text).replace(/\n/g, '<br>')}</div>
-    </div>`;
-  }).join('')}</div>`;
-}
 
 // ---------------------------------------------------------------------------
 // 슈퍼비전 보고서
@@ -86,7 +29,7 @@ function renderSupervisionReport(session) {
         <span>${s.label}</span>
         <span class="rpt-chevron">▾</span>
       </div>
-      <div class="rpt-body">${(a[s.key] || '—').replace(/\n/g, '<br>').replace(/ (\d+)\)/g, '<br>$1)')}</div>
+      <div class="rpt-body">${esc(a[s.key] || '—').replace(/\n/g, '<br>').replace(/ (\d+)\)/g, '<br>$1)')}</div>
     </div>`).join('');
 }
 

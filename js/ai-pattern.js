@@ -182,8 +182,10 @@ function showPatternModal(result, isMy) {
 }
 
 function closePatternModal() {
-  document.getElementById('pattern-modal-overlay').style.display = 'none';
-  document.getElementById('pattern-modal').style.display         = 'none';
+  const overlay = document.getElementById('pattern-modal-overlay');
+  const modal   = document.getElementById('pattern-modal');
+  if (overlay) overlay.style.display = 'none';
+  if (modal)   modal.style.display   = 'none';
 }
 
 function viewLastPatternAnalysis() {
