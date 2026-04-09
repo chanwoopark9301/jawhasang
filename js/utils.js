@@ -58,7 +58,7 @@ function parseJSON(text) {
 
 async function streamAnalyze(payload, onProgress) {
   const controller = new AbortController();
-  const timeoutId  = setTimeout(() => controller.abort(), 300_000); // 5분 타임아웃
+  const timeoutId  = setTimeout(() => controller.abort(), 120_000); // 2분 타임아웃
 
   let res;
   try {
@@ -70,7 +70,7 @@ async function streamAnalyze(payload, onProgress) {
     });
   } catch (e) {
     clearTimeout(timeoutId);
-    if (e.name === 'AbortError') throw new Error('AI 요청 시간이 초과됐습니다 (5분)');
+    if (e.name === 'AbortError') throw new Error('AI 요청 시간이 초과됐습니다 (2분)');
     throw e;
   } finally {
     clearTimeout(timeoutId);

@@ -170,5 +170,5 @@ class TestStagA_LongVerbatim:
         # setTimeout(..., N) 에서 N 추출 (JS 숫자 구분자 _ 포함)
         matches = re.findall(r'setTimeout\([^,]+,\s*([\d_]+)\)', content)
         timeouts = [int(m.replace('_', '')) for m in matches]
-        assert any(t >= 300_000 for t in timeouts), \
-            f"streamAnalyze 타임아웃이 300000ms 이상이어야 함. 현재: {timeouts}"
+        assert any(t >= 120_000 for t in timeouts), \
+            f"streamAnalyze 타임아웃이 120000ms 이상이어야 함. 현재: {timeouts}"
