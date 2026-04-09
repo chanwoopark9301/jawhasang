@@ -159,21 +159,28 @@ function renderNewSessionForm() {
         <button class="vt-replace-btn" onclick="verbatimFindReplace()" type="button">전체 교체</button>
         <span class="vt-replace-result" id="vt-replace-result"></span>
       </div>
-      <div class="vt-annotation-bar" id="vt-annotation-bar">
-        <button class="ann-btn" onclick="insertSilenceAnnotation()" type="button" title="침묵 (초 입력)">침묵 _초</button>
-        <button class="ann-btn" onclick="insertAnnotation('[눈물]')" type="button">눈물</button>
-        <button class="ann-btn" onclick="insertAnnotation('[웃음]')" type="button">웃음</button>
-        <button class="ann-btn" onclick="insertAnnotation('[고개 끄덕임]')" type="button">끄덕임</button>
-        <button class="ann-btn" onclick="insertAnnotation('[고개 저음]')" type="button">고개젓기</button>
-        <button class="ann-btn" onclick="insertAnnotation('[시선 회피]')" type="button">시선회피</button>
-        <button class="ann-btn" onclick="insertAnnotation('[한숨]')" type="button">한숨</button>
+      <div class="vt-mode-tabs">
+        <button class="vt-mode-tab active" data-mode="text" onclick="switchVtMode('text')" type="button">텍스트</button>
+        <button class="vt-mode-tab" data-mode="block" onclick="switchVtMode('block')" type="button">블록</button>
       </div>
-      <textarea class="form-textarea vt-textarea" id="fv"
-        oninput="updateVerbatimCounter(this.value)"
-        placeholder="상담자: 안녕하세요, 오늘은 어땠어요?&#10;내담자: 그냥 그래요...&#10;&#10;클로바 노트 등 STT 결과를 그대로 붙여넣어도 됩니다."></textarea>
-      <div class="verbatim-long-notice" id="vt-long-notice" style="display:none">
-        긴 축어록 모드 — 보고서 생성 시 핵심 장면을 먼저 추출한 뒤 1페이지 보고서를 작성합니다.
+      <div id="vt-text-wrap">
+        <div class="vt-annotation-bar" id="vt-annotation-bar">
+          <button class="ann-btn" onclick="insertSilenceAnnotation()" type="button" title="침묵 (초 입력)">침묵 _초</button>
+          <button class="ann-btn" onclick="insertAnnotation('[눈물]')" type="button">눈물</button>
+          <button class="ann-btn" onclick="insertAnnotation('[웃음]')" type="button">웃음</button>
+          <button class="ann-btn" onclick="insertAnnotation('[고개 끄덕임]')" type="button">끄덕임</button>
+          <button class="ann-btn" onclick="insertAnnotation('[고개 저음]')" type="button">고개젓기</button>
+          <button class="ann-btn" onclick="insertAnnotation('[시선 회피]')" type="button">시선회피</button>
+          <button class="ann-btn" onclick="insertAnnotation('[한숨]')" type="button">한숨</button>
+        </div>
+        <textarea class="form-textarea vt-textarea" id="fv"
+          oninput="updateVerbatimCounter(this.value)"
+          placeholder="상담자: 안녕하세요, 오늘은 어땠어요?&#10;내담자: 그냥 그래요...&#10;&#10;클로바 노트 등 STT 결과를 그대로 붙여넣어도 됩니다."></textarea>
+        <div class="verbatim-long-notice" id="vt-long-notice" style="display:none">
+          긴 축어록 모드 — 보고서 생성 시 핵심 장면을 먼저 추출한 뒤 1페이지 보고서를 작성합니다.
+        </div>
       </div>
+      <div id="vt-block-editor" style="display:none"></div>
     </div>
     <div class="form-group">
       <label class="form-label">메모 (선택)</label>
@@ -220,21 +227,28 @@ function renderEditSessionForm(session) {
         <button class="vt-replace-btn" onclick="verbatimFindReplace()" type="button">전체 교체</button>
         <span class="vt-replace-result" id="vt-replace-result"></span>
       </div>
-      <div class="vt-annotation-bar" id="vt-annotation-bar">
-        <button class="ann-btn" onclick="insertSilenceAnnotation()" type="button" title="침묵 (초 입력)">침묵 _초</button>
-        <button class="ann-btn" onclick="insertAnnotation('[눈물]')" type="button">눈물</button>
-        <button class="ann-btn" onclick="insertAnnotation('[웃음]')" type="button">웃음</button>
-        <button class="ann-btn" onclick="insertAnnotation('[고개 끄덕임]')" type="button">끄덕임</button>
-        <button class="ann-btn" onclick="insertAnnotation('[고개 저음]')" type="button">고개젓기</button>
-        <button class="ann-btn" onclick="insertAnnotation('[시선 회피]')" type="button">시선회피</button>
-        <button class="ann-btn" onclick="insertAnnotation('[한숨]')" type="button">한숨</button>
+      <div class="vt-mode-tabs">
+        <button class="vt-mode-tab active" data-mode="text" onclick="switchVtMode('text')" type="button">텍스트</button>
+        <button class="vt-mode-tab" data-mode="block" onclick="switchVtMode('block')" type="button">블록</button>
       </div>
-      <textarea class="form-textarea vt-textarea" id="fv"
-        oninput="updateVerbatimCounter(this.value)">${esc(session.verbatim || '')}</textarea>
-      <div class="verbatim-long-notice" id="vt-long-notice"
-        style="display:${(session.verbatim || '').length >= 3000 ? 'flex' : 'none'}">
-        긴 축어록 모드 — 보고서 생성 시 핵심 장면을 먼저 추출한 뒤 1페이지 보고서를 작성합니다.
+      <div id="vt-text-wrap">
+        <div class="vt-annotation-bar" id="vt-annotation-bar">
+          <button class="ann-btn" onclick="insertSilenceAnnotation()" type="button" title="침묵 (초 입력)">침묵 _초</button>
+          <button class="ann-btn" onclick="insertAnnotation('[눈물]')" type="button">눈물</button>
+          <button class="ann-btn" onclick="insertAnnotation('[웃음]')" type="button">웃음</button>
+          <button class="ann-btn" onclick="insertAnnotation('[고개 끄덕임]')" type="button">끄덕임</button>
+          <button class="ann-btn" onclick="insertAnnotation('[고개 저음]')" type="button">고개젓기</button>
+          <button class="ann-btn" onclick="insertAnnotation('[시선 회피]')" type="button">시선회피</button>
+          <button class="ann-btn" onclick="insertAnnotation('[한숨]')" type="button">한숨</button>
+        </div>
+        <textarea class="form-textarea vt-textarea" id="fv"
+          oninput="updateVerbatimCounter(this.value)">${esc(session.verbatim || '')}</textarea>
+        <div class="verbatim-long-notice" id="vt-long-notice"
+          style="display:${(session.verbatim || '').length >= 3000 ? 'flex' : 'none'}">
+          긴 축어록 모드 — 보고서 생성 시 핵심 장면을 먼저 추출한 뒤 1페이지 보고서를 작성합니다.
+        </div>
       </div>
+      <div id="vt-block-editor" style="display:none"></div>
     </div>
     <div class="form-group">
       <label class="form-label">메모 (선택)</label>

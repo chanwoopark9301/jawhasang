@@ -78,6 +78,7 @@ function deleteStudent(id) {
 // ---------------------------------------------------------------------------
 
 function saveSession() {
+  syncVtBeforeSave();  // 블록 모드면 textarea에 동기화
   const date     = document.getElementById('fd').value;
   const verbatim = document.getElementById('fv').value.trim();
   if (!date || !verbatim) { alert('날짜와 축어록을 입력해주세요'); return; }
@@ -118,6 +119,7 @@ function editSession(id) {
 }
 
 function updateSession() {
+  syncVtBeforeSave();  // 블록 모드면 textarea에 동기화
   const session = state.sessions.find(s => s.id === state.editingId);
   if (!session) return;
   const date     = document.getElementById('fd').value;

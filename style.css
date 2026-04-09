@@ -1258,6 +1258,140 @@ body {
   border-color: var(--color-accent);
 }
 
+/* --- 블록 에디터 모드 탭 --- */
+.vt-mode-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 6px;
+}
+.vt-mode-tab {
+  font-size: 11px;
+  padding: 3px 10px;
+  background: none;
+  border: 0.5px solid var(--color-border-strong);
+  border-radius: 20px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  font-family: var(--font);
+  transition: background 0.1s, color 0.1s;
+}
+.vt-mode-tab.active {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}
+.vt-mode-tab:not(.active):hover {
+  background: var(--color-accent-bg);
+}
+
+/* --- 블록 에디터 --- */
+.vt-block-editor {
+  border: 0.5px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+  overflow: hidden;
+}
+.vt-block-list {
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.vt-block-empty {
+  text-align: center;
+  padding: 20px;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+.vt-block {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 5px 6px;
+  background: var(--color-bg);
+  border-radius: var(--radius-sm);
+  border: 0.5px solid var(--color-border);
+}
+.vt-block-nonverbal {
+  background: var(--color-bg-tertiary);
+}
+.speaker-btn {
+  flex-shrink: 0;
+  width: 36px;
+  height: 28px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  border: 0.5px solid transparent;
+  cursor: pointer;
+  font-family: var(--font);
+  transition: background 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.speaker-T  { background: #dbeafe; color: #1d4ed8; border-color: #bfdbfe; }
+.speaker-C  { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+.speaker-nv { background: var(--color-bg-tertiary); color: var(--color-text-tertiary);
+              font-size: 10px; width: auto; padding: 0 6px; cursor: default; }
+.speaker-T:hover { background: #bfdbfe; }
+.speaker-C:hover { background: #bbf7d0; }
+.block-text {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  font-size: 12px;
+  font-family: var(--font);
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--color-text);
+  line-height: 1.6;
+  resize: none;
+  overflow: hidden;
+}
+.block-del {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  background: none;
+  border: none;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 3px;
+}
+.block-del:hover { background: #fee2e2; color: #b91c1c; }
+.vt-block-add-row {
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  border-top: 0.5px solid var(--color-border);
+  background: var(--color-bg-secondary);
+}
+.add-block-btn {
+  font-size: 11px;
+  padding: 4px 10px;
+  border: 0.5px solid var(--color-border-strong);
+  border-radius: 20px;
+  cursor: pointer;
+  font-family: var(--font);
+  transition: background 0.1s;
+}
+.add-t  { background: #dbeafe; color: #1d4ed8; border-color: #bfdbfe; }
+.add-c  { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+.add-nv { background: var(--color-bg-tertiary); color: var(--color-text-secondary); }
+.add-t:hover  { background: #bfdbfe; }
+.add-c:hover  { background: #bbf7d0; }
+.add-nv:hover { background: var(--color-accent-bg); }
+
 /* --- 슈퍼비전 보고서 --- */
 .rpt-date {
   font-size: 11px;
