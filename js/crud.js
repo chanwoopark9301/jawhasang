@@ -139,6 +139,7 @@ function updateSession() {
 }
 
 function cancelEditSession() {
+  _resetVtEditor();
   state.editingId = null;
   state.mode      = state.selSession ? 'detail' : (state.selStudent ? 'list' : 'welcome');
   render();

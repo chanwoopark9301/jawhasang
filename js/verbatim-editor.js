@@ -31,20 +31,19 @@ function switchVtMode(mode) {
   const blockWrap= document.getElementById('vt-block-editor');
   const tabs     = document.querySelectorAll('.vt-mode-tab');
 
-  if (!ta) return;
+  // 필요한 DOM 요소 없으면 중단 (폼 재렌더 타이밍 등)
+  if (!ta || !textWrap || !blockWrap) return;
 
   if (mode === 'block') {
-    // 텍스트 → 블록 파싱
     _vtBlocks = vtTextToBlocks(ta.value);
-    if (textWrap)  textWrap.style.display  = 'none';
-    if (blockWrap) blockWrap.style.display = 'block';
+    textWrap.style.display  = 'none';
+    blockWrap.style.display = 'block';
   } else {
-    // 블록 → 텍스트 동기화
     const converted = vtBlocksToText(_vtBlocks);
     ta.value = converted;
     updateVerbatimCounter(converted);
-    if (textWrap)  textWrap.style.display  = 'block';
-    if (blockWrap) blockWrap.style.display = 'none';
+    textWrap.style.display  = 'block';
+    blockWrap.style.display = 'none';
   }
 
   _vtMode = mode;
@@ -110,7 +109,8 @@ function vtBlocksToText(blocks) {
     .filter(b => b.text.trim() !== '')
     .map(b => {
       if (b.type === 'nonverbal') return `[비언어: ${b.text}]`;
-      const label = b.speaker === 'T' ? '상담자' : '내담자';
+      // _rawLabel이 있으면 원래 발화자 레이블 보존, 없으면 기본값
+      const label = b._rawLabel || (b.speaker === 'T' ? '상담자' : '내담자');
       return `${label}: ${b.text}`;
     })
     .join('\n');
@@ -143,13 +143,15 @@ function vtTextToBlocks(text) {
       const label   = spMatch[1].trim();
       const content = spMatch[2].trim();
       // 발화자 판별 (utils.js speakerType 활용)
-      const allLabels = [];
+      // allSpeakers에 지금까지 나온 레이블을 전달해야 첫 번째 발화자를 상담자로 인식
+      const allLabels = blocks.map(b => b._rawLabel).filter(Boolean);
       const sType = speakerType(label, allLabels);
       cur = {
-        id:      _genId(),
-        type:    'speech',
-        speaker: sType === 'counselor' ? 'T' : 'C',
-        text:    content,
+        id:        _genId(),
+        type:      'speech',
+        speaker:   sType === 'counselor' ? 'T' : 'C',
+        text:      content,
+        _rawLabel: label,  // speakerType 판별용 임시 필드 (저장 안 함)
       };
     } else if (cur) {
       // 이어지는 줄은 현재 블록에 병합
@@ -228,11 +230,13 @@ function _renderBlocks() {
 function syncVtBeforeSave() {
   if (_vtMode === 'block') {
     const ta = document.getElementById('fv');
-    if (ta) {
-      ta.value = vtBlocksToText(_vtBlocks);
-    }
+    if (ta) ta.value = vtBlocksToText(_vtBlocks);
   }
-  // 다음 폼 렌더 시 텍스트 모드로 초기화
+  _resetVtEditor();
+}
+
+// 블록 에디터 상태 초기화 (저장/취소/화면 전환 시 공통 호출)
+function _resetVtEditor() {
   _vtMode   = 'text';
   _vtBlocks = [];
 }

@@ -29,6 +29,10 @@ DATA_FILE         = 'data.json'
 
 app = Flask(__name__, static_folder='.')
 app.secret_key = hashlib.sha256((APP_PASSWORD + '_sk').encode()).hexdigest()
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+# HTTPS 환경에서만 Secure 플래그 활성화 (로컬 개발 호환)
+app.config['SESSION_COOKIE_SECURE'] = bool(os.getenv('DATABASE_URL'))
 
 # ---------------------------------------------------------------------------
 # 암호화 — APP_PASSWORD로 Fernet 키 유도 (PBKDF2 강화)
@@ -365,11 +369,16 @@ def summarize_verbatim():
         timeout=60,
     )
     if not resp.ok:
-        return jsonify({'error': f'AI 오류: {resp.status_code}'}), 502
+        return jsonify({'error': f'AI 오류: {resp.status_code}', 'detail': resp.text[:200]}), 502
 
-    data    = resp.json()
-    summary = ''.join(c.get('text', '') for c in data.get('content', []))
-    return jsonify({'summary': summary.strip()})
+    try:
+        data    = resp.json()
+        summary = ''.join(c.get('text', '') for c in data.get('content', []))
+        if not summary.strip():
+            return jsonify({'error': 'AI 응답이 비어 있습니다'}), 502
+        return jsonify({'summary': summary.strip()})
+    except Exception as e:
+        return jsonify({'error': f'응답 파싱 실패: {str(e)}'}), 502
 
 
 # ---------------------------------------------------------------------------

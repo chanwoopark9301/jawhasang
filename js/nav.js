@@ -74,6 +74,7 @@ function handleNsBtn() {
 }
 
 function cancelForm() {
+  _resetVtEditor();
   state.mode  = state.selStudent ? 'list' : 'welcome';
   mobilePanel = state.selStudent ? 'main' : 'sidebar';
   render();

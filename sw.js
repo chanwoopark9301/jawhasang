@@ -5,7 +5,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v1';
+const CACHE_NAME = 'jip-v2'; // app.js 추가로 버전 업
 
 const STATIC_ASSETS = [
   '/',
@@ -29,6 +29,7 @@ const STATIC_ASSETS = [
   '/js/render-main.js',
   '/js/resize.js',
   '/js/verbatim-editor.js',
+  '/app.js',
   '/icons/icon.svg',
   '/manifest.json',
 ];

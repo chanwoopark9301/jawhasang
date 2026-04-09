@@ -56,7 +56,17 @@ function parseJSON(text) {
 // onProgress(accumulated) 로 글자 수 실시간 전달.
 // ---------------------------------------------------------------------------
 
+// onProgress 쓰로틀: 100ms 간격으로만 DOM 업데이트
+function _throttle(fn, ms) {
+  let last = 0;
+  return (...args) => {
+    const now = Date.now();
+    if (now - last >= ms) { last = now; fn(...args); }
+  };
+}
+
 async function streamAnalyze(payload, onProgress) {
+  const _progress = onProgress ? _throttle(onProgress, 100) : null;
   const controller = new AbortController();
   const timeoutId  = setTimeout(() => controller.abort(), 120_000); // 2분 타임아웃
 
@@ -100,7 +110,7 @@ async function streamAnalyze(payload, onProgress) {
         const ev = JSON.parse(raw);
         if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
           accumulated += ev.delta.text;
-          onProgress && onProgress(accumulated);
+          _progress && _progress(accumulated);
         }
       } catch { /* SSE 파싱 오류 무시 */ }
     }
