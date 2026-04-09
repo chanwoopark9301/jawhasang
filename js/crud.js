@@ -145,6 +145,34 @@ function cancelEditSession() {
   render();
 }
 
+// ---------------------------------------------------------------------------
+// 축어록 인라인 편집
+// ---------------------------------------------------------------------------
+
+function startVtInlineEdit() {
+  state.vtInlineEdit = true;
+  render();
+}
+
+function cancelVtInlineEdit() {
+  _resetVtEditor();
+  state.vtInlineEdit = false;
+  render();
+}
+
+function saveVtInline() {
+  syncVtBeforeSave();
+  const session = state.sessions.find(s => s.id === state.selSession);
+  if (!session) return;
+  const ta = document.getElementById('fv');
+  if (!ta) return;
+  const verbatim = ta.value.trim();
+  if (!verbatim) { alert('축어록을 입력해주세요'); return; }
+  session.verbatim   = verbatim;
+  state.vtInlineEdit = false;
+  saveData(); render();
+}
+
 function deleteSession(id) {
   if (!confirm('이 회기 기록을 삭제할까요?')) return;
   state.sessions = state.sessions.filter(s => s.id !== id);

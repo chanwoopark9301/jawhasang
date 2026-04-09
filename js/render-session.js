@@ -5,6 +5,57 @@
    ============================================= */
 
 // ---------------------------------------------------------------------------
+// 축어록 인라인 에디터
+// ---------------------------------------------------------------------------
+
+function renderVerbatimEditor(session) {
+  const charLen = (session.verbatim || '').length;
+  return `
+    <div class="vt-inline-editor">
+      <div class="vt-input-header">
+        <span class="verbatim-char-count" id="vt-char-count">${charLen.toLocaleString()}자</span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button class="vt-tool-btn" onclick="toggleFindReplace()" type="button">찾기/바꾸기</button>
+        </div>
+      </div>
+      <div class="vt-find-replace" id="vt-find-replace" style="display:none">
+        <input class="vt-find-input" id="vt-find-input" placeholder="찾기..." autocomplete="off" />
+        <span class="vt-find-arrow">→</span>
+        <input class="vt-find-input" id="vt-replace-input" placeholder="바꾸기..." autocomplete="off" />
+        <button class="vt-replace-btn" onclick="verbatimFindReplace()" type="button">전체 교체</button>
+        <span class="vt-replace-result" id="vt-replace-result"></span>
+      </div>
+      <div class="vt-mode-tabs">
+        <button class="vt-mode-tab active" data-mode="text" onclick="switchVtMode('text')" type="button">텍스트</button>
+        <button class="vt-mode-tab" data-mode="block" onclick="switchVtMode('block')" type="button">블록</button>
+      </div>
+      <div id="vt-text-wrap">
+        <div class="vt-annotation-bar" id="vt-annotation-bar">
+          <button class="ann-btn" onclick="insertSilenceAnnotation()" type="button" title="침묵 (초 입력)">침묵 _초</button>
+          <button class="ann-btn" onclick="insertAnnotation('[눈물]')" type="button">눈물</button>
+          <button class="ann-btn" onclick="insertAnnotation('[웃음]')" type="button">웃음</button>
+          <button class="ann-btn" onclick="insertAnnotation('[고개 끄덕임]')" type="button">끄덕임</button>
+          <button class="ann-btn" onclick="insertAnnotation('[고개 저음]')" type="button">고개젓기</button>
+          <button class="ann-btn" onclick="insertAnnotation('[시선 회피]')" type="button">시선회피</button>
+          <button class="ann-btn" onclick="insertAnnotation('[한숨]')" type="button">한숨</button>
+        </div>
+        <textarea class="form-textarea vt-textarea" id="fv"
+          oninput="updateVerbatimCounter(this.value)"
+          >${esc(session.verbatim || '')}</textarea>
+        <div class="verbatim-long-notice" id="vt-long-notice"
+          style="display:${charLen >= 3000 ? 'flex' : 'none'}">
+          긴 축어록 모드 — 보고서 생성 시 핵심 장면을 먼저 추출한 뒤 1페이지 보고서를 작성합니다.
+        </div>
+      </div>
+      <div id="vt-block-editor" style="display:none"></div>
+      <div class="btn-row" style="margin-top:8px;">
+        <button class="btn-secondary" onclick="cancelVtInlineEdit()">취소</button>
+        <button class="btn-primary" onclick="saveVtInline()">저장</button>
+      </div>
+    </div>`;
+}
+
+// ---------------------------------------------------------------------------
 // 슈퍼비전 보고서
 // ---------------------------------------------------------------------------
 
@@ -104,9 +155,15 @@ function renderSessionDetail(session, totalSessions) {
   }).join('');
 
   let body = '';
-  if (state.sessionTab === 'verbatim')      body = renderVerbatimView(session.verbatim);
-  else if (state.sessionTab === 'report')   body = renderSupervisionReport(session);
-  else                                      body = renderSupervisionDialogue(session);
+  if (state.sessionTab === 'verbatim') {
+    body = state.vtInlineEdit
+      ? renderVerbatimEditor(session)
+      : renderVerbatimView(session.verbatim);
+  } else if (state.sessionTab === 'report') {
+    body = renderSupervisionReport(session);
+  } else {
+    body = renderSupervisionDialogue(session);
+  }
 
   const sessionTagsHTML = (session.tags && session.tags.length)
     ? `<div class="detail-tags">${session.tags.map(t => `<span class="tag-badge">${esc(t)}</span>`).join('')}</div>` : '';

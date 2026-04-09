@@ -28,6 +28,7 @@ const state = {
   myChatLoading:  false,
   myPeriod:   'month',     // 'week'|'month'|'all'
 
+  vtInlineEdit:   false,   // 축어록 탭 인라인 편집 모드
   editingId:      null,    // 수정 중인 항목 id
   searchQuery:    '',
   filterTags:     [],

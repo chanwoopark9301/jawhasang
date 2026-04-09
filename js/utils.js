@@ -166,12 +166,16 @@ function speakerType(label, allSpeakers) {
 }
 
 function renderVerbatimView(verbatim) {
-  if (!verbatim) return '<div class="empty-state">축어록이 없습니다</div>';
+  const editBtn = `<div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+    <button class="btn-secondary" style="font-size:12px;" onclick="startVtInlineEdit()">편집</button>
+  </div>`;
+
+  if (!verbatim) return editBtn + '<div class="empty-state">축어록이 없습니다</div>';
   const turns = parseVerbatim(verbatim);
-  if (!turns.length) return `<pre class="vt-raw">${esc(verbatim)}</pre>`;
+  if (!turns.length) return editBtn + `<pre class="vt-raw">${esc(verbatim)}</pre>`;
 
   const allSpeakers = [...new Set(turns.map(t => t.speaker).filter(Boolean))];
-  return `<div class="vt-container">${turns.map(t => {
+  return editBtn + `<div class="vt-container">${turns.map(t => {
     const type = speakerType(t.speaker, allSpeakers);
     return `<div class="vt-turn vt-${type}">
       ${t.speaker ? `<div class="vt-speaker">${esc(t.speaker)}</div>` : ''}

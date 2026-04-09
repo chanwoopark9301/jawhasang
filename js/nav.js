@@ -81,13 +81,16 @@ function cancelForm() {
 }
 
 function backFromDetail() {
-  state.selSession = null;
-  state.mode       = state.view === 'student' ? 'list' : 'welcome';
-  mobilePanel      = 'main';
+  _resetVtEditor();
+  state.vtInlineEdit = false;
+  state.selSession   = null;
+  state.mode         = state.view === 'student' ? 'list' : 'welcome';
+  mobilePanel        = 'main';
   render();
 }
 
 function setSessionTab(tab) {
+  if (state.vtInlineEdit) { _resetVtEditor(); state.vtInlineEdit = false; }
   state.sessionTab = tab;
   renderMain();
   renderAIPanel();
