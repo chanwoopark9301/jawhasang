@@ -48,14 +48,14 @@ body {
   font-size: 14px;
   color: var(--color-text);
   background: var(--color-bg-tertiary);
-  height: 100vh;
+  height: 100dvh;  /* dvh: 하드 키보드 툴바 포함한 동적 뷰포트 높이 */
   overflow: hidden;
 }
 
 /* --- 앱 레이아웃 --- */
 .app {
   display: flex;
-  height: 100vh;
+  height: 100dvh;
   background: var(--color-bg);
 }
 
@@ -1477,7 +1477,7 @@ body {
 .chat-wrap {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 280px);
+  height: calc(100dvh - 280px);
   min-height: 300px;
 }
 
@@ -1640,10 +1640,10 @@ body {
 /* =============================================
    iOS Safari 뷰포트 높이 픽스
    ============================================= */
-body { height: 100svh; }
-.app { height: 100svh; }
+body { height: 100dvh; }
+.app { height: 100dvh; }
 .chat-wrap {
-  height: calc(100svh - 280px);
+  height: calc(100dvh - 280px);
 }
 
 /* =============================================
@@ -1690,7 +1690,7 @@ body { height: 100svh; }
    ============================================= */
 @media (max-width: 767px) {
   body, .app {
-    height: 100svh;
+    height: 100dvh;
     overflow: hidden;
   }
 
@@ -1750,7 +1750,7 @@ body { height: 100svh; }
 
   /* 채팅 높이 — 하단 내비게이션(52px) 고려 */
   .chat-wrap {
-    height: calc(100svh - 52px - 280px);
+    height: calc(100dvh - 52px - 280px);
     min-height: 200px;
   }
 
