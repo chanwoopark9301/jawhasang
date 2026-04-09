@@ -190,6 +190,83 @@ function updateVerbatimCounter(value) {
 }
 
 // ---------------------------------------------------------------------------
+// 찾기/바꾸기 토글
+// ---------------------------------------------------------------------------
+
+function toggleFindReplace() {
+  const panel = document.getElementById('vt-find-replace');
+  if (!panel) return;
+  const isOpen = panel.style.display !== 'none';
+  panel.style.display = isOpen ? 'none' : 'flex';
+  if (!isOpen) {
+    const fi = document.getElementById('vt-find-input');
+    if (fi) fi.focus();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 찾기/바꾸기 실행
+// ---------------------------------------------------------------------------
+
+function verbatimFindReplace() {
+  const ta      = document.getElementById('fv');
+  const findEl  = document.getElementById('vt-find-input');
+  const replEl  = document.getElementById('vt-replace-input');
+  const result  = document.getElementById('vt-replace-result');
+  if (!ta || !findEl || !replEl) return;
+
+  const findVal = findEl.value;
+  if (!findVal) { if (result) result.textContent = '찾을 단어를 입력하세요'; return; }
+
+  const replVal = replEl.value;
+  const regex   = new RegExp(findVal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+  const matches = (ta.value.match(regex) || []).length;
+
+  if (matches === 0) {
+    if (result) result.textContent = `"${findVal}" 없음`;
+    return;
+  }
+
+  ta.value = ta.value.replace(regex, replVal);
+  updateVerbatimCounter(ta.value);
+
+  if (result) {
+    result.textContent = `${matches}곳 교체 완료`;
+    setTimeout(() => { if (result) result.textContent = ''; }, 3000);
+  }
+  ta.focus();
+}
+
+// ---------------------------------------------------------------------------
+// 주석 삽입 (커서 위치에 비언어 주석 삽입)
+// ---------------------------------------------------------------------------
+
+function insertAnnotation(text) {
+  const ta = document.getElementById('fv');
+  if (!ta) return;
+
+  const start = ta.selectionStart;
+  const end   = ta.selectionEnd;
+  const before = ta.value.slice(0, start);
+  const after  = ta.value.slice(end);
+
+  ta.value = before + text + after;
+  updateVerbatimCounter(ta.value);
+
+  // 커서를 삽입된 텍스트 뒤로 이동
+  const newPos = start + text.length;
+  ta.setSelectionRange(newPos, newPos);
+  ta.focus();
+}
+
+function insertSilenceAnnotation() {
+  const sec = prompt('침묵 시간 (초)', '3');
+  if (sec === null) return;
+  const num = parseInt(sec, 10);
+  insertAnnotation(`[침묵 ${isNaN(num) ? '_' : num}초]`);
+}
+
+// ---------------------------------------------------------------------------
 // 번호 헬퍼 (삭제 후 재추가 시 번호 중복 방지)
 // ---------------------------------------------------------------------------
 

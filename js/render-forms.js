@@ -144,13 +144,29 @@ function renderNewSessionForm() {
     <div class="form-group">
       <div class="vt-input-header">
         <label class="form-label" style="margin:0;">축어록</label>
-        <div style="display:flex;align-items:center;gap:8px;">
+        <div style="display:flex;align-items:center;gap:6px;">
           <span class="verbatim-char-count" id="vt-char-count">0자</span>
-          <label class="file-btn">
-            파일 불러오기 (.txt)
+          <button class="vt-tool-btn" onclick="toggleFindReplace()" type="button">찾기/바꾸기</button>
+          <label class="file-btn">파일 불러오기 (.txt)
             <input type="file" accept=".txt" style="display:none;" onchange="loadVerbatimFile(this)" />
           </label>
         </div>
+      </div>
+      <div class="vt-find-replace" id="vt-find-replace" style="display:none">
+        <input class="vt-find-input" id="vt-find-input" placeholder="찾기..." autocomplete="off" />
+        <span class="vt-find-arrow">→</span>
+        <input class="vt-find-input" id="vt-replace-input" placeholder="바꾸기..." autocomplete="off" />
+        <button class="vt-replace-btn" onclick="verbatimFindReplace()" type="button">전체 교체</button>
+        <span class="vt-replace-result" id="vt-replace-result"></span>
+      </div>
+      <div class="vt-annotation-bar" id="vt-annotation-bar">
+        <button class="ann-btn" onclick="insertSilenceAnnotation()" type="button" title="침묵 (초 입력)">침묵 _초</button>
+        <button class="ann-btn" onclick="insertAnnotation('[눈물]')" type="button">눈물</button>
+        <button class="ann-btn" onclick="insertAnnotation('[웃음]')" type="button">웃음</button>
+        <button class="ann-btn" onclick="insertAnnotation('[고개 끄덕임]')" type="button">끄덕임</button>
+        <button class="ann-btn" onclick="insertAnnotation('[고개 저음]')" type="button">고개젓기</button>
+        <button class="ann-btn" onclick="insertAnnotation('[시선 회피]')" type="button">시선회피</button>
+        <button class="ann-btn" onclick="insertAnnotation('[한숨]')" type="button">한숨</button>
       </div>
       <textarea class="form-textarea vt-textarea" id="fv"
         oninput="updateVerbatimCounter(this.value)"
@@ -189,12 +205,29 @@ function renderEditSessionForm(session) {
     <div class="form-group">
       <div class="vt-input-header">
         <label class="form-label" style="margin:0;">축어록</label>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span class="verbatim-char-count" id="vt-char-count">${(session.verbatim || '').length}자</span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="verbatim-char-count" id="vt-char-count">${(session.verbatim || '').length.toLocaleString()}자</span>
+          <button class="vt-tool-btn" onclick="toggleFindReplace()" type="button">찾기/바꾸기</button>
           <label class="file-btn">파일 불러오기 (.txt)
             <input type="file" accept=".txt" style="display:none;" onchange="loadVerbatimFile(this)" />
           </label>
         </div>
+      </div>
+      <div class="vt-find-replace" id="vt-find-replace" style="display:none">
+        <input class="vt-find-input" id="vt-find-input" placeholder="찾기..." autocomplete="off" />
+        <span class="vt-find-arrow">→</span>
+        <input class="vt-find-input" id="vt-replace-input" placeholder="바꾸기..." autocomplete="off" />
+        <button class="vt-replace-btn" onclick="verbatimFindReplace()" type="button">전체 교체</button>
+        <span class="vt-replace-result" id="vt-replace-result"></span>
+      </div>
+      <div class="vt-annotation-bar" id="vt-annotation-bar">
+        <button class="ann-btn" onclick="insertSilenceAnnotation()" type="button" title="침묵 (초 입력)">침묵 _초</button>
+        <button class="ann-btn" onclick="insertAnnotation('[눈물]')" type="button">눈물</button>
+        <button class="ann-btn" onclick="insertAnnotation('[웃음]')" type="button">웃음</button>
+        <button class="ann-btn" onclick="insertAnnotation('[고개 끄덕임]')" type="button">끄덕임</button>
+        <button class="ann-btn" onclick="insertAnnotation('[고개 저음]')" type="button">고개젓기</button>
+        <button class="ann-btn" onclick="insertAnnotation('[시선 회피]')" type="button">시선회피</button>
+        <button class="ann-btn" onclick="insertAnnotation('[한숨]')" type="button">한숨</button>
       </div>
       <textarea class="form-textarea vt-textarea" id="fv"
         oninput="updateVerbatimCounter(this.value)">${esc(session.verbatim || '')}</textarea>
