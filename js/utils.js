@@ -58,7 +58,7 @@ function parseJSON(text) {
 
 async function streamAnalyze(payload, onProgress) {
   const controller = new AbortController();
-  const timeoutId  = setTimeout(() => controller.abort(), 120_000); // 2분 타임아웃
+  const timeoutId  = setTimeout(() => controller.abort(), 300_000); // 5분 타임아웃
 
   let res;
   try {
@@ -70,7 +70,7 @@ async function streamAnalyze(payload, onProgress) {
     });
   } catch (e) {
     clearTimeout(timeoutId);
-    if (e.name === 'AbortError') throw new Error('AI 요청 시간이 초과됐습니다 (2분)');
+    if (e.name === 'AbortError') throw new Error('AI 요청 시간이 초과됐습니다 (5분)');
     throw e;
   } finally {
     clearTimeout(timeoutId);
@@ -168,6 +168,25 @@ function renderVerbatimView(verbatim) {
       <div class="vt-text">${esc(t.text).replace(/\n/g, '<br>')}</div>
     </div>`;
   }).join('')}</div>`;
+}
+
+// ---------------------------------------------------------------------------
+// 축어록 글자수 카운터 + 긴 축어록 안내
+// ---------------------------------------------------------------------------
+
+const LONG_VERBATIM_THRESHOLD_UI = 3000;
+
+function updateVerbatimCounter(value) {
+  const count   = (value || '').length;
+  const counter = document.getElementById('vt-char-count');
+  const notice  = document.getElementById('vt-long-notice');
+  if (counter) {
+    counter.textContent = `${count.toLocaleString()}자`;
+    counter.style.color = count >= LONG_VERBATIM_THRESHOLD_UI ? 'var(--color-accent)' : '';
+  }
+  if (notice) {
+    notice.style.display = count >= LONG_VERBATIM_THRESHOLD_UI ? 'flex' : 'none';
+  }
 }
 
 // ---------------------------------------------------------------------------

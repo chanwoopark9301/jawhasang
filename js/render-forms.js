@@ -144,13 +144,20 @@ function renderNewSessionForm() {
     <div class="form-group">
       <div class="vt-input-header">
         <label class="form-label" style="margin:0;">축어록</label>
-        <label class="file-btn">
-          파일 불러오기 (.txt)
-          <input type="file" accept=".txt" style="display:none;" onchange="loadVerbatimFile(this)" />
-        </label>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="verbatim-char-count" id="vt-char-count">0자</span>
+          <label class="file-btn">
+            파일 불러오기 (.txt)
+            <input type="file" accept=".txt" style="display:none;" onchange="loadVerbatimFile(this)" />
+          </label>
+        </div>
       </div>
       <textarea class="form-textarea vt-textarea" id="fv"
+        oninput="updateVerbatimCounter(this.value)"
         placeholder="상담자: 안녕하세요, 오늘은 어땠어요?&#10;내담자: 그냥 그래요...&#10;&#10;클로바 노트 등 STT 결과를 그대로 붙여넣어도 됩니다."></textarea>
+      <div class="verbatim-long-notice" id="vt-long-notice" style="display:none">
+        긴 축어록 모드 — 보고서 생성 시 핵심 장면을 먼저 추출한 뒤 1페이지 보고서를 작성합니다.
+      </div>
     </div>
     <div class="form-group">
       <label class="form-label">메모 (선택)</label>
@@ -182,11 +189,19 @@ function renderEditSessionForm(session) {
     <div class="form-group">
       <div class="vt-input-header">
         <label class="form-label" style="margin:0;">축어록</label>
-        <label class="file-btn">파일 불러오기 (.txt)
-          <input type="file" accept=".txt" style="display:none;" onchange="loadVerbatimFile(this)" />
-        </label>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="verbatim-char-count" id="vt-char-count">${(session.verbatim || '').length}자</span>
+          <label class="file-btn">파일 불러오기 (.txt)
+            <input type="file" accept=".txt" style="display:none;" onchange="loadVerbatimFile(this)" />
+          </label>
+        </div>
       </div>
-      <textarea class="form-textarea vt-textarea" id="fv">${esc(session.verbatim || '')}</textarea>
+      <textarea class="form-textarea vt-textarea" id="fv"
+        oninput="updateVerbatimCounter(this.value)">${esc(session.verbatim || '')}</textarea>
+      <div class="verbatim-long-notice" id="vt-long-notice"
+        style="display:${(session.verbatim || '').length >= 3000 ? 'flex' : 'none'}">
+        긴 축어록 모드 — 보고서 생성 시 핵심 장면을 먼저 추출한 뒤 1페이지 보고서를 작성합니다.
+      </div>
     </div>
     <div class="form-group">
       <label class="form-label">메모 (선택)</label>

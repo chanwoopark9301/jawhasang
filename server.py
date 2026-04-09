@@ -301,6 +301,78 @@ def _scrub_payload(payload: dict) -> dict:
     return result
 
 # ---------------------------------------------------------------------------
+# 축어록 요약 엔드포인트 (긴 축어록 2단계 처리용)
+# ---------------------------------------------------------------------------
+
+LONG_VERBATIM_THRESHOLD = 3000  # JS 와 동일한 기준
+
+@app.route('/api/summarize-verbatim', methods=['POST'])
+@require_auth
+def summarize_verbatim():
+    """
+    긴 축어록을 임상 핵심 요약으로 압축.
+    - verbatim 이 3000자 미만이면 skip:true 반환 (AI 호출 없음)
+    - 3000자 이상이면 Anthropic API 로 요약 생성
+    """
+    payload = request.get_json()
+    if not payload or 'verbatim' not in payload:
+        return jsonify({'error': 'verbatim 필드가 필요합니다'}), 400
+
+    verbatim = payload['verbatim']
+    student  = payload.get('student', {})
+
+    if len(verbatim) < LONG_VERBATIM_THRESHOLD:
+        return jsonify({'skip': True, 'reason': f'축어록이 {LONG_VERBATIM_THRESHOLD}자 미만입니다'})
+
+    if not ANTHROPIC_API_KEY:
+        return jsonify({'error': 'ANTHROPIC_API_KEY가 없습니다'}), 500
+
+    alias     = student.get('alias', '내담자')
+    grade     = student.get('grade', '')
+    session_num = payload.get('sessionNum', '')
+
+    prompt = f"""당신은 학교상담 임상 슈퍼바이저입니다.
+아래 축어록({len(verbatim)}자)에서 슈퍼비전에 필요한 핵심만 추출하세요.
+
+【내담 학생 (익명)】 {alias} ({grade})
+
+【축어록】
+{verbatim}
+
+아래 항목을 800자 이내 산문으로 추출하세요:
+1. 내담자 감정 흐름 (시작 → 전환점 → 마지막)
+2. 상담자 주요 개입 3-5개 (발화 인용 포함)
+3. 가장 임상적으로 의미 있는 순간 1개
+4. 미완결된 주제 또는 저항 순간
+
+텍스트만 반환 (JSON 아님)."""
+
+    ai_payload = {
+        'model': 'claude-sonnet-4-6',
+        'max_tokens': 600,
+        'messages': [{'role': 'user', 'content': prompt}],
+    }
+    ai_payload = _scrub_payload(ai_payload)
+
+    resp = requests.post(
+        'https://api.anthropic.com/v1/messages',
+        headers={
+            'x-api-key': ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01',
+            'Content-Type': 'application/json',
+        },
+        json=ai_payload,
+        timeout=60,
+    )
+    if not resp.ok:
+        return jsonify({'error': f'AI 오류: {resp.status_code}'}), 502
+
+    data    = resp.json()
+    summary = ''.join(c.get('text', '') for c in data.get('content', []))
+    return jsonify({'summary': summary.strip()})
+
+
+# ---------------------------------------------------------------------------
 # Anthropic API 프록시
 # ---------------------------------------------------------------------------
 
