@@ -12,4 +12,5 @@
    ============================================= */
 
 loadData();
-initSidebarState(); // 사이드바 접기 상태 복원 (chat.js)
+initSidebarState();    // 사이드바 접기 상태 복원 (chat.js)
+_initVisualViewport(); // iOS 키보드 대응 (chat.js)

@@ -177,12 +177,84 @@ function initSidebarState() {
 }
 
 // ---------------------------------------------------------------------------
+// 모바일 패널 토글 (resize.js에서 이전)
+// ---------------------------------------------------------------------------
+
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  const ai = document.getElementById('right-panel');
+  const bd = document.getElementById('panel-backdrop');
+  if (!sb) return;
+  const isOpen = sb.classList.toggle('panel-open');
+  if (isOpen && ai) ai.classList.remove('panel-open');
+  if (bd) bd.classList.toggle('visible', isOpen || !!(ai?.classList.contains('panel-open')));
+  _updateMobileNavActive();
+}
+
+function toggleAIPanel() {
+  const sb = document.getElementById('sidebar');
+  const ai = document.getElementById('right-panel');
+  const bd = document.getElementById('panel-backdrop');
+  if (!ai) return;
+  const isOpen = ai.classList.toggle('panel-open');
+  if (isOpen && sb) sb.classList.remove('panel-open');
+  if (bd) bd.classList.toggle('visible', isOpen || !!(sb?.classList.contains('panel-open')));
+  _updateMobileNavActive();
+}
+
+function closePanels() {
+  document.getElementById('sidebar')?.classList.remove('panel-open');
+  document.getElementById('right-panel')?.classList.remove('panel-open');
+  document.getElementById('panel-backdrop')?.classList.remove('visible');
+  _updateMobileNavActive();
+}
+
+function _updateMobileNavActive() {
+  const sbOpen = document.getElementById('sidebar')?.classList.contains('panel-open');
+  const aiOpen = document.getElementById('right-panel')?.classList.contains('panel-open');
+  document.getElementById('mnav-list')?.classList.toggle('active', !!sbOpen);
+  document.getElementById('mnav-main')?.classList.toggle('active', !sbOpen && !aiOpen);
+  document.getElementById('mnav-ai')?.classList.toggle('active', !!aiOpen);
+}
+
+// iOS Safari 키보드 대응 — Visual Viewport API
+function _initVisualViewport() {
+  if (!window.visualViewport) return;
+
+  function _onVVChange() {
+    const vv = window.visualViewport;
+    const inputArea = document.getElementById('input-area');
+    const mobileNav = document.getElementById('mobile-nav');
+    const kbHeight = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    const hasKeyboard = kbHeight > 50;
+
+    if (inputArea && inputArea.style.display !== 'none') {
+      if (hasKeyboard) {
+        inputArea.style.marginBottom = kbHeight + 'px';
+        if (mobileNav) mobileNav.style.opacity = '0';
+      } else {
+        inputArea.style.marginBottom = '';
+        if (mobileNav) mobileNav.style.opacity = '';
+      }
+      const focused = document.activeElement;
+      if (focused && focused.id === 'chat-input-bottom') {
+        setTimeout(() => focused.scrollIntoView({ block: 'nearest' }), 50);
+      }
+    } else {
+      if (mobileNav) mobileNav.style.opacity = '';
+    }
+  }
+
+  window.visualViewport.addEventListener('resize', _onVVChange);
+  window.visualViewport.addEventListener('scroll', _onVVChange);
+}
+
+// ---------------------------------------------------------------------------
 // 모바일 레이아웃 업데이트 (render-main.js에서 호출)
 // ---------------------------------------------------------------------------
 
 function updateMobileLayout() {
-  // 기존 resize.js의 _updateMobileNavActive 호환
-  if (typeof _updateMobileNavActive === 'function') _updateMobileNavActive();
+  _updateMobileNavActive();
 }
 
 // ---------------------------------------------------------------------------
