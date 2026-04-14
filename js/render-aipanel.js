@@ -188,22 +188,22 @@ function _myPatternSection(topic) {
 function _updateRpButtons() {
   const reportBtn    = document.getElementById('rp-report-btn');
   const transformBtn = document.getElementById('rp-transform-btn');
+  const patternBtn   = document.getElementById('rp-pattern-btn');
 
-  const isLoading = state.aiLoading || state.myAiLoading || state.transformLoading;
+  const isLoading = state.aiLoading || state.myAiLoading || state.transformLoading || state.patternLoading || state.myPatternLoading;
 
   if (reportBtn) {
     if (state.view === 'myrecords') {
-      // 나의 기록 — 보고서
+      // 나의 기록 — 보고서 (기록이 있어야 활성)
       reportBtn.style.background = '#1D9E75';
-      const record = state.selRecord ? state.myRecords.find(r => r.id === state.selRecord) : null;
-      reportBtn.disabled    = !record || isLoading;
-      reportBtn.textContent = state.myAiLoading ? '분석 중...'
-        : (record?.analysis ? '보고서 재생성 ↗' : '보고서 생성 ↗');
+      const hasMsgs = state.currentChatMessages.filter(m => m.role !== 'system').length > 0;
+      reportBtn.disabled    = !hasMsgs || isLoading;
+      reportBtn.textContent = state.myAiLoading ? '분석 중...' : '보고서 생성 ↗';
     } else {
-      // 상담 기록 — 슈퍼비전 보고서
+      // 상담 기록 — 슈퍼비전 보고서 (축어록 첨부 or 기존 회기에 축어록 있어야 활성)
       reportBtn.style.background = '';
       const session = state.selSession ? state.sessions.find(s => s.id === state.selSession) : null;
-      const hasVt   = !!(session?.verbatim?.trim());
+      const hasVt   = !!(session?.verbatim?.trim()) || !!(state.attachedVerbatim?.trim());
       reportBtn.disabled    = !hasVt || isLoading;
       reportBtn.textContent = state.aiLoading ? '분석 중...'
         : (session?.analysis ? '보고서 재생성 ↗' : '슈퍼비전 보고서 생성 ↗');
@@ -211,15 +211,38 @@ function _updateRpButtons() {
   }
 
   if (transformBtn) {
-    if (state.view === 'student') {
-      // 축어록 AI 정리 버튼 (상담 기록 전용)
+    if (state.view === 'myrecords' && state.selTopic) {
+      // 나의 기록 — 일기로 변환 (대화 내용 있어야 활성)
+      transformBtn.style.display = '';
+      const hasMsgs = state.currentChatMessages.filter(m => m.role !== 'system').length > 0;
+      transformBtn.disabled    = !hasMsgs || isLoading;
+      transformBtn.textContent = state.transformLoading ? '변환 중...' : '일기로 변환 ↗';
+    } else if (state.view === 'student') {
+      // 상담 기록 — 축어록 AI 정리
       transformBtn.style.display = '';
       const session = state.selSession ? state.sessions.find(s => s.id === state.selSession) : null;
-      const hasVt   = !!(session?.verbatim?.trim());
+      const hasVt   = !!(session?.verbatim?.trim()) || !!(state.attachedVerbatim?.trim());
       transformBtn.disabled    = !hasVt || isLoading;
       transformBtn.textContent = state.transformLoading ? '정리 중...' : '축어록 AI 정리 ↗';
     } else {
       transformBtn.style.display = 'none';
+    }
+  }
+
+  if (patternBtn) {
+    if (state.view === 'myrecords') {
+      // 나의 기록 — 대화 요약·저장 (대화 내용 있어야 활성)
+      patternBtn.style.display = '';
+      const hasMsgs = state.currentChatMessages.filter(m => m.role !== 'system').length > 0;
+      patternBtn.disabled    = !hasMsgs || isLoading;
+      patternBtn.textContent = state.myPatternLoading ? '요약 중...' : '대화 요약·저장 ↗';
+    } else if (state.view === 'student') {
+      // 상담 기록 — 전체 패턴 분석 (내담자 선택 시 활성)
+      patternBtn.style.display = '';
+      patternBtn.disabled    = !state.selStudent || isLoading;
+      patternBtn.textContent = state.patternLoading ? '분석 중...' : '전체 패턴 분석 ↗';
+    } else {
+      patternBtn.style.display = 'none';
     }
   }
 }

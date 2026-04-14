@@ -117,6 +117,11 @@ function renderMain() {
   if (['new-student','edit-student','new-session','edit-session'].includes(state.mode)) {
     openModal(state.mode);
   }
+  if (['new-topic','new-record'].includes(state.myMode)) {
+    const modalId = state.myMode === 'new-record' ? 'write' : 'new-topic';
+    state.myMode = 'list';
+    openModal(modalId);
+  }
 
   // ── 나의 기록 뷰 ──────────────────────────────────────────────────────────
 

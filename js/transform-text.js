@@ -62,45 +62,68 @@ function _applyVerbatimResult(session, result) {
 }
 
 // ---------------------------------------------------------------------------
-// 일기 변환 (mode: diary) — 나의 기록, 블록 에디터 연동
+// 일기 변환 (mode: diary) — 현재 대화 내용(currentChatMessages) 기반
 // ---------------------------------------------------------------------------
 
 async function _handleDiaryTransform() {
-  const blocks = state.selectedBlocks;
-  if (!blocks || !blocks.length) {
-    alert('변환할 블록을 선택하세요.');
+  const msgs = state.currentChatMessages.filter(m => m.role !== 'system');
+  if (!msgs.length) {
+    showToast('변환할 대화 내용이 없어요. 먼저 대화를 나눠보세요.');
     return;
   }
 
-  const record = state.selRecord ? state.myRecords.find(r => r.id === state.selRecord) : null;
-  if (!record) return;
+  if (!state.selTopic) {
+    showToast('주제를 먼저 선택해주세요.');
+    return;
+  }
+
+  const topic = state.myTopics.find(t => t.id === state.selTopic);
+  const aiRole = topic?.aiPrompt || '따뜻하게 경청하고 성찰을 돕는 코치';
 
   state.transformLoading = true;
   renderAIPanel();
-  logger.info('일기 변환 시작: 블록 %d개', blocks.length);
+  logger.info('일기 변환 시작: 대화 %d건', msgs.length);
 
   try {
-    const resp = await fetch('/api/transform-text', {
+    const chatText = msgs.map(m =>
+      `${m.role === 'user' ? '나' : 'AI'}: ${m.text}`
+    ).join('\n\n');
+
+    const prompt = `당신은 ${aiRole} 역할입니다.
+아래는 '${topic?.title || '기록'}' 주제로 나눈 대화입니다.
+
+${chatText}
+
+이 대화를 **일기 형식**으로 변환해주세요.
+규칙:
+- 1인칭 시점으로 작성
+- 대화를 그대로 나열하지 말고, 핵심 감정·생각·통찰을 자연스럽게 녹인 일기로 작성
+- 구어체가 아닌 글말로 정돈
+- 마크다운 없이 순수 텍스트
+- 300~600자 내외
+결과 텍스트만 반환 (다른 설명 없이).`;
+
+    const res = await fetch('/api/analyze', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ mode: 'diary', blocks }),
+      body:    JSON.stringify({
+        model: 'claude-sonnet-4-6', max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }],
+      }),
     });
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
-      throw new Error(err.error || `서버 오류 ${resp.status}`);
-    }
-    const data = await resp.json();
-    if (!data.result) throw new Error('빈 응답');
-    logger.info('일기 변환 완료: %d자', data.result.length);
-    state.diaryDraft = data.result;
-    // 통합 모달(modal.js)로 결과 표시
+    if (!res.ok) throw new Error(`서버 오류 ${res.status}`);
+    const data = await res.json();
+    const result = data.content?.map(c => c.text || '').join('').trim();
+    if (!result) throw new Error('빈 응답');
+
+    logger.info('일기 변환 완료: %d자', result.length);
     openModal('diary-result', {
-      draft: data.result,
+      draft: result,
       date:  new Date().toISOString().split('T')[0],
     });
   } catch (e) {
     logger.error('일기 변환 실패: %s', e.message);
-    alert('변환 실패: ' + e.message);
+    showToast('변환 실패: ' + e.message);
   } finally {
     state.transformLoading = false;
     renderAIPanel();

@@ -36,8 +36,10 @@ function selectStudent(id) {
   state.mode       = 'list';
   state.filterTags = [];
   state.view       = 'student';
+  state.currentChatMessages = [];
   closePanels();
   render();
+  startContextChat();
 }
 
 function selectSession(id) {
@@ -108,8 +110,10 @@ function selectTopic(id) {
   state.myMode     = 'list';
   state.filterTags = [];
   state.view       = 'myrecords';
+  state.currentChatMessages = [];
   closePanels();
   render();
+  startContextChat();
 }
 
 function selectRecord(id) {

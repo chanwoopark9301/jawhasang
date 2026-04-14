@@ -77,31 +77,48 @@ function setAIStageLabel(msg) {
 }
 
 async function runAI() {
-  const session = state.sessions.find(s => s.id === state.selSession);
-  if (!session || state.aiLoading) return;
+  if (state.aiLoading) return;
 
-  const student  = state.students.find(s => s.id === session.studentId);
-  const isLong   = session.verbatim.length >= LONG_VERBATIM_THRESHOLD;
+  // selSession이 있으면 기존 회기, 없으면 attachedVerbatim 사용
+  const session  = state.sessions.find(s => s.id === state.selSession);
+  const verbatim = session?.verbatim || state.attachedVerbatim;
+  if (!verbatim?.trim()) {
+    showToast('축어록을 먼저 첨부해주세요 (+ → 축어록 첨부)');
+    return;
+  }
+
+  const student = session
+    ? state.students.find(s => s.id === session.studentId)
+    : state.students.find(s => s.id === state.selStudent);
+
+  // attachedVerbatim 전용 임시 세션 객체
+  const workSession = session || {
+    id: null, sessionNum: 1, verbatim, memo: '',
+    date: new Date().toISOString().split('T')[0],
+    verbatimSummary: null,
+  };
+
+  const isLong = workSession.verbatim.length >= LONG_VERBATIM_THRESHOLD;
 
   logger.info('슈퍼비전 보고서 생성 시작: %s %d회기 (%d자)',
-    student?.alias, session.sessionNum, session.verbatim.length);
+    student?.alias, workSession.sessionNum, workSession.verbatim.length);
 
   state.aiLoading = true;
   renderAIPanel();
 
   try {
-    let verbatimSummary = session.verbatimSummary || null;
+    let verbatimSummary = workSession.verbatimSummary || null;
 
     // ── 1단계: 긴 축어록이면 먼저 요약 ──────────────────────────────────
     if (isLong && !verbatimSummary) {
-      logger.info('1단계: 긴 축어록 핵심 추출 (%d자)', session.verbatim.length);
+      logger.info('1단계: 긴 축어록 핵심 추출 (%d자)', workSession.verbatim.length);
       setAIStageLabel('1단계: 핵심 장면 추출 중...');
       verbatimSummary = await streamAnalyze(
         { model: 'claude-sonnet-4-6', max_tokens: 600,
-          messages: [{ role: 'user', content: buildSummaryPrompt(session, student) }] },
+          messages: [{ role: 'user', content: buildSummaryPrompt(workSession, student) }] },
         (acc) => setAIStageLabel(`1단계: 핵심 추출 중... ${acc.length}자`)
       );
-      session.verbatimSummary = verbatimSummary;
+      if (session) session.verbatimSummary = verbatimSummary;
       logger.info('1단계 완료: 요약 %d자', verbatimSummary.length);
     }
 
@@ -112,23 +129,29 @@ async function runAI() {
 
     const text = await streamAnalyze(
       { model: 'claude-sonnet-4-6', max_tokens: 2000,
-        messages: [{ role: 'user', content: buildReportPrompt(session, student, verbatimSummary) }] },
+        messages: [{ role: 'user', content: buildReportPrompt(workSession, student, verbatimSummary) }] },
       (acc) => setAIStageLabel(`${stageLabel} ${acc.length}자`)
     );
 
     const result   = parseJSON(text);
     result.savedAt = new Date().toISOString().split('T')[0];
-    session.analysis  = result;
-    saveData();
-    state.sessionTab  = 'report';
-    logger.info('슈퍼비전 보고서 생성 완료: %s %d회기', student?.alias, session.sessionNum);
+
+    if (session) {
+      // 기존 회기에 바로 저장
+      session.analysis = result;
+      saveData();
+    }
+
+    // 결과를 모달로 표시 (저장/슈퍼비전 버튼 포함)
+    openModal('report', { analysis: result });
+    logger.info('슈퍼비전 보고서 생성 완료: %s', student?.alias);
   } catch (e) {
     logger.error('슈퍼비전 보고서 생성 실패', e);
-    alert('보고서 생성 오류:\n' + e.message);
+    showToast('보고서 생성 오류: ' + e.message);
   } finally {
     state.aiLoading = false;
   }
-  render();
+  renderAIPanel();
 }
 
 // ---------------------------------------------------------------------------

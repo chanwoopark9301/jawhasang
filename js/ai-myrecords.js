@@ -17,8 +17,8 @@ function setMyPeriod(period) {
 }
 
 async function runMyAI() {
-  if (!state.selTopic || !state.selRecord) {
-    alert('기록을 먼저 선택해주세요.');
+  if (!state.selTopic) {
+    showToast('주제를 먼저 선택해주세요.');
     return;
   }
   if (state.myAiLoading) return;
@@ -112,20 +112,19 @@ JSON 예시:
     // AI가 포함하지 않은 경우 보장
     result.savedAt = result.savedAt || today;
     result.period  = result.period  || periodLabel;
-    const record   = state.myRecords.find(r => r.id === state.selRecord);
-    if (record) {
-      record.analysis = result;
-      saveData();
-      state.myTab = 'report';
-      logger.info('나의 기록 AI 보고서 완료: 주제=%s', topic.title);
-    }
+    // topic에 패턴 분석 결과 저장
+    topic.patternAnalysis = result;
+    saveData();
+    logger.info('나의 기록 AI 보고서 완료: 주제=%s', topic.title);
+    // 결과를 모달로 표시
+    openModal('pattern', { result });
   } catch (e) {
     logger.error('나의 기록 보고서 생성 실패', e);
-    alert('보고서 생성 오류:\n' + e.message);
+    showToast('보고서 생성 오류: ' + e.message);
   } finally {
     state.myAiLoading = false;
   }
-  render();
+  renderAIPanel();
 }
 
 // ---------------------------------------------------------------------------
