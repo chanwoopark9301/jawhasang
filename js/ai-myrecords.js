@@ -127,3 +127,58 @@ JSON 예시:
   renderAIPanel();
 }
 
+// ---------------------------------------------------------------------------
+// 나의 기록 AI 대화
+// ---------------------------------------------------------------------------
+
+async function sendMyChatMessage(textParam) {
+  let text = textParam;
+  if (!text) {
+    const input = document.getElementById('chat-input-bottom');
+    text = input?.value.trim();
+    if (input) input.value = '';
+  }
+  if (!text || state.myChatLoading) return;
+
+  const topic = state.myTopics.find(t => t.id === state.selTopic);
+
+  state.currentChatMessages.push({ role: 'user', text });
+  renderChatView();
+  scrollChatToBottom();
+
+  state.myChatLoading = true;
+  renderRightPanel();
+
+  const aiRole = topic?.aiPrompt || '따뜻하게 경청하고 공감하는 친구처럼';
+  const sysCtx = `당신은 ${aiRole} 역할입니다. 주제: '${topic?.title || '나의 기록'}'. 한국어 존댓말 사용.`;
+
+  const messages = state.currentChatMessages
+    .filter(m => m.role !== 'system')
+    .map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.text }));
+
+  try {
+    const res = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6', max_tokens: 600,
+        system: [{ type: 'text', text: sysCtx, cache_control: { type: 'ephemeral' } }],
+        messages,
+      }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data   = await res.json();
+    const aiText = data.content?.map(c => c.text || '').join('').trim();
+    if (!aiText) throw new Error('빈 응답');
+    state.currentChatMessages.push({ role: 'ai', text: aiText });
+    saveData();
+  } catch (e) {
+    state.currentChatMessages.push({ role: 'ai', text: '오류가 발생했습니다. 다시 시도해주세요.' });
+  } finally {
+    state.myChatLoading = false;
+  }
+  renderChatView();
+  renderRightPanel();
+  scrollChatToBottom();
+}
+

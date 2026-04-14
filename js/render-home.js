@@ -162,10 +162,7 @@ function _shortDate(dateStr) {
 
 function handleHomeMyRecords() {
   const firstTopic = state.myTopics[0];
-  if (!firstTopic) {
-    openModal('new-topic');
-    return;
-  }
+  if (!firstTopic) { openModal('new-topic'); return; }
   state.selTopic    = firstTopic.id;
   state.view        = 'myrecords';
   state.myMode      = 'list';
@@ -173,24 +170,19 @@ function handleHomeMyRecords() {
   state.currentRole = firstTopic.selectedRole || 'listener';
   state.currentChatMessages = [];
   state.filterTags  = [];
-  const restored = loadChatHistory();
   render();
-  if (!restored) startContextChat();
+  startContextChat();
 }
 
 function handleHomeCounseling() {
   const firstStudent = state.students[0];
-  if (!firstStudent) {
-    openModal('new-student');
-    return;
-  }
+  if (!firstStudent) { openModal('new-student'); return; }
   state.selStudent = firstStudent.id;
   state.view       = 'student';
   state.mode       = 'list';
   state.chatMode   = 'general';
   state.currentChatMessages = [];
   state.filterTags = [];
-  const restored = loadChatHistory();
   render();
-  if (!restored) startContextChat();
+  startContextChat();
 }

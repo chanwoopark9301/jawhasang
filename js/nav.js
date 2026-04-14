@@ -38,10 +38,8 @@ function selectStudent(id) {
   state.view       = 'student';
   state.currentChatMessages = [];
   closePanels();
-  // 저장된 대화 내역 복원 — 없으면 AI 첫 인삿말 새로 시작
-  const restored = loadChatHistory();
   render();
-  if (!restored) startContextChat();
+  startContextChat();
 }
 
 function selectSession(id) {
@@ -111,13 +109,10 @@ function selectTopic(id) {
   state.selRecord  = null;
   state.myMode     = 'list';
   state.filterTags = [];
-  state.view       = 'myrecords';
   state.currentChatMessages = [];
   closePanels();
-  // 저장된 대화 내역 복원 — 없으면 AI 첫 인삿말 새로 시작
-  const restored = loadChatHistory();
   render();
-  if (!restored) startContextChat();
+  startContextChat();
 }
 
 function selectRecord(id) {

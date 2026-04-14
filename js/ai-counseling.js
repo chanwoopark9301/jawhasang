@@ -214,12 +214,10 @@ ${reportPart}
 }
 
 async function sendChatMessage(textParam) {
-  // 통합 입력창(chat.js)에서 text를 직접 받거나, 기존 chat-input에서 읽기
   let text = textParam;
   if (!text) {
-    const input = document.getElementById('chat-input');
-    if (!input) return;
-    text = input.value.trim();
+    const input = document.getElementById('chat-input-bottom');
+    text = input?.value.trim();
     if (input) input.value = '';
   }
   if (!text || state.chatLoading) return;
@@ -230,13 +228,11 @@ async function sendChatMessage(textParam) {
   logger.debug('슈퍼비전 메시지 전송 (%d자)', text.length);
   if (!session.supervisionChat) session.supervisionChat = [];
   session.supervisionChat.push({ role: 'user', text });
+  state.currentChatMessages.push({ role: 'user', text });
 
   state.chatLoading = true;
-  renderMain();
-  requestAnimationFrame(() => {
-    const el = document.getElementById('chat-messages');
-    if (el) el.scrollTop = el.scrollHeight;
-  });
+  renderChatView();
+  scrollChatToBottom();
 
   const student  = state.students.find(s => s.id === session.studentId);
   const sysCtx   = buildSupervisorContext(session, student);
@@ -260,18 +256,18 @@ async function sendChatMessage(textParam) {
     const aiText = data.content?.map(c => c.text || '').join('').trim();
     if (!aiText) throw new Error('AI 응답이 비어 있습니다');
     session.supervisionChat.push({ role: 'ai', text: aiText });
+    state.currentChatMessages.push({ role: 'ai', text: aiText });
     saveData();
     logger.debug('슈퍼비전 AI 응답 수신 (%d자)', aiText.length);
   } catch (e) {
     logger.error('슈퍼비전 메시지 전송 실패', e);
-    session.supervisionChat.push({ role: 'ai', text: '오류가 발생했습니다. 다시 시도해주세요.' });
+    const errMsg = '오류가 발생했습니다. 다시 시도해주세요.';
+    session.supervisionChat.push({ role: 'ai', text: errMsg });
+    state.currentChatMessages.push({ role: 'ai', text: errMsg });
   } finally {
     state.chatLoading = false;
   }
-  renderMain();
-  requestAnimationFrame(() => {
-    const el = document.getElementById('chat-messages');
-    if (el) el.scrollTop = el.scrollHeight;
-  });
+  renderChatView();
+  scrollChatToBottom();
 }
 

@@ -215,43 +215,93 @@ async function startContextChat() {
   const topic   = isMyRecords ? state.myTopics.find(t => t.id === state.selTopic) : null;
   const student = !isMyRecords ? state.students.find(s => s.id === state.selStudent) : null;
 
-  const aiRole  = topic?.aiPrompt || '따뜻하게 경청하고 공감하는 친구처럼';
-
-  // 최근 기록 1-2개를 컨텍스트로 포함
-  let recentContext = '';
-  if (isMyRecords && topic) {
-    const recentRecords = state.myRecords
-      .filter(r => r.topicId === topic.id)
-      .sort((a, b) => b.date.localeCompare(a.date))
-      .slice(0, 2);
-    if (recentRecords.length) {
-      recentContext = '\n\n아래는 이 주제의 최근 기록입니다:\n' +
-        recentRecords.map(r =>
-          `[${r.date} · ${r.recordNum}번째 기록]\n${r.content.slice(0, 300)}${r.content.length > 300 ? '...' : ''}`
-        ).join('\n\n');
-    }
-  } else if (!isMyRecords && student) {
-    const recentSessions = state.sessions
-      .filter(s => s.studentId === student.id)
-      .sort((a, b) => b.date.localeCompare(a.date))
-      .slice(0, 1);
-    if (recentSessions.length && recentSessions[0].memo) {
-      recentContext = `\n\n최근 회기 메모 (${recentSessions[0].date}): ${recentSessions[0].memo.slice(0, 200)}`;
+  // 상담 기록 — 기존 슈퍼비전 대화 이력 복원
+  if (!isMyRecords && state.selSession) {
+    const session = state.sessions.find(s => s.id === state.selSession);
+    if (session?.supervisionChat?.length) {
+      state.currentChatMessages = session.supervisionChat.map(m => ({
+        role: m.role, text: m.text,
+      }));
+      renderChatView();
+      return;
     }
   }
 
+  // 나의 기록 — 최근 기록 컨텍스트
+  const recentRecords = isMyRecords
+    ? state.myRecords
+        .filter(r => r.topicId === state.selTopic)
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, 3)
+    : [];
+  const isFirstRecord = recentRecords.length === 0;
+  const recentRecordContext = isFirstRecord
+    ? '이 주제의 첫 번째 대화입니다.'
+    : `최근 기록 ${recentRecords.length}개:\n` +
+      recentRecords.map(r =>
+        `[${r.date}] ${r.content.substring(0, 150)}`
+      ).join('\n\n');
+
+  // 상담 기록 — 최근 회기 컨텍스트
+  const recentSessions = !isMyRecords
+    ? state.sessions
+        .filter(s => s.studentId === state.selStudent)
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, 2)
+    : [];
+  const isFirstSession = recentSessions.length === 0;
+  const recentSessionContext = isFirstSession
+    ? '첫 번째 상담입니다.'
+    : `최근 회기:\n` +
+      recentSessions.map(s =>
+        `[${s.date} · ${s.sessionNum}회기] ${
+          s.analysis?.overall || s.verbatim?.substring(0, 150) || '기록 없음'
+        }`
+      ).join('\n\n');
+
+  const aiRole = topic?.aiPrompt || '따뜻하게 경청하고 공감하는 친구처럼';
+
   const sysPrompt = isMyRecords
-    ? `당신은 ${aiRole} 역할입니다. 주제는 '${topic?.title || '나의 기록'}'입니다.${recentContext}\n한국어 존댓말 사용.`
-    : `당신은 학교상담 슈퍼바이저입니다. 내담자: ${student?.alias || '?'} (${student?.grade || ''}).${recentContext}\n한국어 존댓말 사용.`;
+    ? `당신은 ${aiRole} 역할입니다.
+주제: '${topic?.title || '나의 기록'}'
+
+${recentRecordContext}
+
+대화 원칙:
+- 처음 만난 사람처럼 대하지 말 것. 이 사람의 흐름을 알고 있는 사람처럼.
+- 칭찬보다 관심. 조언보다 공감이 먼저.
+- 구체적인 내용을 언급할 것. "기록하셨군요"가 아니라 최근 기록의 구체적 내용을 언급.
+- ${isFirstRecord
+    ? '첫 기록이니 어떤 계기로 시작했는지 자연스럽게 물어볼 것.'
+    : '가장 최근 기록에서 자연스럽게 이어받을 것.'}
+- 질문은 한 번에 하나만. 짧고 자연스럽게.
+- 한국어 존댓말 사용.`
+    : `당신은 학교상담 임상 슈퍼바이저입니다.
+내담자: ${student?.alias || '?'} (${student?.grade || ''}${student?.gender ? ' · ' + student.gender : ''})
+가정: ${student?.family || '정보 없음'}
+교우: ${student?.peers || '정보 없음'}
+상황: ${student?.situation || '정보 없음'}
+
+${recentSessionContext}
+
+대화 원칙:
+- 상담사의 감각과 경험을 먼저 물어볼 것. 정보 수집보다 성찰이 먼저.
+- ${isFirstSession
+    ? '첫 회기이니 이 내담자를 맡게 된 배경이나 첫인상을 물어볼 것.'
+    : '직전 회기에서 자연스럽게 이어받을 것.'}
+- 판단하지 말고, 상담사가 스스로 발견하도록 질문으로 안내.
+- 질문은 한 번에 하나만.
+- 한국어 존댓말 사용.`;
 
   const startMsg = isMyRecords
-    ? (recentContext
-        ? '최근 기록을 읽었어요. 지난번 이후 어떻게 지내셨는지 자연스럽게 물어봐주세요.'
-        : '대화를 자연스럽게 시작해주세요. 판단 없이 들어주는 첫 마디를 해주세요.')
-    : `${student?.alias || '내담자'} 학생의 상담을 시작하겠습니다. 첫 인삿말을 해주세요.`;
+    ? (isFirstRecord
+        ? '지금 이 주제로 첫 대화를 시작합니다. 자연스럽게 첫 마디를 해주세요.'
+        : '최근 기록을 바탕으로 자연스럽게 대화를 이어받아 첫 마디를 해주세요. 요약하거나 정리하지 말고, 그냥 이어서 대화하듯이.')
+    : (isFirstSession
+        ? '첫 회기입니다. 자연스럽게 첫 인삿말을 해주세요.'
+        : '직전 회기를 바탕으로 자연스럽게 이어받아 첫 마디를 해주세요.');
 
-  // trigger 메시지도 히스토리에 넣어야 다음 대화에서 Anthropic API가
-  // 'first message must be user' 에러를 내지 않음 (hidden 플래그로 UI에선 숨김)
+  // hidden trigger — Anthropic API first-message-must-be-user 준수
   state.currentChatMessages.push({ role: 'user', text: startMsg, hidden: true });
   showTypingIndicator();
 
