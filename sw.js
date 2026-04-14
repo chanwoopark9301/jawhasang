@@ -5,7 +5,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v12'; // Fix: renderChatView/showTypingIndicator 레이스 컨디션 — selRecord/selSession 시 덮어쓰기 방지
+const CACHE_NAME = 'jip-v13'; // 기록/회기 팝업 상세 + 블록 에디터 수정 모달
 
 const STATIC_ASSETS = [
   '/',

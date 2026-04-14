@@ -3157,6 +3157,106 @@ body { height: 100dvh; }
 .sub-item-add { opacity: 0.55; font-style: italic; }
 .sub-item-add:hover { opacity: 1; }
 
+/* ── 기록/회기 상세 팝업 내 스타일 ── */
+.detail-modal-content {
+  font-size: 15px;
+  line-height: 1.85;
+  color: var(--color-text);
+  margin-bottom: 14px;
+}
+.detail-modal-content p { margin-bottom: 0.7em; }
+.detail-modal-content strong { font-weight: 700; }
+.detail-modal-content em { font-style: italic; }
+.detail-modal-content hr { border: none; border-top: 1px solid var(--color-border); margin: 10px 0; }
+.detail-modal-memo-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+.detail-modal-memo {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
+  padding: 10px 12px;
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-md);
+}
+.detail-modal-verbatim {
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  padding: 10px 12px;
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-md);
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+/* ── 블록 에디터 ── */
+.block-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.block-item {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  background: var(--color-bg-secondary);
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 6px 8px;
+  transition: border-color 0.15s;
+}
+.block-item:focus-within { border-color: var(--color-accent); }
+.block-textarea {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.7;
+  color: var(--color-text);
+  resize: none;
+  min-height: 40px;
+  outline: none;
+  overflow: hidden;
+}
+.block-item-actions { display: flex; flex-direction: column; gap: 2px; flex-shrink: 0; }
+.block-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--color-text-tertiary);
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+  transition: color 0.12s, background 0.12s;
+}
+.block-btn:hover { background: var(--color-bg-tertiary); }
+.block-btn-del:hover { color: #b94040 !important; }
+.block-add-btn {
+  background: none;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: border-color 0.15s, color 0.15s;
+}
+.block-add-btn:hover { border-color: var(--color-accent); color: var(--color-text); }
+
 /* ── 사이드바 하위 기록/회기 목록 ── */
 .sub-children {
   padding-left: 14px;

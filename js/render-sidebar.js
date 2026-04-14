@@ -70,12 +70,8 @@ function _renderRecordChildren(topicId) {
     .sort((a, b) => b.date.localeCompare(a.date));
 
   const items = records.map(r => {
-    const active = state.selRecord === r.id;
-    return `<div class="sub-child${active ? ' active' : ''}" onclick="selectRecord('${r.id}')">
+    return `<div class="sub-child" onclick="openModal('record-detail',{id:'${r.id}'})">
       <span class="sub-child-label">${_sbDate(r.date)} · ${r.recordNum}번째</span>
-      <span class="sub-child-actions">
-        <button class="sub-item-btn sub-item-del" onclick="event.stopPropagation();deleteRecord('${r.id}')" title="삭제">×</button>
-      </span>
     </div>`;
   }).join('');
 
@@ -95,12 +91,8 @@ function _renderSessionChildren(studentId) {
     .sort((a, b) => b.date.localeCompare(a.date));
 
   const items = sessions.map(s => {
-    const active = state.selSession === s.id;
-    return `<div class="sub-child${active ? ' active' : ''}" onclick="selectSession('${s.id}')">
+    return `<div class="sub-child" onclick="openModal('session-detail',{id:'${s.id}'})">
       <span class="sub-child-label">${_sbDate(s.date)} · ${s.sessionNum}회기</span>
-      <span class="sub-child-actions">
-        <button class="sub-item-btn sub-item-del" onclick="event.stopPropagation();deleteSession('${s.id}')" title="삭제">×</button>
-      </span>
     </div>`;
   }).join('');
 

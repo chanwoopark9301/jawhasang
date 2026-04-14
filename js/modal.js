@@ -39,6 +39,8 @@ function buildModalHTML(id, data) {
     case 'new-student':   return renderModalNewStudent();
     case 'edit-topic':    return renderModalEditTopic(data);
     case 'edit-student':  return renderModalEditStudent(data);
+    case 'record-detail': return renderModalRecordDetail(data);
+    case 'session-detail':return renderModalSessionDetail(data);
     case 'new-session':   return renderModalNewSession();
     case 'edit-session':  return renderModalEditSession(data);
     case 'edit-record':   return renderModalEditRecord(data);
@@ -211,6 +213,60 @@ function renderModalEditStudent(data) {
     </div>`;
 }
 
+// ---------------------------------------------------------------------------
+// 기록 상세 팝업 (나의 기록)
+// ---------------------------------------------------------------------------
+
+function renderModalRecordDetail(data) {
+  const record = state.myRecords.find(r => r.id === data.id);
+  if (!record) return `<p>기록을 찾을 수 없습니다</p>`;
+  const topic = state.myTopics.find(t => t.id === record.topicId);
+  return `
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-title">${esc(topic?.title || '')} · ${record.recordNum}번째</div>
+    <div style="font-size:12px;color:var(--color-text-tertiary);margin-bottom:16px;">${esc(record.date)}</div>
+    <div class="detail-modal-content">${renderMd(record.content)}</div>
+    ${record.memo ? `
+      <div class="detail-modal-memo-label">메모</div>
+      <div class="detail-modal-memo">${esc(record.memo)}</div>` : ''}
+    <div class="modal-footer">
+      <button class="btn-secondary" style="color:#b94040;" onclick="modalDeleteRecord('${record.id}')">삭제</button>
+      <button class="btn-secondary" onclick="closeModal();openModal('edit-record',{id:'${record.id}'})">수정</button>
+      <button class="btn-primary-my" onclick="closeModal()">AI 대화</button>
+    </div>`;
+}
+
+// ---------------------------------------------------------------------------
+// 회기 상세 팝업 (상담 기록)
+// ---------------------------------------------------------------------------
+
+function renderModalSessionDetail(data) {
+  const session = state.sessions.find(s => s.id === data.id);
+  if (!session) return `<p>회기를 찾을 수 없습니다</p>`;
+  const student = state.students.find(s => s.id === session.studentId);
+  return `
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-title">${esc(student?.alias || '')} · ${session.sessionNum}회기</div>
+    <div style="font-size:12px;color:var(--color-text-tertiary);margin-bottom:16px;">${esc(session.date)}</div>
+    ${session.verbatim ? `
+      <div class="detail-modal-memo-label">축어록</div>
+      <div class="detail-modal-verbatim">${esc(session.verbatim)}</div>` :
+      '<div style="font-size:13px;color:var(--color-text-tertiary);font-style:italic;">축어록 없음</div>'}
+    ${session.memo ? `
+      <div class="detail-modal-memo-label" style="margin-top:14px;">메모</div>
+      <div class="detail-modal-memo">${esc(session.memo)}</div>` : ''}
+    ${session.analysis ? `
+      <div class="detail-modal-memo-label" style="margin-top:14px;">슈퍼비전 보고서</div>
+      <div style="font-size:13px;">
+        <button class="btn-link" onclick="closeModal();openModal('report',{analysis:state.sessions.find(s=>s.id==='${session.id}').analysis})">보고서 보기 →</button>
+      </div>` : ''}
+    <div class="modal-footer">
+      <button class="btn-secondary" style="color:#b94040;" onclick="modalDeleteSession('${session.id}')">삭제</button>
+      <button class="btn-secondary" onclick="closeModal();openModal('edit-session',{id:'${session.id}'})">수정</button>
+      <button class="btn-primary" onclick="closeModal()">AI 슈퍼비전</button>
+    </div>`;
+}
+
 function renderModalNewSession() {
   const today = new Date().toISOString().split('T')[0];
   return `
@@ -247,8 +303,9 @@ function renderModalEditSession(data) {
       <input class="form-input" id="fss-date" type="date" value="${esc(session.date)}" />
     </div>
     <div class="form-group">
-      <label class="form-label">축어록</label>
-      <textarea class="form-textarea" id="fss-verbatim" style="min-height:140px;">${esc(session.verbatim || '')}</textarea>
+      <label class="form-label">축어록 <span style="color:var(--color-text-tertiary);font-weight:400;">— 문단 단위로 나뉩니다</span></label>
+      <div id="block-editor-verbatim" class="block-editor">${renderBlockEditor(session.verbatim || '', 'verbatim')}</div>
+      <button type="button" class="block-add-btn" onclick="addBlockToEditor('block-editor-verbatim','verbatim')">+ 문단 추가</button>
     </div>
     <div class="form-group">
       <label class="form-label">메모</label>
@@ -271,8 +328,9 @@ function renderModalEditRecord(data) {
       <input class="form-input" id="frec-date" type="date" value="${esc(record.date)}" />
     </div>
     <div class="form-group">
-      <label class="form-label">내용</label>
-      <textarea class="form-textarea my-content-input" id="frec-content" style="min-height:180px;">${esc(record.content || '')}</textarea>
+      <label class="form-label">내용 <span style="color:var(--color-text-tertiary);font-weight:400;">— 문단 단위로 나뉩니다</span></label>
+      <div id="block-editor-content" class="block-editor">${renderBlockEditor(record.content || '', 'content')}</div>
+      <button type="button" class="block-add-btn" onclick="addBlockToEditor('block-editor-content','content')">+ 문단 추가</button>
     </div>
     <div class="form-group">
       <label class="form-label">메모 <span style="color:var(--color-text-tertiary);font-weight:400;">(선택)</span></label>
@@ -532,7 +590,7 @@ function modalUpdateSession(id) {
   const session = state.sessions.find(s => s.id === id);
   if (!session) return;
   session.date     = document.getElementById('fss-date')?.value || session.date;
-  session.verbatim = (document.getElementById('fss-verbatim')?.value || '').trim();
+  session.verbatim = collectBlocks('verbatim');
   session.memo     = (document.getElementById('fss-memo')?.value || '').trim();
   saveData();
   closeModal();
@@ -544,7 +602,7 @@ function modalUpdateRecord(id) {
   const record = state.myRecords.find(r => r.id === id);
   if (!record) return;
   record.date    = document.getElementById('frec-date')?.value || record.date;
-  record.content = (document.getElementById('frec-content')?.value || '').trim();
+  record.content = collectBlocks('content');
   record.memo    = (document.getElementById('frec-memo')?.value || '').trim();
   saveData();
   closeModal();
@@ -765,6 +823,128 @@ function saveSummaryAsRecord() {
   closeModal();
   showToast('기록으로 저장됐어요.');
   render();
+}
+
+// ---------------------------------------------------------------------------
+// 팝업 내 삭제 (confirm 후 모달 닫기)
+// ---------------------------------------------------------------------------
+
+function modalDeleteRecord(id) {
+  if (!confirm('이 기록을 삭제할까요?')) return;
+  state.myRecords = state.myRecords.filter(r => r.id !== id);
+  if (state.selRecord === id) {
+    state.selRecord = null;
+    state.myMode = state.selTopic ? 'list' : 'welcome';
+  }
+  saveData();
+  closeModal();
+  render();
+  showToast('기록이 삭제되었습니다');
+}
+
+function modalDeleteSession(id) {
+  if (!confirm('이 회기 기록을 삭제할까요?')) return;
+  state.sessions = state.sessions.filter(s => s.id !== id);
+  if (state.selSession === id) {
+    state.selSession = null;
+    state.mode = state.selStudent ? 'list' : 'welcome';
+  }
+  saveData();
+  closeModal();
+  render();
+  showToast('회기가 삭제되었습니다');
+}
+
+// ---------------------------------------------------------------------------
+// 블록 에디터 (문단 단위 편집)
+// ---------------------------------------------------------------------------
+
+function renderBlockEditor(content, fieldName) {
+  const blocks = (content || '').split(/\n\n+/).map(b => b.trim()).filter(Boolean);
+  if (!blocks.length) blocks.push('');
+  return blocks.map((block, i) => _renderBlockItem(block, fieldName, i)).join('');
+}
+
+function _renderBlockItem(text, fieldName, idx) {
+  return `<div class="block-item" data-field="${fieldName}">
+    <textarea class="block-textarea" oninput="autoResizeBlock(this)"
+      onkeydown="blockKeydown(event,this,'${fieldName}')"
+    >${esc(text)}</textarea>
+    <div class="block-item-actions">
+      <button type="button" class="block-btn block-btn-del"
+        onclick="removeBlock(this,'${fieldName}')" title="이 문단 삭제">×</button>
+    </div>
+  </div>`;
+}
+
+function collectBlocks(fieldName) {
+  const blocks = document.querySelectorAll(`.block-item[data-field="${fieldName}"] .block-textarea`);
+  return Array.from(blocks).map(ta => ta.value.trim()).filter(Boolean).join('\n\n');
+}
+
+function addBlockToEditor(editorId, fieldName) {
+  const editor = document.getElementById(editorId);
+  if (!editor) return;
+  const div = document.createElement('div');
+  div.innerHTML = _renderBlockItem('', fieldName, Date.now());
+  const newItem = div.firstElementChild;
+  editor.appendChild(newItem);
+  const ta = newItem.querySelector('.block-textarea');
+  ta.focus();
+  autoResizeBlock(ta);
+}
+
+function removeBlock(btn, fieldName) {
+  const items = document.querySelectorAll(`.block-item[data-field="${fieldName}"]`);
+  if (items.length <= 1) {
+    btn.closest('.block-item').querySelector('.block-textarea').value = '';
+    return;
+  }
+  btn.closest('.block-item').remove();
+}
+
+function autoResizeBlock(ta) {
+  ta.style.height = 'auto';
+  ta.style.height = (ta.scrollHeight) + 'px';
+}
+
+// Enter 두 번 → 새 블록, Backspace on empty → 위 블록으로 포커스
+function blockKeydown(e, ta, fieldName) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    const val = ta.value;
+    const pos = ta.selectionStart;
+    // 커서 앞뒤 두 개 이상의 줄바꿈 = 블록 분리 신호
+    if (pos > 0 && val[pos - 1] === '\n') {
+      e.preventDefault();
+      // 현재 블록 내용을 분리
+      const before = val.slice(0, pos - 1).trimEnd();
+      const after  = val.slice(pos).trimStart();
+      ta.value = before;
+      autoResizeBlock(ta);
+      const editor = ta.closest('.block-editor');
+      const currentItem = ta.closest('.block-item');
+      const div = document.createElement('div');
+      div.innerHTML = _renderBlockItem(after, fieldName, Date.now());
+      const newItem = div.firstElementChild;
+      currentItem.after(newItem);
+      const newTa = newItem.querySelector('.block-textarea');
+      newTa.focus();
+      newTa.selectionStart = newTa.selectionEnd = 0;
+      autoResizeBlock(newTa);
+    }
+  } else if (e.key === 'Backspace' && ta.value === '') {
+    const items = document.querySelectorAll(`.block-item[data-field="${fieldName}"]`);
+    if (items.length <= 1) return;
+    e.preventDefault();
+    const currentItem = ta.closest('.block-item');
+    const prev = currentItem.previousElementSibling;
+    currentItem.remove();
+    if (prev) {
+      const prevTa = prev.querySelector('.block-textarea');
+      prevTa.focus();
+      prevTa.selectionStart = prevTa.selectionEnd = prevTa.value.length;
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
