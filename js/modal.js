@@ -45,6 +45,7 @@ function buildModalHTML(id, data) {
     case 'report':        return renderModalReport(data.analysis);
     case 'diary-result':  return renderModalDiaryResult(data.draft, data.date);
     case 'pattern':       return renderModalPattern(data.result);
+    case 'chat-summary':  return renderModalChatSummary(data);
     default:              return `<p>알 수 없는 팝업: ${esc(id)}</p>`;
   }
 }
@@ -540,6 +541,87 @@ function startSupervisionFromReport(analysis) {
   closeModal();
   state.chatMode = 'supervision';
   renderRightPanel();
+}
+
+// ---------------------------------------------------------------------------
+// 대화 요약 모달 (나의 기록 — 오늘 대화 → 기록 저장)
+// ---------------------------------------------------------------------------
+
+function renderModalChatSummary(data) {
+  const today = new Date().toISOString().split('T')[0];
+  return `
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-title">대화 요약 · ${esc(data.topic?.title || '')}</div>
+    <div class="form-group">
+      <label class="form-label">날짜</label>
+      <input class="form-input" id="modal-summary-date" type="date" value="${today}" />
+    </div>
+    <div class="form-group">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <label class="form-label" style="margin:0;">내용 편집</label>
+        <button class="btn-secondary" style="font-size:11px;padding:3px 8px;"
+          onclick="toggleSummaryFindReplace()">찾기/바꾸기</button>
+      </div>
+      <div id="summary-find-replace" style="display:none;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+        <input id="summary-find-input" class="form-input" style="flex:1;min-width:80px;" placeholder="찾을 단어" />
+        <input id="summary-replace-input" class="form-input" style="flex:1;min-width:80px;" placeholder="바꿀 단어" />
+        <button class="btn-secondary" style="font-size:11px;" onclick="applySummaryFindReplace()">바꾸기</button>
+      </div>
+      <textarea class="form-textarea my-content-input" id="modal-summary-content"
+        style="min-height:240px;line-height:1.8;">${esc(data.text || '')}</textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">메모 <span style="color:var(--color-text-tertiary);font-weight:400;">(선택)</span></label>
+      <textarea class="form-textarea" id="modal-summary-memo" style="min-height:50px;"
+        placeholder="짧은 메모"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">취소</button>
+      <button class="btn-primary-my" onclick="saveSummaryAsRecord()">기록으로 저장</button>
+    </div>`;
+}
+
+function toggleSummaryFindReplace() {
+  const el = document.getElementById('summary-find-replace');
+  if (!el) return;
+  el.style.display = el.style.display === 'flex' ? 'none' : 'flex';
+}
+
+function applySummaryFindReplace() {
+  const find    = document.getElementById('summary-find-input')?.value;
+  const replace = document.getElementById('summary-replace-input')?.value || '';
+  const ta      = document.getElementById('modal-summary-content');
+  if (!find || !ta) return;
+  ta.value = ta.value.split(find).join(replace);
+}
+
+function saveSummaryAsRecord() {
+  const content = document.getElementById('modal-summary-content')?.value.trim();
+  const memo    = document.getElementById('modal-summary-memo')?.value.trim() || '';
+  const date    = document.getElementById('modal-summary-date')?.value
+                || new Date().toISOString().split('T')[0];
+  if (!content) { showToast('내용을 입력해주세요.'); return; }
+  if (!state.selTopic) { showToast('주제를 선택해주세요.'); return; }
+
+  const topicRecords = state.myRecords.filter(r => r.topicId === state.selTopic);
+  const maxNum = topicRecords.length ? Math.max(...topicRecords.map(r => r.recordNum)) : 0;
+
+  state.myRecords.push({
+    id:        'r' + Date.now(),
+    topicId:   state.selTopic,
+    date,
+    recordNum: maxNum + 1,
+    content,
+    memo,
+    tags:      [],
+    analysis:  null,
+    aiChat:    [],
+  });
+
+  saveData();
+  closeModal();
+  showToast('기록으로 저장됐어요.');
+  render();
 }
 
 // ---------------------------------------------------------------------------

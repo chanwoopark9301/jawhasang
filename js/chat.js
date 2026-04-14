@@ -24,6 +24,12 @@ function sendCurrentChat() {
   if (!text) return;
   input.value = '';
 
+  // 일기 변환 모드: AI 없이 혼자 쓰기
+  if (state.chatMode === 'diary-convert') {
+    appendMessage('user', text);
+    return;
+  }
+
   // 새 대화창 구조: selSession/selRecord 없이 컨텍스트 대화
   continueContextChat(text);
 }

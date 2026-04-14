@@ -79,59 +79,50 @@ async function runMyPatternAnalysis() {
   const topic = state.myTopics.find(t => t.id === state.selTopic);
   if (!topic) return;
 
-  const records = state.myRecords
-    .filter(r => r.topicId === state.selTopic)
-    .sort((a, b) => a.date.localeCompare(b.date));
-  if (!records.length) { alert('분석할 기록이 없습니다.'); return; }
+  const msgs = state.currentChatMessages.filter(m => m.role !== 'system');
+  if (!msgs.length) {
+    showToast('대화 내용이 없어요. 먼저 대화를 나눠보세요.');
+    return;
+  }
 
   state.myPatternLoading = true;
   renderAIPanel();
 
-  const aiRole      = topic.aiPrompt || '따뜻하게 경청하고 성찰을 돕는 코치';
-  const recordsText = records.map(r =>
-    `${r.recordNum}번째 기록 (${r.date}):\n${r.content}` +
-    (r.memo    ? `\n메모: ${r.memo}`              : '') +
-    (r.analysis ? `\n[보고서 요약] ${r.analysis.overall}` : '')
-  ).join('\n\n---\n\n');
+  const chatText = msgs.map(m =>
+    `${m.role === 'user' ? '나' : 'AI'}: ${m.text}`
+  ).join('\n\n');
 
+  const aiRole = topic.aiPrompt || '따뜻하게 경청하고 성찰을 돕는 코치';
   const prompt = `당신은 ${aiRole} 역할입니다.
-'${topic.title}' 주제의 전체 ${records.length}개 기록입니다.
+아래는 '${topic.title}' 주제로 나눈 오늘의 대화입니다.
 
-${recordsText}
+${chatText}
 
-위 전체 기록을 분석해 종합 패턴 보고서를 JSON으로 작성하세요.
-각 항목은 핵심만 2-4문장으로. JSON으로만 응답.
-
-{
-  "pattern":   "전체 기록에서 발견된 핵심 반복 패턴",
-  "growth":    "시간 경과에 따른 변화와 성장",
-  "recurring": "계속 돌아오는 미해결 주제나 감정",
-  "insight":   "전체 기록에서 가장 중요한 통찰",
-  "nextFocus": "앞으로 주목해야 할 방향과 질문",
-  "overall":   "전체 기록 종합 평가"
-}`;
+위 대화를 바탕으로, '${topic.title}'에 어울리는 자연스러운 글로 정리해주세요.
+규칙:
+- 대화를 그대로 옮기지 말고 핵심 내용·감정·통찰을 녹인 글로 요약
+- 1인칭으로 작성
+- 마크다운 없이 순수 텍스트
+- 너무 길지 않게 (300~500자 내외)`;
 
   try {
-    const text = await streamAnalyze(
-      { model: 'claude-sonnet-4-6', max_tokens: 6000,
-        messages: [{ role: 'user', content: prompt }] },
-      (acc) => {
-        const lbl = document.querySelector('#ai-content .ai-loading-label');
-        if (lbl) lbl.textContent = `패턴 분석 중... ${acc.length}자`;
-      }
-    );
-    const result   = parseJSON(text);
-    result.savedAt = new Date().toISOString().split('T')[0];
-    topic.patternAnalysis = result;
-    saveData();
-    showPatternModal(result, true);
+    const res = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6', max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+    const data = await res.json();
+    const text = data.content?.map(c => c.text || '').join('').trim();
+    if (text) openModal('chat-summary', { text, topic });
   } catch (e) {
-    console.error('패턴 분석 오류:', e);
-    alert('패턴 분석 오류:\n' + e.message);
+    showToast('요약 실패: ' + e.message);
   } finally {
     state.myPatternLoading = false;
+    renderAIPanel();
   }
-  renderAIPanel();
 }
 
 // ---------------------------------------------------------------------------

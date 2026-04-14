@@ -172,7 +172,7 @@ function _myPatternSection(topic) {
   if (!cnt) return '';
   return `<div class="pattern-section" style="border-top-color:rgba(29,158,117,.2);">
     <button class="pattern-analysis-btn" style="background:#1D9E75;" onclick="runMyPatternAnalysis()" ${state.myPatternLoading ? 'disabled' : ''}>
-      ${state.myPatternLoading ? '분석 중...' : '전체 패턴 분석 ↗'}
+      ${state.myPatternLoading ? '요약 중...' : '대화 요약·저장 ↗'}
     </button>
     ${topic.patternAnalysis
       ? `<div class="pattern-last">마지막 분석: ${esc(topic.patternAnalysis.savedAt)}
