@@ -24,8 +24,7 @@ async function loadData() {
   } else {
     _useSampleData();
   }
-  render();
-  showHome();
+  render(); // 초기 상태가 이미 welcome이므로 홈 화면이 그대로 표시됨
 
   // 2단계: 서버에서 최신 데이터 백그라운드 수신 후 재렌더
   try {

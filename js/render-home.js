@@ -175,8 +175,9 @@ function handleHomeMyRecords() {
   state.currentRole = firstTopic.selectedRole || 'listener';
   state.currentChatMessages = [];
   state.filterTags  = [];
+  const restored = loadChatHistory();
   render();
-  startContextChat();
+  if (!restored) startContextChat();
 }
 
 function handleHomeCounseling() {
@@ -191,6 +192,7 @@ function handleHomeCounseling() {
   state.chatMode   = 'general';
   state.currentChatMessages = [];
   state.filterTags = [];
+  const restored = loadChatHistory();
   render();
-  startContextChat();
+  if (!restored) startContextChat();
 }

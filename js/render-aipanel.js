@@ -51,12 +51,13 @@ function _updateRpRolePills() {
   if (!showRoles) return;
 
   const topic = state.myTopics.find(t => t.id === state.selTopic);
-  pills.innerHTML = AI_ROLE_PRESETS.map(p =>
+  const newHtml = AI_ROLE_PRESETS.map(p =>
     `<button class="role-pill${topic?.selectedRole === p.id ? ' active' : ''}"
       onclick="selectRole('${p.id}')" title="${esc(p.desc)}">
       ${esc(p.label)}
     </button>`
   ).join('');
+  if (pills.innerHTML !== newHtml) pills.innerHTML = newHtml;
 }
 
 // ---------------------------------------------------------------------------

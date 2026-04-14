@@ -426,8 +426,12 @@ scripts\stage_commit.bat A "기능 설명"    # Windows
 
 | 커밋 | 내용 |
 |------|------|
+| `9c97e63` | Style: 폰트 Nanum Myeongjo 통일 + 글자 크기 상향 + 대화 내용 localStorage 유지 |
+| `167b40d` | Fix: 채팅 전송 후 AI 무응답 — startContextChat trigger 메시지 히스토리 누락 |
+| `e930d30` | Refactor: 미사용 껍데기 함수 제거 |
+| `e33c775` | Fix: 지시서 기반 미구현 기능 4종 완성 |
+| `6a40065` | Refactor: 나의 기록 패턴분석→대화요약저장, 일기변환→솔로쓰기 모드 |
 | `1ea29ba` | 대화창 중심 아키텍처 전환 — render-forms/session/myrecords-view/resize 제거, 모든 폼을 modal.js로 통합, AI 첫 마디 자동 시작(startContextChat) |
-| `29ee168` | 통합 모달 아키텍처 도입 + 버그 수정 + 성능 개선 (테스트 108개 통과) |
 | `7838519` | Claude.ai 스타일 고정 3열 레이아웃 전환 |
 | `568c0c3` | Stage E: PWA + 아이패드 dvh 레이아웃 |
 | `167decd` | Stage D: 블록 에디터 |
@@ -446,4 +450,7 @@ scripts\stage_commit.bat A "기능 설명"    # Windows
 6. **Railway 배포**: `Procfile` 존재. `DATABASE_URL` 환경변수 설정 시 PostgreSQL 자동 사용.
 7. **dvh 지원**: iOS Safari 15.4+, iPadOS 16+. 그 이하에서는 100vh로 fallback (큰 문제 없음).
 8. **대화창 중심 구조**: 주제/학생 선택 시 메인 영역은 항상 `renderChatView()`. 폼(등록/수정)은 전부 `openModal()`. 인라인 폼 렌더링 없음.
-9. **startContextChat()**: 주제/학생 선택 직후 AI 첫 마디 자동 생성 (`chat.js`). `state.currentChatMessages`가 비어있을 때 호출 권장.
+9. **startContextChat()**: 주제/학생 선택 직후 AI 첫 마디 자동 생성 (`chat.js`). `loadChatHistory()`로 기존 대화가 복원되면 호출하지 않음.
+10. **채팅 히스토리 영속성**: `saveChatHistory()`/`loadChatHistory()` — 주제·학생별 `jip_chat_{id}` 키로 localStorage 저장. 새로고침·탭 전환 후 복원. Anthropic API 규칙상 첫 메시지는 반드시 user여야 하므로 `startContextChat()`의 trigger 메시지를 `hidden:true`로 히스토리에 포함.
+11. **폰트**: `--font` CSS 변수 = `Nanum Myeongjo` (serif). 自畵像 제목과 동일 폰트 전면 적용. Google Fonts `display=swap`으로 FOUT 방지.
+12. **SW 캐시**: `jip-v{n}` 버전 번호 — CSS/JS 변경 시 반드시 버전 올려야 구 캐시 무효화됨.

@@ -5,7 +5,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v5'; // 대화창 중심 아키텍처 — render-forms/session/myrecords-view/resize 제거, modal+chat 통합
+const CACHE_NAME = 'jip-v6'; // 폰트 Nanum Myeongjo 통일, 채팅 localStorage 유지, 전송 버그 수정
 
 const STATIC_ASSETS = [
   '/',
