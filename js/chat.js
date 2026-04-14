@@ -151,6 +151,8 @@ function scrollChatToBottom() {
 // ---------------------------------------------------------------------------
 
 function renderChatView() {
+  // 상세 뷰가 열려있으면 chat이 덮어쓰지 않음 (레이스 컨디션 방지)
+  if (state.selRecord || state.selSession) return;
   const content = document.getElementById('main-content');
   if (!content) return;
   if (!state.currentChatMessages.length) {
@@ -181,6 +183,7 @@ function renderChatBubble(m) {
 // ---------------------------------------------------------------------------
 
 function showTypingIndicator() {
+  if (state.selRecord || state.selSession) return;
   let msgs = document.getElementById('chat-messages');
   if (!msgs) {
     // 첫 메시지 전 상태 — 컨테이너 생성

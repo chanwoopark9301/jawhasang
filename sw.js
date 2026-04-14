@@ -5,7 +5,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v11'; // 사이드바 트리 + 기록/회기 CRUD (new-session, edit-session, edit-record 모달, detail-view)
+const CACHE_NAME = 'jip-v12'; // Fix: renderChatView/showTypingIndicator 레이스 컨디션 — selRecord/selSession 시 덮어쓰기 방지
 
 const STATIC_ASSETS = [
   '/',
