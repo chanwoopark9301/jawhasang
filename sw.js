@@ -5,7 +5,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v8'; // 홈 스트릭·통계·성찰질문, 이어서쓰기, 폼 간소화, AI 최근기록 컨텍스트
+const CACHE_NAME = 'jip-v9'; // 모듈화: panels.js 분리 (chat.js에서 레이아웃 코드 이동)
 
 const STATIC_ASSETS = [
   '/',
@@ -21,6 +21,7 @@ const STATIC_ASSETS = [
   '/js/ai-myrecords.js',
   '/js/ai-pattern.js',
   '/js/modal.js',
+  '/js/panels.js',
   '/js/chat.js',
   '/js/render-sidebar.js',
   '/js/render-calendar.js',
