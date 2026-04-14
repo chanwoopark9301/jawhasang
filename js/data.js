@@ -12,6 +12,22 @@
 
 async function loadData() {
   logger.info('데이터 로드 시작');
+
+  // 1단계: localStorage 캐시로 즉시 렌더 (체감 속도 개선)
+  const cached = _loadFromLocalCache();
+  if (cached) {
+    state.students  = cached.students  || [];
+    state.sessions  = cached.sessions  || [];
+    state.myTopics  = cached.my_topics  || [];
+    state.myRecords = cached.my_records || [];
+    logger.info('로컬 캐시로 즉시 렌더 (학생 %d명)', state.students.length);
+  } else {
+    _useSampleData();
+  }
+  render();
+  showHome();
+
+  // 2단계: 서버에서 최신 데이터 백그라운드 수신 후 재렌더
   try {
     const res = await fetch('/api/data');
     if (res.ok) {
@@ -20,35 +36,56 @@ async function loadData() {
         data = await res.json();
       } catch (parseErr) {
         logger.error('서버 응답 JSON 파싱 실패', parseErr);
-        _useSampleData();
-        render();
-        showHome();
+        if (!cached) saveData();
         return;
       }
 
+      const isNew = !data.students || !data.students.length;
       state.students  = data.students  && data.students.length  ? data.students  : SAMPLE_STUDENTS;
       state.sessions  = data.sessions  && data.sessions.length  ? data.sessions  : SAMPLE_SESSIONS;
       state.myTopics  = data.my_topics  && data.my_topics.length  ? data.my_topics  : SAMPLE_TOPICS;
       state.myRecords = data.my_records && data.my_records.length ? data.my_records : SAMPLE_RECORDS;
 
-      const isNew = !data.students || !data.students.length;
-      logger.info('데이터 로드 완료 (학생 %d명, 회기 %d건, 주제 %d개)',
-        state.students.length, state.sessions.length, state.myTopics.length);
+      logger.info('서버 데이터 수신 완료 (학생 %d명, 회기 %d건)', state.students.length, state.sessions.length);
+      _saveToLocalCache();
+
       if (isNew) {
         logger.info('신규 사용자 — 샘플 데이터 저장');
         saveData();
       }
+      render(); // 최신 데이터로 재렌더
     } else {
-      logger.warn('서버 데이터 응답 오류: HTTP %d — 샘플 데이터 사용', res.status);
-      _useSampleData();
-      saveData();
+      logger.warn('서버 응답 오류: HTTP %d', res.status);
+      if (!cached) { _useSampleData(); saveData(); }
     }
   } catch (e) {
-    logger.warn('서버 연결 실패 — 샘플 데이터로 시작', e);
-    _useSampleData();
+    logger.warn('서버 연결 실패 — 캐시 데이터 유지', e);
+    if (!cached) _useSampleData();
   }
-  render();
-  showHome();
+}
+
+const _CACHE_KEY = 'jip_data_cache';
+
+function _loadFromLocalCache() {
+  try {
+    const raw = localStorage.getItem(_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function _saveToLocalCache() {
+  try {
+    localStorage.setItem(_CACHE_KEY, JSON.stringify({
+      students:   state.students,
+      sessions:   state.sessions,
+      my_topics:  state.myTopics,
+      my_records: state.myRecords,
+    }));
+  } catch (e) {
+    // localStorage 용량 초과 등 무시
+  }
 }
 
 function _useSampleData() {
