@@ -88,11 +88,44 @@ async function continueContextChat(text) {
 }
 
 // ---------------------------------------------------------------------------
+// 대화 내용 localStorage 저장/복원 (새로고침·탭 전환 후에도 유지)
+// ---------------------------------------------------------------------------
+
+function _chatStorageKey() {
+  const id = state.selTopic || state.selStudent;
+  return id ? `jip_chat_${id}` : null;
+}
+
+function saveChatHistory() {
+  const key = _chatStorageKey();
+  if (!key) return;
+  try {
+    localStorage.setItem(key, JSON.stringify(state.currentChatMessages));
+  } catch (e) { /* 용량 초과 무시 */ }
+}
+
+function loadChatHistory() {
+  const key = _chatStorageKey();
+  if (!key) return false;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return false;
+    const msgs = JSON.parse(raw);
+    if (Array.isArray(msgs) && msgs.length) {
+      state.currentChatMessages = msgs;
+      return true;
+    }
+  } catch (e) { /* 파싱 오류 무시 */ }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
 // state.currentChatMessages 관리
 // ---------------------------------------------------------------------------
 
 function appendMessage(role, text) {
   state.currentChatMessages.push({ role, text });
+  saveChatHistory();
   renderChatView();
   scrollChatToBottom();
 }
@@ -136,10 +169,10 @@ function renderChatBubble(m) {
   }
   const isUser = m.role === 'user';
   return `<div style="display:flex;justify-content:${isUser ? 'flex-end' : 'flex-start'};">
-    <div style="max-width:75%;padding:10px 14px;border-radius:${isUser ? '16px 16px 4px 16px' : '16px 16px 16px 4px'};
+    <div style="max-width:72%;padding:7px 12px;border-radius:${isUser ? '14px 14px 3px 14px' : '14px 14px 14px 3px'};
       background:${isUser ? 'var(--color-accent)' : 'var(--color-bg-secondary)'};
       color:${isUser ? 'white' : 'var(--color-text)'};
-      font-size:13px;line-height:1.7;white-space:pre-wrap;">
+      font-size:15px;line-height:1.65;white-space:pre-wrap;word-break:break-word;">
       ${esc(m.text)}
     </div>
   </div>`;

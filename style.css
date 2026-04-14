@@ -24,7 +24,7 @@
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
-  --font: -apple-system, BlinkMacSystemFont, 'Pretendard', 'Noto Sans KR', sans-serif;
+  --font: 'Nanum Myeongjo', 'Noto Serif KR', Georgia, serif;
   --sidebar-width: 210px;
   --ai-width: 275px;
 }
@@ -46,7 +46,7 @@
 
 body {
   font-family: var(--font);
-  font-size: 14px;
+  font-size: 15px;
   color: var(--color-text);
   background: var(--color-bg-tertiary);
   height: 100dvh;  /* dvh: 하드 키보드 툴바 포함한 동적 뷰포트 높이 */
@@ -3082,7 +3082,7 @@ body { height: 100dvh; }
   border: 0.5px solid var(--color-border-strong);
   border-radius: var(--radius-md);
   background: transparent;
-  font-size: 12px;
+  font-size: 13px;
   font-family: var(--font);
   color: var(--color-text-secondary);
   cursor: pointer;
@@ -3109,7 +3109,7 @@ body { height: 100dvh; }
   align-items: center;
   gap: 7px;
   padding: 6px 16px;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-text-secondary);
   cursor: pointer;
   transition: background 0.1s, color 0.1s;
@@ -3128,7 +3128,7 @@ body { height: 100dvh; }
   padding-left: 8px;
 }
 .sub-item {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--color-text-tertiary);
   padding: 5px 8px;
   border-radius: var(--radius-sm);
@@ -3165,7 +3165,7 @@ body { height: 100dvh; }
   background: var(--color-bg-secondary);
   border: 0.5px solid var(--color-border);
   border-radius: 20px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--color-text-secondary);
   cursor: pointer;
   transition: border-color 0.15s;
@@ -3181,7 +3181,7 @@ body { height: 100dvh; }
 }
 .chip-arrow { font-size: 9px; opacity: 0.5; }
 .ctx-role-label {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--color-text-tertiary);
   flex: 1;
   min-width: 0;
@@ -3204,7 +3204,7 @@ body { height: 100dvh; }
   margin-bottom: 5px;
 }
 .rp-value {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-text);
   cursor: pointer;
   padding: 4px 6px;
@@ -3216,7 +3216,7 @@ body { height: 100dvh; }
 /* AI 역할 pills */
 .role-pills { display: flex; flex-direction: column; gap: 3px; }
 .role-pill {
-  font-size: 11px;
+  font-size: 12px;
   padding: 5px 9px;
   border-radius: var(--radius-sm);
   border: 0.5px solid var(--color-border);
@@ -3262,7 +3262,7 @@ body { height: 100dvh; }
 }
 .input-field {
   flex: 1;
-  font-size: 13px;
+  font-size: 15px;
   font-family: var(--font);
   background: transparent;
   border: none;
@@ -3305,7 +3305,7 @@ body { height: 100dvh; }
   letter-spacing: 0.15em;
 }
 .greeting-sub {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-text-secondary);
   line-height: 1.7;
   text-align: center;
@@ -3326,7 +3326,7 @@ body { height: 100dvh; }
   border: 0.5px solid var(--color-border);
   border-radius: var(--radius-lg);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--color-text-secondary);
   line-height: 1.5;
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -3337,7 +3337,7 @@ body { height: 100dvh; }
 }
 .quick-card-icon { font-size: 18px; margin-bottom: 7px; }
 .quick-card-title {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--color-text);
   margin-bottom: 2px;
