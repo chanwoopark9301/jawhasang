@@ -42,12 +42,12 @@ function renderHomeGreeting() {
         오늘 하루를 그저 떠오르는 대로 써봐요.
       </div>
       <div class="quick-cards">
-        <div class="quick-card" onclick="setView('myrecords');handleAdd()">
+        <div class="quick-card" onclick="handleHomeMyRecords()">
           <div class="quick-card-icon">✎</div>
           <div class="quick-card-title">나의 기록</div>
           <div>생각·감정 기록</div>
         </div>
-        <div class="quick-card" onclick="setView('student');handleAdd()">
+        <div class="quick-card" onclick="handleHomeCounseling()">
           <div class="quick-card-icon">◎</div>
           <div class="quick-card-title">상담 기록</div>
           <div>회기 기록·슈퍼비전</div>
@@ -156,4 +156,39 @@ function _renderRecentItems() {
 function _shortDate(dateStr) {
   const [, m, d] = dateStr.split('-');
   return `${parseInt(m)}/${parseInt(d)}`;
+}
+
+// ---------------------------------------------------------------------------
+// 홈 → 자동 세팅 흐름
+// ---------------------------------------------------------------------------
+
+function handleHomeMyRecords() {
+  const firstTopic = state.myTopics[0];
+  if (!firstTopic) {
+    openModal('new-topic');
+    return;
+  }
+  state.selTopic    = firstTopic.id;
+  state.view        = 'myrecords';
+  state.myMode      = 'list';
+  state.chatMode    = 'general';
+  state.currentRole = firstTopic.selectedRole || 'listener';
+  state.currentChatMessages = [];
+  state.filterTags  = [];
+  render();
+}
+
+function handleHomeCounseling() {
+  const firstStudent = state.students[0];
+  if (!firstStudent) {
+    openModal('new-student');
+    return;
+  }
+  state.selStudent = firstStudent.id;
+  state.view       = 'student';
+  state.mode       = 'list';
+  state.chatMode   = 'general';
+  state.currentChatMessages = [];
+  state.filterTags = [];
+  render();
 }

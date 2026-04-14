@@ -233,17 +233,21 @@ async function startSupervisionChat() {
   });
 }
 
-async function sendChatMessage() {
-  const input = document.getElementById('chat-input');
-  if (!input) return;
-  const text = input.value.trim();
+async function sendChatMessage(textParam) {
+  // 통합 입력창(chat.js)에서 text를 직접 받거나, 기존 chat-input에서 읽기
+  let text = textParam;
+  if (!text) {
+    const input = document.getElementById('chat-input');
+    if (!input) return;
+    text = input.value.trim();
+    if (input) input.value = '';
+  }
   if (!text || state.chatLoading) return;
 
   const session = state.sessions.find(s => s.id === state.selSession);
   if (!session) return;
 
   logger.debug('슈퍼비전 메시지 전송 (%d자)', text.length);
-  input.value = '';
   if (!session.supervisionChat) session.supervisionChat = [];
   session.supervisionChat.push({ role: 'user', text });
 

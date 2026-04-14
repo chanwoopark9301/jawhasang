@@ -93,7 +93,11 @@ async function _handleDiaryTransform() {
     if (!data.result) throw new Error('빈 응답');
     logger.info('일기 변환 완료: %d자', data.result.length);
     state.diaryDraft = data.result;
-    _showTransformModal('일기로 변환 결과', data.result, () => _applyDiaryResult(record, data.result));
+    // 통합 모달(modal.js)로 결과 표시
+    openModal('diary-result', {
+      draft: data.result,
+      date:  new Date().toISOString().split('T')[0],
+    });
   } catch (e) {
     logger.error('일기 변환 실패: %s', e.message);
     alert('변환 실패: ' + e.message);

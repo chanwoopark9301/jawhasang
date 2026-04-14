@@ -70,6 +70,13 @@ const state = {
   selectedBlocks:  [],    // 선택된 대화 블록 인덱스 (일기 변환용)
   diaryDraft:      null,  // AI 생성 일기 초안 (string | null)
   transformLoading: false,
+
+  // 최종 아키텍처 — 대화창/모달 통합
+  chatMode:            'general',  // 'general' | 'supervision' | 'diary-convert'
+  currentChatMessages: [],         // 현재 대화창 메시지 [{role, text}]
+  attachedVerbatim:    null,       // 첨부된 축어록 텍스트
+  currentRole:         'listener', // 현재 AI 역할 ID
+  activeModal:         null,       // 현재 열린 모달 ID
 };
 
 let mobilePanel = 'sidebar'; // 'sidebar'|'main'|'ai'

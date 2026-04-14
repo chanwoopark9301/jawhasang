@@ -8,7 +8,21 @@
 // 최상위 render()
 // ---------------------------------------------------------------------------
 
+// rAF 배치: 같은 프레임 내 중복 render() 호출을 한 번으로 합산
+let _renderScheduled = false;
+
 function render() {
+  if (_renderScheduled) return;
+  _renderScheduled = true;
+  requestAnimationFrame(_doRender);
+}
+
+function _doRender() {
+  _renderScheduled = false;
+
+  // plus-menu가 열려있으면 닫기
+  if (typeof closePlusMenu === 'function') closePlusMenu();
+
   const aiHeaderEl = document.querySelector('.ai-header span:first-child');
   if (aiHeaderEl) aiHeaderEl.textContent = state.view === 'myrecords' ? '주제 정보' : '학생 정보';
 
@@ -17,7 +31,7 @@ function render() {
   renderRightPanel();
   updateContextChip();
   updateInputArea();
-  updateMobileLayout();
+  if (typeof updateMobileLayout === 'function') updateMobileLayout();
 }
 
 // ---------------------------------------------------------------------------
@@ -62,9 +76,12 @@ function updateContextChip() {
 // ---------------------------------------------------------------------------
 
 function updateInputArea() {
-  // 기존 인라인 채팅 입력창이 main-content 내에 있으므로 bottom input은 숨김
   const inputArea = document.getElementById('input-area');
-  if (inputArea) inputArea.style.display = 'none';
+  if (!inputArea) return;
+  const showInput =
+    (state.view === 'myrecords' && state.myTab === 'dialogue' && state.selRecord) ||
+    (state.view === 'student'   && state.sessionTab === 'dialogue' && state.selSession);
+  inputArea.style.display = showInput ? '' : 'none';
 }
 
 // ---------------------------------------------------------------------------
@@ -96,47 +113,29 @@ function renderMain() {
     return;
   }
 
-  // 상담 기록 — 새 내담자
-  if (state.mode === 'new-student') {
-    titleEl.textContent = '새 내담자 등록';
-    subEl.textContent   = '';
-    nsBtn.style.display = 'none';
-    content.innerHTML   = renderNewStudentForm();
-    return;
-  }
-
-  // 상담 기록 — 새 회기
-  if (state.mode === 'new-session') {
-    const st = state.students.find(s => s.id === state.selStudent);
-    titleEl.textContent = '새 회기 기록';
-    subEl.textContent   = st ? esc(st.alias) : '';
-    nsBtn.style.display = 'none';
-    content.innerHTML   = renderNewSessionForm();
-    return;
-  }
-
-  // 상담 기록 — 내담자 수정
-  if (state.mode === 'edit-student') {
-    const st = state.students.find(s => s.id === state.editingId);
-    if (st) {
-      titleEl.textContent = '내담자 정보 수정';
-      subEl.textContent   = esc(st.alias);
-      nsBtn.style.display = 'none';
-      content.innerHTML   = renderEditStudentForm(st);
-      return;
-    }
-  }
-
-  // 상담 기록 — 회기 수정
-  if (state.mode === 'edit-session') {
-    const session = state.sessions.find(s => s.id === state.editingId);
-    if (session) {
-      const st = state.students.find(s => s.id === session.studentId);
-      titleEl.textContent = '회기 수정';
-      subEl.textContent   = st ? esc(st.alias) : '';
-      nsBtn.style.display = 'none';
-      content.innerHTML   = renderEditSessionForm(session);
-      return;
+  // 상담 기록 폼 분기 — 이제 모달로 처리 (하위 호환을 위해 폴백 유지)
+  if (state.mode === 'new-student' || state.mode === 'edit-student' ||
+      state.mode === 'new-session' || state.mode === 'edit-session') {
+    // 모달이 열리지 않은 경우 폴백: 기존 폼 렌더
+    if (typeof renderNewStudentForm === 'function') {
+      if (state.mode === 'new-student') {
+        nsBtn.style.display = 'none';
+        content.innerHTML   = renderNewStudentForm();
+        return;
+      }
+      if (state.mode === 'new-session') {
+        nsBtn.style.display = 'none';
+        content.innerHTML   = renderNewSessionForm?.() || '';
+        return;
+      }
+      if (state.mode === 'edit-student') {
+        const st = state.students.find(s => s.id === state.editingId);
+        if (st) { nsBtn.style.display = 'none'; content.innerHTML = renderEditStudentForm(st); return; }
+      }
+      if (state.mode === 'edit-session') {
+        const ss = state.sessions.find(s => s.id === state.editingId);
+        if (ss) { nsBtn.style.display = 'none'; content.innerHTML = renderEditSessionForm?.(ss) || ''; return; }
+      }
     }
   }
 
@@ -157,45 +156,24 @@ function renderMain() {
   // ── 나의 기록 뷰 ──────────────────────────────────────────────────────────
 
   if (state.view === 'myrecords') {
-    // 새 주제 폼
-    if (state.myMode === 'new-topic') {
-      titleEl.textContent = '새 주제 만들기';
-      subEl.textContent   = '';
-      nsBtn.style.display = 'none';
-      content.innerHTML   = renderNewTopicForm();
-      return;
-    }
-    // 주제 수정 폼
-    if (state.myMode === 'edit-topic') {
-      const t = state.myTopics.find(t => t.id === state.editingId);
-      if (t) {
-        titleEl.textContent = '주제 수정';
-        subEl.textContent   = '';
-        nsBtn.style.display = 'none';
-        content.innerHTML   = renderEditTopicForm(t);
-        return;
+    // 나의 기록 폼 분기 — 이제 모달로 처리 (하위 호환 폴백)
+    if (['new-topic','edit-topic','new-record','edit-record'].includes(state.myMode)) {
+      if (typeof renderNewTopicForm === 'function') {
+        if (state.myMode === 'new-topic') {
+          nsBtn.style.display = 'none'; content.innerHTML = renderNewTopicForm(); return;
+        }
+        if (state.myMode === 'edit-topic') {
+          const t = state.myTopics.find(t => t.id === state.editingId);
+          if (t) { nsBtn.style.display = 'none'; content.innerHTML = renderEditTopicForm(t); return; }
+        }
+        if (state.myMode === 'new-record' && state.selTopic) {
+          nsBtn.style.display = 'none'; content.innerHTML = renderNewRecordForm(); return;
+        }
+        if (state.myMode === 'edit-record') {
+          const r = state.myRecords.find(r => r.id === state.editingId);
+          if (r) { nsBtn.style.display = 'none'; content.innerHTML = renderEditRecordForm?.(r) || ''; return; }
+        }
       }
-    }
-    // 기록 수정 폼
-    if (state.myMode === 'edit-record') {
-      const r = state.myRecords.find(r => r.id === state.editingId);
-      if (r) {
-        const t = state.myTopics.find(t => t.id === r.topicId);
-        titleEl.textContent = '기록 수정';
-        subEl.textContent   = t ? esc(t.title) : '';
-        nsBtn.style.display = 'none';
-        content.innerHTML   = renderEditRecordForm(r);
-        return;
-      }
-    }
-    // 새 기록 폼
-    if (state.myMode === 'new-record' && state.selTopic) {
-      const t = state.myTopics.find(t => t.id === state.selTopic);
-      titleEl.textContent = '새 기록';
-      subEl.textContent   = t ? esc(t.title) : '';
-      nsBtn.style.display = 'none';
-      content.innerHTML   = renderNewRecordForm();
-      return;
     }
     // 기록 상세
     if (state.myMode === 'detail' && state.selRecord) {

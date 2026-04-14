@@ -206,17 +206,21 @@ async function startMyChat() {
   });
 }
 
-async function sendMyChatMessage() {
-  const input = document.getElementById('my-chat-input');
-  if (!input) return;
-  const text = input.value.trim();
+async function sendMyChatMessage(textParam) {
+  // 통합 입력창(chat.js)에서 text를 직접 받거나, 기존 my-chat-input에서 읽기
+  let text = textParam;
+  if (!text) {
+    const input = document.getElementById('my-chat-input');
+    if (!input) return;
+    text = input.value.trim();
+    if (input) input.value = '';
+  }
   if (!text || state.myChatLoading) return;
 
   const record = state.myRecords.find(r => r.id === state.selRecord);
   if (!record) return;
 
   logger.debug('나의 기록 AI 메시지 전송 (%d자)', text.length);
-  input.value = '';
   if (!record.aiChat) record.aiChat = [];
   record.aiChat.push({ role: 'user', text });
 

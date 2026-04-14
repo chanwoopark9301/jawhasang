@@ -225,6 +225,23 @@ function _updateRpButtons() {
 }
 
 // ---------------------------------------------------------------------------
+// AI 역할 선택 즉시 적용
+// ---------------------------------------------------------------------------
+
+function selectRole(presetId) {
+  state.currentRole = presetId;
+  const topic = state.myTopics.find(t => t.id === state.selTopic);
+  if (topic) {
+    const preset = AI_ROLE_PRESETS.find(p => p.id === presetId);
+    if (preset && presetId !== 'custom') topic.aiPrompt = preset.prompt;
+    topic.selectedRole = presetId;
+    saveData();
+  }
+  renderRightPanel();
+  updateContextChip();
+}
+
+// ---------------------------------------------------------------------------
 // 하위 호환 — 기존 코드에서 개별 패널 렌더를 호출하는 경우
 // ---------------------------------------------------------------------------
 

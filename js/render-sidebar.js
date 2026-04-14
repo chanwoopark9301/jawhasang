@@ -17,16 +17,19 @@ function renderSidebar() {
       ? state.myTopics.filter(t => t.title.toLowerCase().includes(query))
       : state.myTopics;
 
-    subMy.innerHTML = topics.map(t => {
+    const newMyHtml = topics.map(t => {
       const active = state.selTopic === t.id;
-      return `<div class="sub-item${active ? ' active' : ''}">
+      return `<div class="sub-item${active ? ' active' : ''}"
+        oncontextmenu="event.preventDefault();openModal('edit-topic',{id:'${t.id}'})">
         <span class="sub-item-label" onclick="selectTopic('${t.id}')" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;">${esc(t.title)}</span>
         <span class="sub-item-actions">
-          <button class="sub-item-btn" onclick="event.stopPropagation();editTopic('${t.id}')" title="수정">✎</button>
+          <button class="sub-item-btn" onclick="event.stopPropagation();openModal('edit-topic',{id:'${t.id}'})" title="수정">✎</button>
           <button class="sub-item-btn sub-item-del" onclick="event.stopPropagation();deleteTopic('${t.id}')" title="삭제">×</button>
         </span>
       </div>`;
-    }).join('') + `<div class="sub-item sub-item-add" onclick="setView('myrecords');handleAdd()">+ 새 주제</div>`;
+    }).join('') + `<div class="sub-item sub-item-add" onclick="openModal('new-topic')">+ 새 주제</div>`;
+    // 변경된 경우에만 DOM 갱신 (불필요한 reflow 방지)
+    if (subMy.innerHTML !== newMyHtml) subMy.innerHTML = newMyHtml;
   }
 
   // ── 상담 기록 서브 항목 ─────────────────────────────────────────────────
@@ -40,15 +43,17 @@ function renderSidebar() {
         )
       : state.students;
 
-    subSv.innerHTML = students.map(st => {
+    const newSvHtml = students.map(st => {
       const active = state.selStudent === st.id;
-      return `<div class="sub-item${active ? ' active' : ''}">
+      return `<div class="sub-item${active ? ' active' : ''}"
+        oncontextmenu="event.preventDefault();openModal('edit-student',{id:'${st.id}'})">
         <span class="sub-item-label" onclick="selectStudent('${st.id}')" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;">${esc(st.alias)}</span>
         <span class="sub-item-actions">
-          <button class="sub-item-btn" onclick="event.stopPropagation();editStudent('${st.id}')" title="수정">✎</button>
+          <button class="sub-item-btn" onclick="event.stopPropagation();openModal('edit-student',{id:'${st.id}'})" title="수정">✎</button>
           <button class="sub-item-btn sub-item-del" onclick="event.stopPropagation();deleteStudent('${st.id}')" title="삭제">×</button>
         </span>
       </div>`;
-    }).join('') + `<div class="sub-item sub-item-add" onclick="setView('student');handleAdd()">+ 새 내담자</div>`;
+    }).join('') + `<div class="sub-item sub-item-add" onclick="openModal('new-student')">+ 새 내담자</div>`;
+    if (subSv.innerHTML !== newSvHtml) subSv.innerHTML = newSvHtml;
   }
 }

@@ -179,7 +179,7 @@ function openNewChatModal() {
       </div>
     `).join('')}
     <div class="sub-item sub-item-add" style="font-size:13px;padding:8px 10px;"
-      onclick="closeNewChatModal();setView('myrecords');handleAdd();">
+      onclick="closeNewChatModal();openModal('new-topic');">
       + 새 주제 만들기
     </div>
 
@@ -193,7 +193,7 @@ function openNewChatModal() {
       </div>
     `).join('')}
     <div class="sub-item sub-item-add" style="font-size:13px;padding:8px 10px;"
-      onclick="closeNewChatModal();setView('student');handleAdd();">
+      onclick="closeNewChatModal();openModal('new-student');">
       + 새 내담자 추가
     </div>
 
@@ -220,26 +220,6 @@ function openTopicPicker() {
 }
 
 // ---------------------------------------------------------------------------
-// AI 역할 선택 (나의 기록)
-// ---------------------------------------------------------------------------
-
-function selectRole(presetId) {
-  const topic = state.myTopics.find(t => t.id === state.selTopic);
-  if (!topic) return;
-
-  const preset = AI_ROLE_PRESETS.find(p => p.id === presetId);
-  if (!preset) return;
-
-  topic.selectedRole = presetId;
-  if (presetId !== 'custom') {
-    topic.aiPrompt = preset.prompt;
-  }
-  saveData();
-  renderRightPanel();
-  updateContextChip();
-}
-
-// ---------------------------------------------------------------------------
 // AI 라우팅 (뷰에 따라 분기)
 // ---------------------------------------------------------------------------
 
@@ -254,22 +234,6 @@ function runCurrentPattern() {
 }
 
 // ---------------------------------------------------------------------------
-// 하단 입력창 라우팅
-// ---------------------------------------------------------------------------
-
-function sendCurrentChat() {
-  if (state.view === 'myrecords') sendMyChatMessage();
-  else                            sendChatMessage();
-}
-
-function handleChatKey(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendCurrentChat();
-  }
-}
-
-// ---------------------------------------------------------------------------
 // 모바일 레이아웃
 // ---------------------------------------------------------------------------
 
@@ -279,6 +243,4 @@ function setMobilePanel(panel) {
   else closePanels();
 }
 
-function updateMobileLayout() {
-  _updateMobileNavActive();
-}
+// updateMobileLayout, sendCurrentChat, handleChatKey, selectRole → chat.js / render-aipanel.js

@@ -31,6 +31,7 @@
 
     <!-- 왼쪽 사이드바 (데스크탑: 항상 고정, 모바일: 오버레이) -->
     <aside class="sidebar" id="sidebar">
+      <button class="sb-toggle" id="sb-left-toggle" onclick="toggleLeftSidebar()" title="사이드바 접기">‹</button>
       <div class="sidebar-logo" onclick="showHome();closePanels();" title="홈으로">自畵像</div>
 
       <button class="new-chat-btn" onclick="openNewChatModal()">
@@ -99,7 +100,7 @@
       <!-- 하단 입력창 (대화 탭 활성 시만 표시) -->
       <div class="input-area" id="input-area" style="display:none;">
         <div class="input-wrap">
-          <button class="input-plus" onclick="openTopicPicker()" title="주제 선택">+</button>
+          <button class="input-plus" onclick="openPlusMenu()" title="더 보기">+</button>
           <textarea class="input-field" id="chat-input-bottom"
             placeholder="메시지를 입력하세요 (Enter 전송 · Shift+Enter 줄바꿈)"
             rows="1"
@@ -116,6 +117,7 @@
 
     <!-- 오른쪽 패널 (데스크탑: 항상 고정, 모바일: 오버레이) -->
     <aside class="right-panel ai-panel" id="right-panel">
+      <button class="sb-toggle rp-toggle" id="sb-right-toggle" onclick="toggleRightPanel()" title="패널 접기">›</button>
       <div class="ai-header">
         <span id="ai-header-title">AI 도구</span>
         <button class="panel-close-btn mobile-only" onclick="closePanels()" title="닫기">✕</button>
@@ -190,6 +192,14 @@
     <div class="cal-popup-overlay" id="new-chat-overlay" style="display:none;" onclick="closeNewChatModal()"></div>
     <div class="new-chat-modal" id="new-chat-modal" style="display:none;"></div>
 
+    <!-- 통합 모달 -->
+    <div class="modal-overlay" id="modal-overlay" onclick="handleModalOverlayClick(event)">
+      <div class="modal-box" id="modal-box"></div>
+    </div>
+
+    <!-- 토스트 -->
+    <div class="toast" id="toast"></div>
+
   </div>
 
   <!-- 모듈 로드 순서: 의존성 순 -->
@@ -202,6 +212,8 @@
   <script src="js/ai-counseling.js"></script>
   <script src="js/ai-myrecords.js"></script>
   <script src="js/ai-pattern.js"></script>
+  <script src="js/modal.js"></script>
+  <script src="js/chat.js"></script>
   <script src="js/render-sidebar.js"></script>
   <script src="js/render-calendar.js"></script>
   <script src="js/verbatim-editor.js"></script>

@@ -7,6 +7,52 @@
 function initResize() {
   localStorage.removeItem('sidebar_collapsed');
   localStorage.removeItem('aipanel_collapsed');
+  _initVisualViewport();
+}
+
+// ---------------------------------------------------------------------------
+// iOS Safari 키보드 대응 — Visual Viewport API
+// 키보드가 올라올 때 하단 input-area가 가려지는 문제 방지
+// ---------------------------------------------------------------------------
+
+function _initVisualViewport() {
+  if (!window.visualViewport) return;
+
+  function _onVVChange() {
+    const vv = window.visualViewport;
+    const inputArea = document.getElementById('input-area');
+    const mobileNav = document.getElementById('mobile-nav');
+
+    // 키보드 높이 = 윈도우 높이 - 비주얼뷰포트 높이 - 뷰포트 오프셋
+    const kbHeight = Math.max(0,
+      window.innerHeight - vv.height - vv.offsetTop
+    );
+    const hasKeyboard = kbHeight > 50;
+
+    // input-area가 표시 중일 때만 처리
+    if (inputArea && inputArea.style.display !== 'none') {
+      if (hasKeyboard) {
+        // 키보드 높이만큼 input-area를 위로 밀어올림
+        inputArea.style.marginBottom = kbHeight + 'px';
+        // 모바일 내비게이션은 키보드 뒤로 숨김
+        if (mobileNav) mobileNav.style.opacity = '0';
+      } else {
+        inputArea.style.marginBottom = '';
+        if (mobileNav) mobileNav.style.opacity = '';
+      }
+      // 포커스된 입력창이 가려지지 않도록 스크롤
+      const focused = document.activeElement;
+      if (focused && (focused.id === 'chat-input-bottom')) {
+        setTimeout(() => focused.scrollIntoView({ block: 'nearest' }), 50);
+      }
+    } else {
+      // input-area 숨김 상태 — 키보드가 올라와도 기본 상태 유지
+      if (mobileNav) mobileNav.style.opacity = '';
+    }
+  }
+
+  window.visualViewport.addEventListener('resize', _onVVChange);
+  window.visualViewport.addEventListener('scroll', _onVVChange);
 }
 
 // ---------------------------------------------------------------------------
