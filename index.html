@@ -14,7 +14,6 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="自畵像" />
-  <!-- iOS는 SVG 미지원 — PNG 필수 -->
   <link rel="apple-touch-icon" href="/icons/icon-192.png" />
   <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png" />
   <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512.png" />
@@ -27,12 +26,15 @@
 <body>
   <div class="app" id="app">
 
-    <!-- 사이드바 -->
+    <!-- 패널 백드롭 (패널 열릴 때 배경 어둡게) -->
+    <div class="panel-backdrop" id="panel-backdrop" onclick="closePanels()"></div>
+
+    <!-- 사이드바 (왼쪽 오버레이) -->
     <aside class="sidebar" id="sidebar">
-      <!-- 로고 -->
+      <!-- 로고 + 닫기 -->
       <div class="sidebar-logo-area">
-        <div class="sidebar-logo" onclick="showHome()" title="홈으로">自畵像</div>
-        <button id="sidebar-collapse-btn" class="panel-collapse-btn" onclick="toggleSidebar()" title="사이드바 접기">◀</button>
+        <div class="sidebar-logo" onclick="showHome();closePanels();" title="홈으로">自畵像</div>
+        <button class="panel-close-btn" onclick="closePanels()" title="닫기">✕</button>
       </div>
 
       <!-- 3-버튼 네비게이션 -->
@@ -63,31 +65,36 @@
       </div>
     </aside>
 
-    <div class="resize-handle" id="rh-1"></div>
-
-    <!-- 메인 컨텐츠 -->
+    <!-- 메인 컨텐츠 (전체 너비) -->
     <main class="main" id="main">
       <div class="main-header">
-        <div>
+        <!-- 왼쪽: 목록 토글 -->
+        <button class="header-panel-btn" onclick="toggleSidebar()" title="목록">☰</button>
+
+        <!-- 중앙: 타이틀 -->
+        <div class="main-header-center">
           <div class="main-title" id="main-title">自畵像</div>
           <div class="main-sub" id="main-sub"></div>
         </div>
-        <button class="btn-secondary" id="ns-btn" style="display:none;" onclick="handleNsBtn()">
-          + 회기 추가
-        </button>
+
+        <!-- 오른쪽: 새 항목 버튼 + AI 토글 -->
+        <div class="main-header-right">
+          <button class="btn-secondary" id="ns-btn" style="display:none;" onclick="handleNsBtn()">
+            + 회기 추가
+          </button>
+          <button class="header-panel-btn" onclick="toggleAIPanel()" title="AI 도구">✦</button>
+        </div>
       </div>
       <div class="main-content" id="main-content">
         <div class="empty-state">왼쪽에서 학생을 선택하거나<br>새 학생을 추가해보세요</div>
       </div>
     </main>
 
-    <div class="resize-handle" id="rh-2"></div>
-
-    <!-- AI 분석 패널 -->
+    <!-- AI 분석 패널 (오른쪽 오버레이) -->
     <aside class="ai-panel" id="ai-panel">
       <div class="ai-header">
-        <button id="ai-collapse-btn" class="panel-collapse-btn" onclick="toggleAIPanel()" title="AI 패널 접기">▶</button>
         <span id="ai-header-title">AI 도구</span>
+        <button class="panel-close-btn" onclick="closePanels()" title="닫기">✕</button>
       </div>
       <div class="ai-content" id="ai-content">
         <p class="ai-placeholder">회기를 선택하면<br>AI 분석을 요청할 수 있어요</p>
@@ -104,15 +111,15 @@
 
     <!-- 모바일 하단 내비게이션 -->
     <nav class="mobile-nav" id="mobile-nav">
-      <button class="mnav-btn active" id="mnav-list" onclick="setMobilePanel('sidebar')">
+      <button class="mnav-btn" id="mnav-list" onclick="toggleSidebar()">
         <span class="mnav-icon">☰</span>
         <span class="mnav-label">목록</span>
       </button>
-      <button class="mnav-btn" id="mnav-main" onclick="setMobilePanel('main')">
+      <button class="mnav-btn active" id="mnav-main" onclick="closePanels()">
         <span class="mnav-icon">◧</span>
-        <span class="mnav-label">상담</span>
+        <span class="mnav-label">화면</span>
       </button>
-      <button class="mnav-btn" id="mnav-ai" onclick="setMobilePanel('ai')">
+      <button class="mnav-btn" id="mnav-ai" onclick="toggleAIPanel()">
         <span class="mnav-icon">✦</span>
         <span class="mnav-label">AI</span>
       </button>
@@ -126,7 +133,7 @@
     <div class="cal-popup-overlay" id="pattern-modal-overlay" style="display:none;" onclick="closePatternModal()"></div>
     <div class="pattern-modal" id="pattern-modal" style="display:none;"></div>
 
-    <!-- 일기 초안 모달 (Phase 4) -->
+    <!-- 일기 초안 모달 -->
     <div class="cal-popup-overlay" id="diary-draft-overlay" style="display:none;" onclick="closeDiaryDraft()"></div>
     <div class="diary-draft-modal" id="diary-draft-modal" style="display:none;"></div>
 

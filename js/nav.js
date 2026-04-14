@@ -39,7 +39,7 @@ function setView(view) {
 function handleAdd() {
   if (state.view === 'myrecords') state.myMode = 'new-topic';
   else                            state.mode   = 'new-student';
-  mobilePanel = 'main';
+  closePanels();
   render();
 }
 
@@ -52,7 +52,7 @@ function selectStudent(id) {
   state.selSession = null;
   state.mode       = 'list';
   state.filterTags = [];
-  mobilePanel      = 'main';
+  closePanels();
   render();
 }
 
@@ -60,7 +60,7 @@ function selectSession(id) {
   state.selSession  = id;
   state.mode        = 'detail';
   state.sessionTab  = 'verbatim';
-  mobilePanel       = 'main';
+  closePanels();
   render();
 }
 
@@ -71,13 +71,13 @@ function selectDateSession(sessionId) {
   state.selStudent = s.studentId;
   state.mode       = 'detail';
   state.sessionTab = 'verbatim';
-  mobilePanel      = 'main';
+  closePanels();
   render();
 }
 
 function showNewSessionForm() {
-  state.mode  = 'new-session';
-  mobilePanel = 'main';
+  state.mode = 'new-session';
+  closePanels();
   render();
 }
 
@@ -88,8 +88,7 @@ function handleNsBtn() {
 
 function cancelForm() {
   _resetVtEditor();
-  state.mode  = state.selStudent ? 'list' : 'welcome';
-  mobilePanel = state.selStudent ? 'main' : 'sidebar';
+  state.mode = state.selStudent ? 'list' : 'welcome';
   render();
 }
 
@@ -98,7 +97,6 @@ function backFromDetail() {
   state.vtInlineEdit = false;
   state.selSession   = null;
   state.mode         = state.view === 'student' ? 'list' : 'welcome';
-  mobilePanel        = 'main';
   render();
 }
 
@@ -124,7 +122,7 @@ function selectTopic(id) {
   state.selRecord  = null;
   state.myMode     = 'list';
   state.filterTags = [];
-  mobilePanel      = 'main';
+  closePanels();
   render();
 }
 
@@ -132,26 +130,24 @@ function selectRecord(id) {
   state.selRecord = id;
   state.myMode    = 'detail';
   state.myTab     = 'content';
-  mobilePanel     = 'main';
+  closePanels();
   render();
 }
 
 function showNewRecordForm() {
   state.myMode = 'new-record';
-  mobilePanel  = 'main';
+  closePanels();
   render();
 }
 
 function cancelMyForm() {
   state.myMode = state.selTopic ? 'list' : 'welcome';
-  mobilePanel  = state.selTopic ? 'main' : 'sidebar';
   render();
 }
 
 function backFromMyDetail() {
   state.selRecord = null;
   state.myMode    = 'list';
-  mobilePanel     = 'main';
   render();
 }
 
@@ -177,23 +173,17 @@ function navCal(dir) {
 }
 
 // ---------------------------------------------------------------------------
-// 모바일 레이아웃
+// 모바일 레이아웃 (오버레이 방식으로 통합)
 // ---------------------------------------------------------------------------
 
 function setMobilePanel(panel) {
-  mobilePanel = panel;
-  updateMobileLayout();
+  // 하위 호환 — 새 방식으로 위임
+  if (panel === 'sidebar') toggleSidebar();
+  else if (panel === 'ai') toggleAIPanel();
+  else closePanels();
 }
 
 function updateMobileLayout() {
-  const map = { sidebar: 'sidebar', main: 'main', ai: 'ai-panel' };
-  Object.entries(map).forEach(([key, id]) => {
-    const el = document.getElementById(id);
-    if (el) el.classList.toggle('mobile-active', key === mobilePanel);
-  });
-  ['mnav-list', 'mnav-main', 'mnav-ai'].forEach((id, i) => {
-    const key = ['sidebar', 'main', 'ai'][i];
-    const btn = document.getElementById(id);
-    if (btn) btn.classList.toggle('active', key === mobilePanel);
-  });
+  // 새 오버레이 방식에서는 resize.js의 _updateMobileNavActive()가 담당
+  _updateMobileNavActive();
 }
