@@ -24,10 +24,47 @@ function sendCurrentChat() {
   if (!text) return;
   input.value = '';
 
-  if (state.view === 'myrecords') {
-    sendMyChatMessage(text);
-  } else {
-    sendChatMessage(text);
+  // 새 대화창 구조: selSession/selRecord 없이 컨텍스트 대화
+  continueContextChat(text);
+}
+
+async function continueContextChat(text) {
+  if (!text || state._ctxChatLoading) return;
+  state._ctxChatLoading = true;
+
+  appendMessage('user', text);
+
+  const isMyRecords = state.view === 'myrecords';
+  const topic   = isMyRecords ? state.myTopics.find(t => t.id === state.selTopic) : null;
+  const student = !isMyRecords ? state.students.find(s => s.id === state.selStudent) : null;
+
+  const aiRole = topic?.aiPrompt || '따뜻하게 경청하고 공감하는 친구처럼';
+  const sysPrompt = isMyRecords
+    ? `당신은 ${aiRole} 역할입니다. 주제는 '${topic?.title || '나의 기록'}'입니다. 한국어 존댓말 사용.`
+    : `당신은 학교상담 슈퍼바이저입니다. 내담자: ${student?.alias || '?'} (${student?.grade || ''}). 한국어 존댓말 사용.`;
+
+  // currentChatMessages → Anthropic messages 형식 변환 (system 제외)
+  const messages = state.currentChatMessages
+    .filter(m => m.role !== 'system')
+    .map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.text }));
+
+  try {
+    const res = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6', max_tokens: 600,
+        system: [{ type: 'text', text: sysPrompt, cache_control: { type: 'ephemeral' } }],
+        messages,
+      }),
+    });
+    const data = await res.json();
+    const reply = data.content?.map(c => c.text || '').join('').trim();
+    if (reply) appendMessage('ai', reply);
+  } catch (e) {
+    appendMessage('ai', '죄송해요, 오류가 발생했어요. 다시 시도해주세요.');
+  } finally {
+    state._ctxChatLoading = false;
   }
 }
 
