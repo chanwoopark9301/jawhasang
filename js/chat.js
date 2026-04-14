@@ -19,9 +19,11 @@ function handleChatKey(e) {
 // ---------------------------------------------------------------------------
 
 function sendCurrentChat() {
+  console.log('[chat] sendCurrentChat 호출됨');
   const input = document.getElementById('chat-input-bottom');
+  console.log('[chat] input 요소:', input, '| 값:', input?.value);
   const text  = input?.value.trim();
-  if (!text) return;
+  if (!text) { console.warn('[chat] 빈 입력 — 전송 중단'); return; }
   input.value = '';
 
   // 일기 변환 모드: AI 없이 혼자 쓰기
@@ -30,12 +32,16 @@ function sendCurrentChat() {
     return;
   }
 
-  // 새 대화창 구조: selSession/selRecord 없이 컨텍스트 대화
+  console.log('[chat] continueContextChat 호출, text=', text);
   continueContextChat(text);
 }
 
 async function continueContextChat(text) {
-  if (!text || state._ctxChatLoading) return;
+  console.log('[chat] continueContextChat 진입, _ctxChatLoading=', state._ctxChatLoading);
+  if (!text || state._ctxChatLoading) {
+    console.warn('[chat] 조기 리턴 — text:', text, '_ctxChatLoading:', state._ctxChatLoading);
+    return;
+  }
   state._ctxChatLoading = true;
 
   appendMessage('user', text);
@@ -49,10 +55,13 @@ async function continueContextChat(text) {
     ? `당신은 ${aiRole} 역할입니다. 주제는 '${topic?.title || '나의 기록'}'입니다. 한국어 존댓말 사용.`
     : `당신은 학교상담 슈퍼바이저입니다. 내담자: ${student?.alias || '?'} (${student?.grade || ''}). 한국어 존댓말 사용.`;
 
-  // currentChatMessages → Anthropic messages 형식 변환 (system 제외)
+  // currentChatMessages → Anthropic messages 형식 변환
+  // system 메시지 제외, hidden 메시지는 UI엔 안 보이지만 API context엔 포함
   const messages = state.currentChatMessages
     .filter(m => m.role !== 'system')
     .map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.text }));
+
+  console.log('[chat] API 전송 직전 — messages:', JSON.stringify(messages));
 
   try {
     const res = await fetch('/api/analyze', {
@@ -64,10 +73,14 @@ async function continueContextChat(text) {
         messages,
       }),
     });
+    console.log('[chat] API 응답 status:', res.status, res.ok);
     const data = await res.json();
+    console.log('[chat] API 응답 data:', JSON.stringify(data).slice(0, 300));
     const reply = data.content?.map(c => c.text || '').join('').trim();
     if (reply) appendMessage('ai', reply);
+    else console.warn('[chat] reply 비어있음 — data.content:', data.content, 'data.error:', data.error);
   } catch (e) {
+    console.error('[chat] 예외 발생:', e);
     appendMessage('ai', '죄송해요, 오류가 발생했어요. 다시 시도해주세요.');
   } finally {
     state._ctxChatLoading = false;
@@ -117,6 +130,7 @@ function renderChatView() {
 }
 
 function renderChatBubble(m) {
+  if (m.hidden) return '';
   if (m.role === 'system') {
     return `<div class="chat-system-msg">${esc(m.text)}</div>`;
   }
@@ -317,6 +331,10 @@ async function startContextChat() {
   const startMsg = isMyRecords
     ? '대화를 자연스럽게 시작해주세요. 판단 없이 들어주는 첫 마디를 해주세요.'
     : `${student?.alias || '내담자'} 학생의 상담을 시작하겠습니다. 첫 인삿말을 해주세요.`;
+
+  // trigger 메시지도 히스토리에 넣어야 다음 대화에서 Anthropic API가
+  // 'first message must be user' 에러를 내지 않음 (hidden 플래그로 UI에선 숨김)
+  state.currentChatMessages.push({ role: 'user', text: startMsg, hidden: true });
 
   try {
     const res = await fetch('/api/analyze', {
