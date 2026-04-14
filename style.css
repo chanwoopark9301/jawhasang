@@ -380,14 +380,14 @@ body {
 .main-header {
   padding: 12px 16px;
   border-bottom: 0.5px solid var(--color-border);
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-shrink: 0;
 }
 
 .main-header-center {
-  flex: 1;
   min-width: 0;
   text-align: center;
 }
@@ -395,6 +395,7 @@ body {
 .main-header-right {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
   flex-shrink: 0;
 }
@@ -1729,10 +1730,19 @@ body { height: 100dvh; }
 }
 
 /* =============================================
-   모바일 하단 내비게이션 (기본 숨김)
+   모바일 하단 내비게이션
    ============================================= */
 .mobile-nav {
   display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 90;
+  height: calc(52px + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  border-top: 0.5px solid var(--color-border);
+  background: var(--color-bg-secondary);
 }
 
 .mnav-btn {
@@ -1785,10 +1795,6 @@ body { height: 100dvh; }
   .mobile-nav {
     display: flex;
     flex-shrink: 0;
-    height: calc(52px + env(safe-area-inset-bottom));
-    padding-bottom: env(safe-area-inset-bottom);
-    border-top: 0.5px solid var(--color-border);
-    background: var(--color-bg-secondary);
   }
 
   /* 메인에 하단 내비게이션 높이만큼 패딩 */

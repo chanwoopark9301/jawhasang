@@ -71,7 +71,6 @@ function showHome() {
   state.selRecord  = null;
   state.mode       = 'welcome';
   state.myMode     = 'welcome';
-  mobilePanel      = 'main';
   render();
 }
 
@@ -167,7 +166,6 @@ function calPopupGoSession(id) {
   state.selSession = id;
   state.mode       = 'detail';
   state.sessionTab = 'verbatim';
-  mobilePanel      = 'main';
   _syncNavButtons('student');
   render();
 }
@@ -181,7 +179,6 @@ function calPopupGoRecord(id) {
   state.selRecord = id;
   state.myMode    = 'detail';
   state.myTab     = 'content';
-  mobilePanel     = 'main';
   _syncNavButtons('myrecords');
   render();
 }
@@ -191,7 +188,6 @@ function calPopupAddSession(date) {
   state.view = 'student';
   state.mode = 'new-session';
   _syncNavButtons('student');
-  mobilePanel = 'main';
   render();
   requestAnimationFrame(() => {
     const el = document.getElementById('fd');
@@ -205,7 +201,6 @@ function calPopupAddRecord(date) {
   state.view   = 'myrecords';
   state.myMode = state.selTopic ? 'new-record' : 'new-topic';
   _syncNavButtons('myrecords');
-  mobilePanel = 'main';
   render();
   if (state.selTopic) {
     requestAnimationFrame(() => {

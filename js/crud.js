@@ -35,7 +35,7 @@ function saveStudent() {
 function editStudent(id) {
   state.editingId = id;
   state.mode      = 'edit-student';
-  mobilePanel     = 'main';
+
   render();
 }
 
@@ -114,7 +114,7 @@ function saveSession() {
 function editSession(id) {
   state.editingId = id;
   state.mode      = 'edit-session';
-  mobilePanel     = 'main';
+
   render();
 }
 
@@ -216,7 +216,7 @@ function saveTopic() {
 function editTopic(id) {
   state.editingId = id;
   state.myMode    = 'edit-topic';
-  mobilePanel     = 'main';
+
   render();
 }
 
@@ -282,7 +282,7 @@ function saveRecord() {
 function editRecord(id) {
   state.editingId = id;
   state.myMode    = 'edit-record';
-  mobilePanel     = 'main';
+
   render();
 }
 
