@@ -66,11 +66,11 @@ counselingReport/
 │   ├── ai-pattern.js       ← 전체 패턴 분석
 │   ├── render-sidebar.js   ← 사이드바 렌더링 (학생/주제 목록)
 │   ├── render-calendar.js  ← 홈 캘린더 렌더링 (점 표시, 팝업)
-│   ├── modal.js            ← 통합 모달 (폼, 보고서, 모드 선택 등 모든 오버레이)
+│   ├── modal.js            ← 통합 모달 (폼, 보고서, 모드 선택, 기록/회기 상세 팝업, 블록 에디터 포함)
 │   ├── panels.js           ← 패널·사이드바·모바일 레이아웃 (chat.js에서 분리)
 │   ├── chat.js             ← 대화창 전용 (renderChatView, startContextChat, sendCurrentChat)
 │   ├── render-aipanel.js   ← AI 패널 렌더링 (renderRightPanel)
-│   ├── render-main.js      ← 메인 컨텐츠 라우팅 (캘린더/홈/대화창 분기)
+│   ├── render-main.js      ← 메인 컨텐츠 라우팅 (캘린더/홈/대화창 분기 — 상세 뷰는 팝업으로 분리)
 │   ├── verbatim-editor.js  ← 블록 에디터 (텍스트↔블록 모드 전환)
 │   ├── render-home.js      ← 홈 화면 렌더링 (그리팅, 최근 7일, 퀵 카드)
 │   └── transform-text.js   ← 축어록 AI 정리 클라이언트
@@ -246,7 +246,7 @@ const state = {
 - 패널 뒤 백드롭: 클릭 시 `closePanels()` 호출
 - 하단 탭 `mobile-nav`: 목록(☰) / 화면(◧) / AI(✦)
 
-### 사이드바 구조 (nav-item / sub-items)
+### 사이드바 구조 (nav-item / sub-items / sub-children)
 ```
 div.sidebar-logo           → 홈으로 (showHome)
 button.new-chat-btn        → 새 대화 모달 (openNewChatModal)
@@ -254,8 +254,12 @@ nav.sidebar-nav
   ├ .nav-section-label "기록"
   ├ #nav-my.nav-item       → setView('myrecords')
   │   └ #sub-my.sub-items  → 주제 sub-item 목록 + "+ 새 주제" add
+  │       └ .sub-children  → 선택된 주제의 기록 목록 (날짜·번호)
+  │           └ 각 기록 클릭 → openModal('record-detail', {id})
   ├ #nav-sv.nav-item       → setView('student')
   │   └ #sub-sv.sub-items  → 학생 sub-item 목록 + "+ 새 내담자" add
+  │       └ .sub-children  → 선택된 학생의 회기 목록 (날짜·회기번호)
+  │           └ 각 회기 클릭 → openModal('session-detail', {id})
   └ #nav-cal.nav-item      → setView('calendar')
 div.sidebar-footer         → 내보내기 + 로그아웃
 ```
@@ -272,8 +276,13 @@ div.sidebar-footer         → 내보내기 + 로그아웃
 2. **주제/학생 선택**: `renderChatView()` — AI 대화창 + 하단 입력창
    - 선택 직후 `startContextChat()` → AI가 첫 마디 자동 시작
 3. **캘린더**: `renderCalendar()`
-4. **폼 (등록/수정)**: `openModal()` → 통합 모달 오버레이
+4. **기록/회기 상세**: `openModal('record-detail'/'session-detail')` — 사이드바 트리에서 클릭 시 팝업
+   - 내용(마크다운) / 메모 / 축어록 / 날짜 표시
+   - 버튼: 삭제 / 수정 / AI 대화(AI 슈퍼비전)
+5. **폼 (등록/수정)**: `openModal()` → 통합 모달 오버레이
    - `new-student` / `edit-student` / `new-topic` / `edit-topic`
+   - `new-session` / `edit-session` (블록 에디터로 축어록 편집)
+   - `edit-record` (블록 에디터로 본문 편집)
    - `verbatim` (축어록 첨부) / `write` (직접 쓰기) / `mode` (대화 모드)
 
 ### 색상 테마
@@ -435,6 +444,9 @@ scripts\stage_commit.bat A "기능 설명"    # Windows
 
 | 커밋 | 내용 |
 |------|------|
+| `51e4201` | Feat: 기록/회기 팝업 상세 + 블록 에디터 — 사이드바 트리 클릭 시 팝업, 수정 모달 문단 단위 블록 편집 |
+| `cbea58c` | Fix: renderChatView 레이스 컨디션 — selRecord/selSession 시 chat이 detail 덮어쓰는 버그 |
+| `b253971` | Feat: 사이드바 트리 + 기록/회기 CRUD — 하위 기록·회기 펼치기, new/edit-session, edit-record 모달 |
 | `91d76cc` | Feat: 자화상 최종 지시서 반영 — AI_ROLE_PRESETS 교체, startContextChat 최근기록 컨텍스트, sendMyChatMessage 추가, sendChatMessage 동기화 |
 | `2dc7092` | Refactor: panels.js 분리 — chat.js에서 레이아웃·패널·모바일 코드 이동 |
 | `ca00776` | Revert: 홈 동기부여 기능 전체 제거 (스트릭·통계·성찰질문) |
@@ -463,4 +475,7 @@ scripts\stage_commit.bat A "기능 설명"    # Windows
 9. **startContextChat()**: 주제/학생 선택 직후 AI 첫 마디 자동 생성 (`chat.js`). 상담 기록은 `session.supervisionChat`에서 복원. 나의 기록은 최근 기록 3개를 시스템 프롬프트에 포함해 AI가 연속성 있게 시작. Anthropic API 규칙상 trigger 메시지를 `hidden:true`로 히스토리에 포함.
 10. **AI_ROLE_PRESETS**: `listener`(그냥 들어주기) / `coach` / `counselor`(감정 상담사) / `advisor`(조언가) / `companion`(생각 친구) / `custom`(직접 입력) 6종. 각 프리셋은 구체적인 행동 지침 포함.
 11. **폰트**: `--font` CSS 변수 = `Nanum Myeongjo` (serif). 自畵像 제목과 동일 폰트 전면 적용. Google Fonts `display=swap`으로 FOUT 방지.
-12. **SW 캐시**: `jip-v{n}` 버전 번호 — CSS/JS 변경 시 반드시 버전 올려야 구 캐시 무효화됨.
+12. **SW 캐시**: `jip-v{n}` 버전 번호 — CSS/JS 변경 시 반드시 버전 올려야 구 캐시 무효화됨. 현재: `jip-v13`.
+13. **기록/회기 상세**: 메인 영역 인라인 렌더링 없음. 사이드바 트리에서 클릭 시 `openModal('record-detail'/'session-detail')`로 팝업. AI 대화 버튼은 팝업 닫고 기존 채팅창 복귀.
+14. **블록 에디터 (modal.js)**: `renderBlockEditor()` / `collectBlocks()` / `addBlockToEditor()` / `removeBlock()`. verbatim-editor.js의 블록 에디터(축어록 전용)와 별개. edit-record(본문)·edit-session(축어록)에 적용. 문단 구분은 `\n\n`. Enter 두 번 → 새 블록, 빈 블록 Backspace → 위 블록 포커스.
+15. **modalDeleteRecord/Session**: crud.js의 deleteRecord/deleteSession은 confirm+render. 팝업 내 삭제 버튼은 modal.js의 래퍼 함수 사용 (confirm 후 closeModal() 추가 호출).
