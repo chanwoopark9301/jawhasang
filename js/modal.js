@@ -39,6 +39,9 @@ function buildModalHTML(id, data) {
     case 'new-student':   return renderModalNewStudent();
     case 'edit-topic':    return renderModalEditTopic(data);
     case 'edit-student':  return renderModalEditStudent(data);
+    case 'new-session':   return renderModalNewSession();
+    case 'edit-session':  return renderModalEditSession(data);
+    case 'edit-record':   return renderModalEditRecord(data);
     case 'verbatim':      return renderModalVerbatim();
     case 'write':         return renderModalWrite();
     case 'mode':          return renderModalMode();
@@ -205,6 +208,79 @@ function renderModalEditStudent(data) {
     <div class="modal-footer">
       <button class="btn-secondary" onclick="closeModal()">취소</button>
       <button class="btn-primary" onclick="modalUpdateStudent('${esc(st.id)}')">저장</button>
+    </div>`;
+}
+
+function renderModalNewSession() {
+  const today = new Date().toISOString().split('T')[0];
+  return `
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-title">새 회기 추가</div>
+    <div class="form-group">
+      <label class="form-label">날짜</label>
+      <input class="form-input" id="fss-date" type="date" value="${today}" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">축어록 <span style="color:var(--color-text-tertiary);font-weight:400;">(선택)</span></label>
+      <textarea class="form-textarea" id="fss-verbatim" style="min-height:140px;"
+        placeholder="상담 내용을 기록하세요. STT 결과를 붙여넣어도 됩니다."></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">메모 <span style="color:var(--color-text-tertiary);font-weight:400;">(선택)</span></label>
+      <textarea class="form-textarea" id="fss-memo" style="min-height:60px;"
+        placeholder="짧은 메모"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">취소</button>
+      <button class="btn-primary" onclick="modalSaveSession()">저장</button>
+    </div>`;
+}
+
+function renderModalEditSession(data) {
+  const session = data.session || state.sessions.find(s => s.id === (data.id || state.editingId));
+  if (!session) return `<p>회기를 찾을 수 없습니다</p>`;
+  return `
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-title">${session.sessionNum}회기 수정</div>
+    <div class="form-group">
+      <label class="form-label">날짜</label>
+      <input class="form-input" id="fss-date" type="date" value="${esc(session.date)}" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">축어록</label>
+      <textarea class="form-textarea" id="fss-verbatim" style="min-height:140px;">${esc(session.verbatim || '')}</textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">메모</label>
+      <textarea class="form-textarea" id="fss-memo" style="min-height:60px;">${esc(session.memo || '')}</textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">취소</button>
+      <button class="btn-primary" onclick="modalUpdateSession('${esc(session.id)}')">저장</button>
+    </div>`;
+}
+
+function renderModalEditRecord(data) {
+  const record = data.record || state.myRecords.find(r => r.id === (data.id || state.editingId));
+  if (!record) return `<p>기록을 찾을 수 없습니다</p>`;
+  return `
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-title">${record.recordNum}번째 기록 수정</div>
+    <div class="form-group">
+      <label class="form-label">날짜</label>
+      <input class="form-input" id="frec-date" type="date" value="${esc(record.date)}" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">내용</label>
+      <textarea class="form-textarea my-content-input" id="frec-content" style="min-height:180px;">${esc(record.content || '')}</textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">메모 <span style="color:var(--color-text-tertiary);font-weight:400;">(선택)</span></label>
+      <textarea class="form-textarea" id="frec-memo" style="min-height:60px;">${esc(record.memo || '')}</textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">취소</button>
+      <button class="btn-primary-my" onclick="modalUpdateRecord('${esc(record.id)}')">저장</button>
     </div>`;
 }
 
@@ -426,6 +502,54 @@ function modalUpdateStudent(id) {
   closeModal();
   render();
   showToast('내담자 정보가 수정되었습니다');
+}
+
+function modalSaveSession() {
+  if (!state.selStudent) { alert('내담자를 먼저 선택해주세요'); return; }
+  const date     = document.getElementById('fss-date')?.value || new Date().toISOString().split('T')[0];
+  const verbatim = (document.getElementById('fss-verbatim')?.value || '').trim();
+  const memo     = (document.getElementById('fss-memo')?.value || '').trim();
+  const session = {
+    id:              'ss' + Date.now(),
+    studentId:       state.selStudent,
+    date,
+    sessionNum:      getNextSessionNum(state.selStudent),
+    verbatim,
+    memo,
+    tags:            [],
+    analysis:        null,
+    supervisionChat: [],
+  };
+  state.sessions.push(session);
+  state.selSession = session.id;
+  saveData();
+  closeModal();
+  render();
+  showToast('회기가 추가되었습니다');
+}
+
+function modalUpdateSession(id) {
+  const session = state.sessions.find(s => s.id === id);
+  if (!session) return;
+  session.date     = document.getElementById('fss-date')?.value || session.date;
+  session.verbatim = (document.getElementById('fss-verbatim')?.value || '').trim();
+  session.memo     = (document.getElementById('fss-memo')?.value || '').trim();
+  saveData();
+  closeModal();
+  render();
+  showToast('회기가 수정되었습니다');
+}
+
+function modalUpdateRecord(id) {
+  const record = state.myRecords.find(r => r.id === id);
+  if (!record) return;
+  record.date    = document.getElementById('frec-date')?.value || record.date;
+  record.content = (document.getElementById('frec-content')?.value || '').trim();
+  record.memo    = (document.getElementById('frec-memo')?.value || '').trim();
+  saveData();
+  closeModal();
+  render();
+  showToast('기록이 수정되었습니다');
 }
 
 // 축어록 파일 불러오기 (모달 내)

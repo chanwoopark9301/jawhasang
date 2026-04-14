@@ -19,6 +19,8 @@ function renderSidebar() {
 
     const newMyHtml = topics.map(t => {
       const active = state.selTopic === t.id;
+      // 선택된 주제면 하위 기록 목록 펼침
+      const childHtml = active ? _renderRecordChildren(t.id) : '';
       return `<div class="sub-item${active ? ' active' : ''}"
         oncontextmenu="event.preventDefault();openModal('edit-topic',{id:'${t.id}'})">
         <span class="sub-item-label" onclick="selectTopic('${t.id}')" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;">${esc(t.title)}</span>
@@ -26,9 +28,8 @@ function renderSidebar() {
           <button class="sub-item-btn" onclick="event.stopPropagation();openModal('edit-topic',{id:'${t.id}'})" title="수정">✎</button>
           <button class="sub-item-btn sub-item-del" onclick="event.stopPropagation();deleteTopic('${t.id}')" title="삭제">×</button>
         </span>
-      </div>`;
+      </div>${childHtml}`;
     }).join('') + `<div class="sub-item sub-item-add" onclick="openModal('new-topic')">+ 새 주제</div>`;
-    // 변경된 경우에만 DOM 갱신 (불필요한 reflow 방지)
     if (subMy.innerHTML !== newMyHtml) subMy.innerHTML = newMyHtml;
   }
 
@@ -45,6 +46,7 @@ function renderSidebar() {
 
     const newSvHtml = students.map(st => {
       const active = state.selStudent === st.id;
+      const childHtml = active ? _renderSessionChildren(st.id) : '';
       return `<div class="sub-item${active ? ' active' : ''}"
         oncontextmenu="event.preventDefault();openModal('edit-student',{id:'${st.id}'})">
         <span class="sub-item-label" onclick="selectStudent('${st.id}')" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;">${esc(st.alias)}</span>
@@ -52,8 +54,63 @@ function renderSidebar() {
           <button class="sub-item-btn" onclick="event.stopPropagation();openModal('edit-student',{id:'${st.id}'})" title="수정">✎</button>
           <button class="sub-item-btn sub-item-del" onclick="event.stopPropagation();deleteStudent('${st.id}')" title="삭제">×</button>
         </span>
-      </div>`;
+      </div>${childHtml}`;
     }).join('') + `<div class="sub-item sub-item-add" onclick="openModal('new-student')">+ 새 내담자</div>`;
     if (subSv.innerHTML !== newSvHtml) subSv.innerHTML = newSvHtml;
   }
+}
+
+// ---------------------------------------------------------------------------
+// 하위 기록 목록 (나의 기록)
+// ---------------------------------------------------------------------------
+
+function _renderRecordChildren(topicId) {
+  const records = state.myRecords
+    .filter(r => r.topicId === topicId)
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  const items = records.map(r => {
+    const active = state.selRecord === r.id;
+    return `<div class="sub-child${active ? ' active' : ''}" onclick="selectRecord('${r.id}')">
+      <span class="sub-child-label">${_sbDate(r.date)} · ${r.recordNum}번째</span>
+      <span class="sub-child-actions">
+        <button class="sub-item-btn sub-item-del" onclick="event.stopPropagation();deleteRecord('${r.id}')" title="삭제">×</button>
+      </span>
+    </div>`;
+  }).join('');
+
+  return `<div class="sub-children">
+    ${items}
+    <div class="sub-child sub-child-add" onclick="openModal('write')">+ 새 기록</div>
+  </div>`;
+}
+
+// ---------------------------------------------------------------------------
+// 하위 회기 목록 (상담 기록)
+// ---------------------------------------------------------------------------
+
+function _renderSessionChildren(studentId) {
+  const sessions = state.sessions
+    .filter(s => s.studentId === studentId)
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  const items = sessions.map(s => {
+    const active = state.selSession === s.id;
+    return `<div class="sub-child${active ? ' active' : ''}" onclick="selectSession('${s.id}')">
+      <span class="sub-child-label">${_sbDate(s.date)} · ${s.sessionNum}회기</span>
+      <span class="sub-child-actions">
+        <button class="sub-item-btn sub-item-del" onclick="event.stopPropagation();deleteSession('${s.id}')" title="삭제">×</button>
+      </span>
+    </div>`;
+  }).join('');
+
+  return `<div class="sub-children">
+    ${items}
+    <div class="sub-child sub-child-add" onclick="openModal('new-session')">+ 새 회기</div>
+  </div>`;
+}
+
+function _sbDate(dateStr) {
+  const [, m, d] = (dateStr || '').split('-');
+  return m && d ? `${parseInt(m)}/${parseInt(d)}` : dateStr;
 }

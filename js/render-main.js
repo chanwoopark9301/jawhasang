@@ -131,8 +131,13 @@ function renderMain() {
       content.innerHTML = renderTodayView();
       return;
     }
-    // 주제 선택됨 → 대화창
     nsBtn.style.display = 'none';
+    // 기록이 선택된 경우 → 기록 상세
+    if (state.selRecord) {
+      const record = state.myRecords.find(r => r.id === state.selRecord);
+      if (record) { content.innerHTML = _renderRecordDetail(record); return; }
+    }
+    // 주제만 선택됨 → 대화창
     renderChatView();
     return;
   }
@@ -145,9 +150,83 @@ function renderMain() {
       content.innerHTML = renderTodayView();
       return;
     }
-    // 내담자 선택됨 → 대화창
     nsBtn.style.display = 'none';
+    // 회기가 선택된 경우 → 회기 상세
+    if (state.selSession) {
+      const session = state.sessions.find(s => s.id === state.selSession);
+      if (session) { content.innerHTML = _renderSessionDetail(session); return; }
+    }
+    // 내담자만 선택됨 → 대화창
     renderChatView();
     return;
   }
+}
+
+// ---------------------------------------------------------------------------
+// 기록 상세 뷰
+// ---------------------------------------------------------------------------
+
+function _renderRecordDetail(record) {
+  const topic = state.myTopics.find(t => t.id === record.topicId);
+  return `
+    <div class="detail-view">
+      <div class="detail-header">
+        <button class="detail-back" onclick="backToChat()">← 대화로</button>
+        <div class="detail-meta">${esc(topic?.title || '')} · ${record.recordNum}번째 · ${esc(record.date)}</div>
+        <div class="detail-actions">
+          <button class="btn-secondary" onclick="openModal('edit-record',{id:'${record.id}'})">수정</button>
+          <button class="btn-secondary" style="color:#b94040;" onclick="deleteRecord('${record.id}')">삭제</button>
+        </div>
+      </div>
+      <div class="detail-body">
+        <div class="detail-content">${renderMd(record.content)}</div>
+        ${record.memo ? `<div class="detail-memo">${esc(record.memo)}</div>` : ''}
+      </div>
+    </div>`;
+}
+
+// ---------------------------------------------------------------------------
+// 회기 상세 뷰
+// ---------------------------------------------------------------------------
+
+function _renderSessionDetail(session) {
+  const student = state.students.find(s => s.id === session.studentId);
+  return `
+    <div class="detail-view">
+      <div class="detail-header">
+        <button class="detail-back" onclick="backToChat()">← 대화로</button>
+        <div class="detail-meta">${esc(student?.alias || '')} · ${session.sessionNum}회기 · ${esc(session.date)}</div>
+        <div class="detail-actions">
+          <button class="btn-secondary" onclick="openModal('edit-session',{id:'${session.id}'})">수정</button>
+          <button class="btn-secondary" style="color:#b94040;" onclick="deleteSession('${session.id}')">삭제</button>
+        </div>
+      </div>
+      <div class="detail-body">
+        ${session.verbatim
+          ? `<div class="detail-section-label">축어록</div>
+             <div class="detail-verbatim">${esc(session.verbatim)}</div>`
+          : '<div class="detail-empty">축어록 없음</div>'}
+        ${session.memo
+          ? `<div class="detail-section-label" style="margin-top:16px;">메모</div>
+             <div class="detail-memo">${esc(session.memo)}</div>`
+          : ''}
+        ${session.analysis
+          ? `<div class="detail-section-label" style="margin-top:16px;">슈퍼비전 보고서</div>
+             <div class="detail-memo" style="color:var(--color-text-secondary);">
+               ${esc(session.date)} 작성 · <button class="btn-link" onclick="openModal('report',{analysis:state.sessions.find(s=>s.id==='${session.id}').analysis})">보기</button>
+             </div>`
+          : ''}
+      </div>
+    </div>`;
+}
+
+// ---------------------------------------------------------------------------
+// 상세 뷰 → 대화로 돌아가기
+// ---------------------------------------------------------------------------
+
+function backToChat() {
+  state.selRecord  = null;
+  state.selSession = null;
+  renderMain();
+  renderSidebar();
 }

@@ -5,7 +5,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v10'; // 최종 지시서 반영: AI_ROLE_PRESETS 교체, startContextChat 개선, 대화 동기화
+const CACHE_NAME = 'jip-v11'; // 사이드바 트리 + 기록/회기 CRUD (new-session, edit-session, edit-record 모달, detail-view)
 
 const STATIC_ASSETS = [
   '/',
