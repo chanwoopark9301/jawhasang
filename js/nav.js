@@ -173,9 +173,7 @@ function navCal(dir) {
   state.calMonth += dir;
   if (state.calMonth < 0)  { state.calMonth = 11; state.calYear--; }
   if (state.calMonth > 11) { state.calMonth = 0;  state.calYear++; }
-  const hv = document.getElementById('home-view');
-  if (hv && hv.style.display !== 'none') renderHomeCalendar();
-  else renderMain();
+  renderMain();
 }
 
 // ---------------------------------------------------------------------------

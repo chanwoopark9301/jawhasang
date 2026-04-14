@@ -106,8 +106,6 @@ function closeCalPopup() {
   const modal   = document.getElementById('cal-popup-modal');
   if (overlay) overlay.style.display = 'none';
   if (modal)   modal.style.display   = 'none';
-  const hv = document.getElementById('home-view');
-  if (hv && hv.style.display !== 'none') renderHomeCalendar();
 }
 
 function buildCalPopupHTML(date) {
