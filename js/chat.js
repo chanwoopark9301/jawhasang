@@ -184,3 +184,39 @@ function updateMobileLayout() {
   // 기존 resize.js의 _updateMobileNavActive 호환
   if (typeof _updateMobileNavActive === 'function') _updateMobileNavActive();
 }
+
+// ---------------------------------------------------------------------------
+// 컨텍스트 대화 시작 (주제/내담자 선택 직후 AI 첫 마디)
+// ---------------------------------------------------------------------------
+
+async function startContextChat() {
+  const isMyRecords = state.view === 'myrecords';
+  const topic   = isMyRecords ? state.myTopics.find(t => t.id === state.selTopic) : null;
+  const student = !isMyRecords ? state.students.find(s => s.id === state.selStudent) : null;
+
+  const aiRole  = topic?.aiPrompt || '따뜻하게 경청하고 공감하는 친구처럼';
+  const sysPrompt = isMyRecords
+    ? `당신은 ${aiRole} 역할입니다. 주제는 '${topic?.title || '나의 기록'}'입니다. 한국어 존댓말 사용.`
+    : `당신은 학교상담 슈퍼바이저입니다. 내담자: ${student?.alias || '?'} (${student?.grade || ''}). 한국어 존댓말 사용.`;
+
+  const startMsg = isMyRecords
+    ? '대화를 자연스럽게 시작해주세요. 판단 없이 들어주는 첫 마디를 해주세요.'
+    : `${student?.alias || '내담자'} 학생의 상담을 시작하겠습니다. 첫 인삿말을 해주세요.`;
+
+  try {
+    const res = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6', max_tokens: 400,
+        system: [{ type: 'text', text: sysPrompt, cache_control: { type: 'ephemeral' } }],
+        messages: [{ role: 'user', content: startMsg }],
+      }),
+    });
+    const data = await res.json();
+    const text = data.content?.map(c => c.text || '').join('').trim();
+    if (text) appendMessage('ai', text);
+  } catch (e) {
+    appendMessage('ai', '안녕하세요. 오늘 어떤 이야기를 나눠볼까요?');
+  }
+}
