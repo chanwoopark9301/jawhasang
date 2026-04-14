@@ -70,14 +70,8 @@ function renderModalNewTopic() {
       <input class="form-input" id="ft-title" placeholder="예: 일기, 아쉬운 점, 임용 공부" autocomplete="off" />
     </div>
     <div class="form-group">
-      <label class="form-label">AI 역할 프리셋 <span style="color:var(--color-text-tertiary);font-weight:400;">(선택)</span></label>
+      <label class="form-label">AI 역할 <span style="color:var(--color-text-tertiary);font-weight:400;">(선택)</span></label>
       <div class="role-preset-grid">${presetBtns}</div>
-    </div>
-    <div class="form-group">
-      <label class="form-label">AI 역할 직접 입력</label>
-      <textarea class="form-textarea" id="ft-prompt" style="min-height:90px;"
-        placeholder="이 주제에서 AI가 어떤 역할을 해줬으면 하는지 자유롭게 입력하세요.
-비워두면 기본 성찰 코치로 동작합니다."></textarea>
     </div>
     <div class="modal-footer">
       <button class="btn-secondary" onclick="closeModal()">취소</button>
@@ -115,25 +109,30 @@ function renderModalNewStudent() {
         </select>
       </div>
     </div>
-    <div class="form-section-title">배경 정보 (AI 슈퍼비전에 활용)</div>
-    <div class="form-group">
-      <label class="form-label">가족관계 / 가정환경</label>
-      <textarea class="form-textarea" id="ffamily" style="min-height:50px;"
-        placeholder="예: 편부모 가정, 형제 없음, 경제적 어려움"></textarea>
+    <div class="form-collapsible-toggle" onclick="toggleStudentBgInfo(this)">
+      배경 정보 추가 <span style="color:var(--color-text-tertiary);font-weight:400;">(선택)</span>
+      <span class="collapsible-arrow">▸</span>
     </div>
-    <div class="form-group">
-      <label class="form-label">교우관계 / 학교생활</label>
-      <textarea class="form-textarea" id="fpeers" style="min-height:50px;"
-        placeholder="예: 또래 관계 어려움, 학급 내 고립"></textarea>
-    </div>
-    <div class="form-group">
-      <label class="form-label">현재 상황 및 배경</label>
-      <textarea class="form-textarea" id="fsituation" style="min-height:50px;"
-        placeholder="예: 담임 의뢰, 불안 증상, 학폭 피해"></textarea>
-    </div>
-    <div class="form-group">
-      <label class="form-label">기타 메모</label>
-      <textarea class="form-textarea" id="fnotes" placeholder="기타 특이사항"></textarea>
+    <div class="form-collapsible-body" id="student-bg-info" style="display:none;">
+      <div class="form-group">
+        <label class="form-label">가족관계 / 가정환경</label>
+        <textarea class="form-textarea" id="ffamily" style="min-height:50px;"
+          placeholder="예: 편부모 가정, 형제 없음, 경제적 어려움"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">교우관계 / 학교생활</label>
+        <textarea class="form-textarea" id="fpeers" style="min-height:50px;"
+          placeholder="예: 또래 관계 어려움, 학급 내 고립"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">현재 상황 및 배경</label>
+        <textarea class="form-textarea" id="fsituation" style="min-height:50px;"
+          placeholder="예: 담임 의뢰, 불안 증상, 학폭 피해"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">기타 메모</label>
+        <textarea class="form-textarea" id="fnotes" placeholder="기타 특이사항"></textarea>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn-secondary" onclick="closeModal()">취소</button>
@@ -354,9 +353,13 @@ function renderModalPattern(result) {
 function modalSaveTopic() {
   const title = (document.getElementById('ft-title')?.value || '').trim();
   if (!title) { alert('주제 이름을 입력해주세요'); return; }
+  // 프리셋이 선택된 경우 해당 preset의 prompt 사용; 없으면 기본값
+  const selectedPresetId = document.querySelector('.role-preset-btn.active')?.dataset?.id || 'listener';
+  const selectedPreset = AI_ROLE_PRESETS.find(p => p.id === selectedPresetId);
   const topic = {
     id: 't' + Date.now(), title,
-    aiPrompt:  (document.getElementById('ft-prompt')?.value || '').trim(),
+    aiPrompt:     selectedPreset?.prompt || '',
+    selectedRole: selectedPresetId,
     createdAt: new Date().toISOString().split('T')[0],
   };
   state.myTopics.push(topic);
@@ -470,6 +473,23 @@ function saveWriteRecord() {
   closeModal();
   render();
   showToast('기록이 저장되었습니다');
+}
+
+// 새 주제 모달 — 프리셋 버튼 활성화
+function selectRolePreset(presetId) {
+  document.querySelectorAll('.role-preset-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.id === presetId);
+  });
+}
+
+// 배경 정보 접기/펼치기
+function toggleStudentBgInfo(btn) {
+  const body = document.getElementById('student-bg-info');
+  if (!body) return;
+  const open = body.style.display === 'none';
+  body.style.display = open ? '' : 'none';
+  const arrow = btn.querySelector('.collapsible-arrow');
+  if (arrow) arrow.textContent = open ? '▾' : '▸';
 }
 
 // 대화 모드 선택

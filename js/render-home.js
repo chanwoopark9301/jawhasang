@@ -25,14 +25,10 @@ function renderHomeGreeting() {
   const now  = new Date();
   const dateStr = `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일 (${DAYS[now.getDay()]}요일)`;
 
-  // 오늘 기록 수
-  const today = now.toISOString().split('T')[0];
-  const todayCnt = state.sessions.filter(s => s.date === today).length
-                 + state.myRecords.filter(r => r.date === today).length;
-
-  const countNote = todayCnt
-    ? `<div style="font-size:12px;color:var(--color-text-tertiary);margin-top:4px;">오늘 ${todayCnt}개의 기록이 있어요</div>`
-    : '';
+  const streak    = _getStreak();
+  const monthStats = _getMonthStats();
+  const question  = _getTodayQuestion();
+  const quickStart = _getQuickStartBtn();
 
   return `
     <div class="greeting-screen">
@@ -41,6 +37,11 @@ function renderHomeGreeting() {
         ${dateStr}<br>
         오늘 하루를 그저 떠오르는 대로 써봐요.
       </div>
+
+      ${streak >= 2 ? `<div class="streak-badge">🔥 ${streak}일 연속 기록 중</div>` : ''}
+
+      ${quickStart}
+
       <div class="quick-cards">
         <div class="quick-card" onclick="handleHomeMyRecords()">
           <div class="quick-card-icon">✎</div>
@@ -58,7 +59,21 @@ function renderHomeGreeting() {
           <div>기록 한눈에 보기</div>
         </div>
       </div>
-      ${countNote}
+
+      ${monthStats.total > 0 ? `
+      <div class="home-stats-bar">
+        <div class="home-stat"><span class="home-stat-num" style="color:#1D9E75;">${monthStats.records}</span><span class="home-stat-lbl">나의 기록</span></div>
+        <div class="home-stat-divider"></div>
+        <div class="home-stat"><span class="home-stat-num" style="color:#EF9F27;">${monthStats.sessions}</span><span class="home-stat-lbl">상담 기록</span></div>
+        <div class="home-stat-divider"></div>
+        <div class="home-stat"><span class="home-stat-num">${monthStats.total}</span><span class="home-stat-lbl">이번 달 합계</span></div>
+      </div>` : ''}
+
+      <div class="home-question-card" onclick="handleHomeMyRecords()">
+        <div class="home-question-label">오늘의 성찰 질문</div>
+        <div class="home-question-text">${esc(question)}</div>
+      </div>
+
       ${_renderRecentItems()}
     </div>`;
 }
@@ -156,6 +171,87 @@ function _renderRecentItems() {
 function _shortDate(dateStr) {
   const [, m, d] = dateStr.split('-');
   return `${parseInt(m)}/${parseInt(d)}`;
+}
+
+// ---------------------------------------------------------------------------
+// 연속 기록 스트릭 계산
+// ---------------------------------------------------------------------------
+
+function _getStreak() {
+  const allDates = new Set([
+    ...state.sessions.map(s => s.date),
+    ...state.myRecords.map(r => r.date),
+  ]);
+  if (!allDates.size) return 0;
+
+  let streak = 0;
+  const d = new Date();
+  // 오늘 기록 없으면 어제부터 체크
+  const today = d.toISOString().split('T')[0];
+  if (!allDates.has(today)) d.setDate(d.getDate() - 1);
+
+  while (true) {
+    const key = d.toISOString().split('T')[0];
+    if (!allDates.has(key)) break;
+    streak++;
+    d.setDate(d.getDate() - 1);
+  }
+  return streak;
+}
+
+// ---------------------------------------------------------------------------
+// 이번 달 통계
+// ---------------------------------------------------------------------------
+
+function _getMonthStats() {
+  const now   = new Date();
+  const ym    = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const records  = state.myRecords.filter(r => r.date.startsWith(ym)).length;
+  const sessions = state.sessions.filter(s => s.date.startsWith(ym)).length;
+  return { records, sessions, total: records + sessions };
+}
+
+// ---------------------------------------------------------------------------
+// 오늘의 성찰 질문 (날짜 기반 순환)
+// ---------------------------------------------------------------------------
+
+const _DAILY_QUESTIONS = [
+  '오늘 가장 오래 머문 감정은 무엇이었나요?',
+  '오늘 나를 가장 힘들게 한 것은 무엇인가요?',
+  '오늘 잘 해냈다고 느낀 순간이 있었나요?',
+  '지금 이 순간 가장 마음에 걸리는 것은 무엇인가요?',
+  '오늘 누군가에게 고마운 마음이 들었나요?',
+  '오늘 회피했거나 미룬 것이 있나요?',
+  '지금 나에게 필요한 것은 무엇인가요?',
+  '이번 주 상담에서 가장 인상 깊었던 장면은 무엇인가요?',
+  '요즘 나를 소진시키는 것과 채우는 것은 각각 무엇인가요?',
+  '한 달 뒤의 나에게 한 마디를 남긴다면?',
+  '오늘 내담자와의 대화에서 나는 어떤 상담자였나요?',
+  '지금 하고 있는 공부에서 가장 막히는 부분은 어디인가요?',
+  '오늘 나는 나 자신에게 친절했나요?',
+  '요즘 반복되는 생각이나 패턴이 있나요?',
+  '내가 상담사로 성장하고 있다고 느낄 때는 언제인가요?',
+];
+
+function _getTodayQuestion() {
+  const now = new Date();
+  const idx = (now.getFullYear() * 366 + now.getMonth() * 31 + now.getDate()) % _DAILY_QUESTIONS.length;
+  return _DAILY_QUESTIONS[idx];
+}
+
+// ---------------------------------------------------------------------------
+// 이어서 쓰기 버튼 (마지막으로 사용한 주제)
+// ---------------------------------------------------------------------------
+
+function _getQuickStartBtn() {
+  // 가장 최근 기록이 있는 주제 찾기
+  const lastRecord = [...state.myRecords].sort((a, b) => b.date.localeCompare(a.date))[0];
+  const lastTopic  = lastRecord ? state.myTopics.find(t => t.id === lastRecord.topicId) : state.myTopics[0];
+  if (!lastTopic) return '';
+
+  return `<button class="home-quick-start" onclick="selectTopic('${lastTopic.id}')">
+    이어서 쓰기 — ${esc(lastTopic.title)} ›
+  </button>`;
 }
 
 // ---------------------------------------------------------------------------

@@ -5,7 +5,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v7'; // 말풍선 CSS 클래스화, 입력 중 표시기, font-weight 700, 일기변환 중복 제거
+const CACHE_NAME = 'jip-v8'; // 홈 스트릭·통계·성찰질문, 이어서쓰기, 폼 간소화, AI 최근기록 컨텍스트
 
 const STATIC_ASSETS = [
   '/',

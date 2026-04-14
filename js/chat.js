@@ -385,12 +385,38 @@ async function startContextChat() {
   const student = !isMyRecords ? state.students.find(s => s.id === state.selStudent) : null;
 
   const aiRole  = topic?.aiPrompt || '따뜻하게 경청하고 공감하는 친구처럼';
+
+  // 최근 기록 1-2개를 컨텍스트로 포함
+  let recentContext = '';
+  if (isMyRecords && topic) {
+    const recentRecords = state.myRecords
+      .filter(r => r.topicId === topic.id)
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 2);
+    if (recentRecords.length) {
+      recentContext = '\n\n아래는 이 주제의 최근 기록입니다:\n' +
+        recentRecords.map(r =>
+          `[${r.date} · ${r.recordNum}번째 기록]\n${r.content.slice(0, 300)}${r.content.length > 300 ? '...' : ''}`
+        ).join('\n\n');
+    }
+  } else if (!isMyRecords && student) {
+    const recentSessions = state.sessions
+      .filter(s => s.studentId === student.id)
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 1);
+    if (recentSessions.length && recentSessions[0].memo) {
+      recentContext = `\n\n최근 회기 메모 (${recentSessions[0].date}): ${recentSessions[0].memo.slice(0, 200)}`;
+    }
+  }
+
   const sysPrompt = isMyRecords
-    ? `당신은 ${aiRole} 역할입니다. 주제는 '${topic?.title || '나의 기록'}'입니다. 한국어 존댓말 사용.`
-    : `당신은 학교상담 슈퍼바이저입니다. 내담자: ${student?.alias || '?'} (${student?.grade || ''}). 한국어 존댓말 사용.`;
+    ? `당신은 ${aiRole} 역할입니다. 주제는 '${topic?.title || '나의 기록'}'입니다.${recentContext}\n한국어 존댓말 사용.`
+    : `당신은 학교상담 슈퍼바이저입니다. 내담자: ${student?.alias || '?'} (${student?.grade || ''}).${recentContext}\n한국어 존댓말 사용.`;
 
   const startMsg = isMyRecords
-    ? '대화를 자연스럽게 시작해주세요. 판단 없이 들어주는 첫 마디를 해주세요.'
+    ? (recentContext
+        ? '최근 기록을 읽었어요. 지난번 이후 어떻게 지내셨는지 자연스럽게 물어봐주세요.'
+        : '대화를 자연스럽게 시작해주세요. 판단 없이 들어주는 첫 마디를 해주세요.')
     : `${student?.alias || '내담자'} 학생의 상담을 시작하겠습니다. 첫 인삿말을 해주세요.`;
 
   // trigger 메시지도 히스토리에 넣어야 다음 대화에서 Anthropic API가
