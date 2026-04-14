@@ -67,7 +67,8 @@ counselingReport/
 │   ├── render-sidebar.js   ← 사이드바 렌더링 (학생/주제 목록)
 │   ├── render-calendar.js  ← 홈 캘린더 렌더링 (점 표시, 팝업)
 │   ├── modal.js            ← 통합 모달 (폼, 보고서, 모드 선택 등 모든 오버레이)
-│   ├── chat.js             ← 대화창 통합 (renderChatView, startContextChat, sendCurrentChat)
+│   ├── panels.js           ← 패널·사이드바·모바일 레이아웃 (chat.js에서 분리)
+│   ├── chat.js             ← 대화창 전용 (renderChatView, startContextChat, sendCurrentChat)
 │   ├── render-aipanel.js   ← AI 패널 렌더링 (renderRightPanel)
 │   ├── render-main.js      ← 메인 컨텐츠 라우팅 (캘린더/홈/대화창 분기)
 │   ├── verbatim-editor.js  ← 블록 에디터 (텍스트↔블록 모드 전환)
@@ -192,6 +193,13 @@ const state = {
   calMonth:  number,
   calDate:   null,
   calPopup:  null,
+
+  // 대화창 통합
+  chatMode:            'general',  // 'general' | 'supervision' | 'diary-convert'
+  currentChatMessages: [],         // 현재 대화창 메시지 [{role, text, hidden?}]
+  attachedVerbatim:    null,       // 첨부된 축어록 텍스트
+  currentRole:         'listener', // 현재 AI 역할 ID
+  activeModal:         null,       // 현재 열린 모달 ID
 
   // 공통
   editingId:       null,   // 수정 중인 항목 id
@@ -416,8 +424,9 @@ scripts\stage_commit.bat A "기능 설명"    # Windows
 | test_stage_e.py | PWA, dvh CSS, 메타태그, Stage ABCD 회귀 | 30개 |
 | test_e2e.py | E2E (Playwright) — 인증·사이드바·CRUD·캘린더 | 19개 |
 | test_ui_stage_a.py | 기본 로딩 3개 + 인라인폼 E2E 3개(skip) | 6개 |
-| **합계** | **105 통과, 3 skip** | **108개** |
+| **합계** | **102 통과, 3 실패(서버 미실행), 3 skip** | **108개** |
 
+> **실패 사유**: `test_ui_stage_a.py` 3개 — Playwright가 `localhost:5000`에 연결 실패 (서버 미실행 시 항상 발생, CI에서는 서버 선기동 필요)
 > **skip 사유**: 인라인 세션 폼(`#ns-btn` 기반)이 모달+대화창 구조로 전환됨
 
 ---
@@ -426,6 +435,10 @@ scripts\stage_commit.bat A "기능 설명"    # Windows
 
 | 커밋 | 내용 |
 |------|------|
+| `91d76cc` | Feat: 자화상 최종 지시서 반영 — AI_ROLE_PRESETS 교체, startContextChat 최근기록 컨텍스트, sendMyChatMessage 추가, sendChatMessage 동기화 |
+| `2dc7092` | Refactor: panels.js 분리 — chat.js에서 레이아웃·패널·모바일 코드 이동 |
+| `ca00776` | Revert: 홈 동기부여 기능 전체 제거 (스트릭·통계·성찰질문) |
+| `2c4c101` | Feat: 폼 간소화 — 새 주제 textarea 제거, 새 내담자 배경정보 접기/펼치기 |
 | `9c97e63` | Style: 폰트 Nanum Myeongjo 통일 + 글자 크기 상향 + 대화 내용 localStorage 유지 |
 | `167b40d` | Fix: 채팅 전송 후 AI 무응답 — startContextChat trigger 메시지 히스토리 누락 |
 | `e930d30` | Refactor: 미사용 껍데기 함수 제거 |
@@ -434,9 +447,6 @@ scripts\stage_commit.bat A "기능 설명"    # Windows
 | `1ea29ba` | 대화창 중심 아키텍처 전환 — render-forms/session/myrecords-view/resize 제거, 모든 폼을 modal.js로 통합, AI 첫 마디 자동 시작(startContextChat) |
 | `7838519` | Claude.ai 스타일 고정 3열 레이아웃 전환 |
 | `568c0c3` | Stage E: PWA + 아이패드 dvh 레이아웃 |
-| `167decd` | Stage D: 블록 에디터 |
-| `066413f` | Stage B+C: 찾기/바꾸기 + 주석 버튼 |
-| `e652942` | Stage A: 긴 축어록 2단계 처리 + 테스트 인프라 |
 
 ---
 
@@ -450,7 +460,7 @@ scripts\stage_commit.bat A "기능 설명"    # Windows
 6. **Railway 배포**: `Procfile` 존재. `DATABASE_URL` 환경변수 설정 시 PostgreSQL 자동 사용.
 7. **dvh 지원**: iOS Safari 15.4+, iPadOS 16+. 그 이하에서는 100vh로 fallback (큰 문제 없음).
 8. **대화창 중심 구조**: 주제/학생 선택 시 메인 영역은 항상 `renderChatView()`. 폼(등록/수정)은 전부 `openModal()`. 인라인 폼 렌더링 없음.
-9. **startContextChat()**: 주제/학생 선택 직후 AI 첫 마디 자동 생성 (`chat.js`). `loadChatHistory()`로 기존 대화가 복원되면 호출하지 않음.
-10. **채팅 히스토리 영속성**: `saveChatHistory()`/`loadChatHistory()` — 주제·학생별 `jip_chat_{id}` 키로 localStorage 저장. 새로고침·탭 전환 후 복원. Anthropic API 규칙상 첫 메시지는 반드시 user여야 하므로 `startContextChat()`의 trigger 메시지를 `hidden:true`로 히스토리에 포함.
+9. **startContextChat()**: 주제/학생 선택 직후 AI 첫 마디 자동 생성 (`chat.js`). 상담 기록은 `session.supervisionChat`에서 복원. 나의 기록은 최근 기록 3개를 시스템 프롬프트에 포함해 AI가 연속성 있게 시작. Anthropic API 규칙상 trigger 메시지를 `hidden:true`로 히스토리에 포함.
+10. **AI_ROLE_PRESETS**: `listener`(그냥 들어주기) / `coach` / `counselor`(감정 상담사) / `advisor`(조언가) / `companion`(생각 친구) / `custom`(직접 입력) 6종. 각 프리셋은 구체적인 행동 지침 포함.
 11. **폰트**: `--font` CSS 변수 = `Nanum Myeongjo` (serif). 自畵像 제목과 동일 폰트 전면 적용. Google Fonts `display=swap`으로 FOUT 방지.
 12. **SW 캐시**: `jip-v{n}` 버전 번호 — CSS/JS 변경 시 반드시 버전 올려야 구 캐시 무효화됨.
