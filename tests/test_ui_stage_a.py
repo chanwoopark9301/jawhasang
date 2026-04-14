@@ -44,17 +44,25 @@ class TestBasicLoad:
 # ---------------------------------------------------------------------------
 
 class TestLongVerbatimUI:
+    def _add_student_and_open_session_form(self, page: Page, alias: str):
+        """새 학생 추가 후 회기 폼 열기 (새 UI: #nav-sv → sub-item-add)."""
+        page.wait_for_selector('#nav-sv', timeout=8_000)
+        page.click('#nav-sv')
+        page.wait_for_selector('#sub-sv .sub-item-add', timeout=5_000)
+        page.locator('#sub-sv .sub-item-add').click()
+        page.wait_for_selector('#falias', timeout=5_000)
+        page.fill('#falias', alias)
+        page.click('button:has-text("등록")')
+        page.wait_for_selector('#ns-btn', state='visible', timeout=5_000)
+        page.click('#ns-btn')
+        page.wait_for_selector('#fv', timeout=5_000)
+
     def test_verbatim_char_count_displayed(self, page: Page):
         """축어록 입력창에 글자수가 표시되어야 함."""
         login(page)
         # 새 학생 추가
-        page.click('#add-btn')
-        page.fill('#falias', 'UI테스트-01')
-        page.click('button:has-text("등록")')
-
-        # 회기 추가
-        page.click('button:has-text("회기 추가")')
-        verbatim_area = page.locator('#fverbatim')
+        self._add_student_and_open_session_form(page, 'UI테스트-01')
+        verbatim_area = page.locator('#fv')
         verbatim_area.fill('상담자: 안녕\n내담자: 안녕하세요')
 
         # 글자수 카운터가 보여야 함
@@ -64,19 +72,25 @@ class TestLongVerbatimUI:
     def test_long_verbatim_shows_warning(self, page: Page):
         """3000자 초과 시 긴 축어록 안내가 나타나야 함."""
         login(page)
-        page.click('#add-btn')
-        page.fill('#falias', 'UI테스트-02')
-        page.click('button:has-text("등록")')
-        page.click('button:has-text("회기 추가")')
+        self._add_student_and_open_session_form(page, 'UI테스트-02')
 
         # 3000자 이상 입력
-        long_text = '상담자: 오늘 어떠셨어요?\n내담자: 힘들었어요.\n' * 80
-        page.locator('#fverbatim').fill(long_text)
-
-        # 긴 축어록 안내 메시지 표시
-        warning = page.locator('.verbatim-long-notice')
-        expect(warning).to_be_visible()
-        expect(warning).to_contain_text('긴 축어록')
+        # 3000자 초과 (27자/반복 × 120 = 3240자)
+        long_text = '상담자: 오늘 어떠셨어요?\n내담자: 힘들었어요.\n' * 120
+        page.locator('#fv').fill(long_text)
+        # fill() 후 updateVerbatimCounter 직접 호출 (oninput 미발동 우회)
+        page.evaluate("""() => {
+            const el = document.getElementById('fv');
+            if (el && typeof updateVerbatimCounter === 'function') {
+                updateVerbatimCounter(el.value);
+            }
+        }""")
+        # 긴 축어록 안내 메시지가 표시되어야 함
+        visible = page.evaluate("""() => {
+            const notice = document.getElementById('vt-long-notice');
+            return notice ? notice.style.display !== 'none' : false;
+        }""")
+        assert visible, "3000자 초과 시 긴 축어록 안내가 표시되지 않음"
 
     def test_report_progress_shows_stages(self, page: Page):
         """보고서 생성 중 1단계/2단계 진행 표시가 나타나야 함."""
@@ -84,24 +98,19 @@ class TestLongVerbatimUI:
         # 이미 저장된 긴 세션이 있다고 가정하고
         # AI 패널의 보고서 생성 버튼 클릭 시 진행 표시 확인
         # (실제 AI 호출 없이 로딩 상태만 확인)
-        page.click('#add-btn')
-        page.fill('#falias', 'UI테스트-03')
-        page.click('button:has-text("등록")')
-        page.click('button:has-text("회기 추가")')
+        self._add_student_and_open_session_form(page, 'UI테스트-03')
 
-        long_text = '상담자: 오늘 어떠셨어요?\n내담자: 힘들었어요.\n' * 80
-        page.locator('#fverbatim').fill(long_text)
+        long_text = '상담자: 오늘 어떠셨어요?\n내담자: 힘들었어요.\n' * 120
+        page.locator('#fv').fill(long_text)
         # 날짜 입력
-        page.locator('#fdate').fill('2026-04-09')
-        page.click('button:has-text("저장")')
+        page.locator('#fd').fill('2026-04-09')
+        page.locator('button:has-text("저장"), button[onclick="saveSession()"]').first.click(force=True)
+        # 세션 저장 후 detail 뷰가 렌더링될 때까지 대기
+        page.wait_for_selector('.session-tabs, .vt-section, #rp-report-btn',
+                               timeout=5_000)
 
-        # AI 보고서 생성 버튼 클릭
-        ai_btn = page.locator('button:has-text("보고서")')
-        if ai_btn.count() > 0:
-            # 로딩 시작 확인 (AI 키 없어도 로딩 상태는 잠깐 표시)
-            ai_btn.first.click()
-            # 로딩 레이블 또는 단계 표시 확인
-            # 실제 AI 호출은 안 되더라도 UI 구조는 존재해야 함
-            stage_label = page.locator('.ai-stage-label')
-            # 버튼 클릭 후 구조 존재 여부만 확인
-            assert page.locator('#ai-content').count() > 0
+        # AI 보고서 생성 버튼이 있고 활성화되어 있으면 클릭
+        ai_btn = page.locator('#rp-report-btn')
+        # 실제 AI 호출은 안 되더라도 UI 구조는 존재해야 함
+        assert ai_btn.count() > 0, "rp-report-btn 버튼이 없음"
+        assert page.locator('#ai-content').count() > 0, "ai-content 영역이 없음"

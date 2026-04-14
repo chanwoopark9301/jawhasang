@@ -1,66 +1,54 @@
 /* =============================================
-   自畵像 — 사이드바 렌더링
+   自畵像 — 사이드바 렌더링 (新 nav-item/sub-items 구조)
    의존성: state.js, utils.js
    ============================================= */
 
 function renderSidebar() {
-  const el    = document.getElementById('sidebar-list');
-  const query = state.searchQuery.toLowerCase().trim();
+  // ── nav-item 활성 상태 ──────────────────────────────────────────────────
+  document.getElementById('nav-my')?.classList.toggle('active', state.view === 'myrecords');
+  document.getElementById('nav-sv')?.classList.toggle('active', state.view === 'student');
+  document.getElementById('nav-cal')?.classList.toggle('active', state.view === 'calendar');
 
-  if (state.view === 'myrecords') {
+  // ── 나의 기록 서브 항목 ─────────────────────────────────────────────────
+  const subMy = document.getElementById('sub-my');
+  if (subMy) {
+    const query = state.searchQuery.toLowerCase().trim();
     const topics = query
       ? state.myTopics.filter(t => t.title.toLowerCase().includes(query))
       : state.myTopics;
-    if (!topics.length) {
-      el.innerHTML = query
-        ? '<p class="ai-placeholder">검색 결과 없음</p>'
-        : '<p class="ai-placeholder">주제가 없어요<br><span style="font-size:10px;opacity:.6;">+ 새 주제 추가로 시작하세요</span></p>';
-      return;
-    }
-    el.innerHTML = topics.map(t => {
-      const cnt    = state.myRecords.filter(r => r.topicId === t.id).length;
+
+    subMy.innerHTML = topics.map(t => {
       const active = state.selTopic === t.id;
-      return `<div class="list-item${active ? ' active my-active' : ''}">
-        <div class="list-item-info" onclick="selectTopic('${t.id}')">
-          <div class="list-item-name">${esc(t.title)}</div>
-          <div class="list-item-sub">${cnt}개 기록</div>
-        </div>
-        <div class="list-item-actions">
-          <button class="list-item-edit" onclick="event.stopPropagation();editTopic('${t.id}')" title="수정">✎</button>
-          <button class="list-item-del" onclick="event.stopPropagation();deleteTopic('${t.id}')" title="삭제">×</button>
-        </div>
+      return `<div class="sub-item${active ? ' active' : ''}">
+        <span class="sub-item-label" onclick="selectTopic('${t.id}')" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;">${esc(t.title)}</span>
+        <span class="sub-item-actions">
+          <button class="sub-item-btn" onclick="event.stopPropagation();editTopic('${t.id}')" title="수정">✎</button>
+          <button class="sub-item-btn sub-item-del" onclick="event.stopPropagation();deleteTopic('${t.id}')" title="삭제">×</button>
+        </span>
       </div>`;
-    }).join('');
-    return;
+    }).join('') + `<div class="sub-item sub-item-add" onclick="setView('myrecords');handleAdd()">+ 새 주제</div>`;
   }
 
-  // view === 'student'
-  const students = query
-    ? state.students.filter(st =>
-        st.alias.toLowerCase().includes(query) ||
-        st.grade.toLowerCase().includes(query) ||
-        (st.situation || '').toLowerCase().includes(query)
-      )
-    : state.students;
+  // ── 상담 기록 서브 항목 ─────────────────────────────────────────────────
+  const subSv = document.getElementById('sub-sv');
+  if (subSv) {
+    const query = state.searchQuery.toLowerCase().trim();
+    const students = query
+      ? state.students.filter(st =>
+          st.alias.toLowerCase().includes(query) ||
+          st.grade.toLowerCase().includes(query)
+        )
+      : state.students;
 
-  if (!students.length) {
-    el.innerHTML = query
-      ? '<p class="ai-placeholder">검색 결과 없음</p>'
-      : '<p class="ai-placeholder">내담자가 없어요</p>';
-    return;
+    subSv.innerHTML = students.map(st => {
+      const active = state.selStudent === st.id;
+      return `<div class="sub-item${active ? ' active' : ''}">
+        <span class="sub-item-label" onclick="selectStudent('${st.id}')" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;">${esc(st.alias)}</span>
+        <span class="sub-item-actions">
+          <button class="sub-item-btn" onclick="event.stopPropagation();editStudent('${st.id}')" title="수정">✎</button>
+          <button class="sub-item-btn sub-item-del" onclick="event.stopPropagation();deleteStudent('${st.id}')" title="삭제">×</button>
+        </span>
+      </div>`;
+    }).join('') + `<div class="sub-item sub-item-add" onclick="setView('student');handleAdd()">+ 새 내담자</div>`;
   }
-  el.innerHTML = students.map(st => {
-    const cnt    = state.sessions.filter(s => s.studentId === st.id).length;
-    const active = state.selStudent === st.id;
-    return `<div class="list-item${active ? ' active' : ''}">
-      <div class="list-item-info" onclick="selectStudent('${st.id}')">
-        <div class="list-item-name">${esc(st.alias)}</div>
-        <div class="list-item-sub">${esc(st.grade)} · ${cnt}회기</div>
-      </div>
-      <div class="list-item-actions">
-        <button class="list-item-edit" onclick="event.stopPropagation();editStudent('${st.id}')" title="수정">✎</button>
-        <button class="list-item-del" onclick="event.stopPropagation();deleteStudent('${st.id}')" title="삭제">×</button>
-      </div>
-    </div>`;
-  }).join('');
 }

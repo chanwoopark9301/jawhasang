@@ -14,23 +14,6 @@ function setView(view) {
   state.mode       = 'welcome';
   state.filterTags = [];
   state.searchQuery = '';
-  const searchEl = document.getElementById('sidebar-search');
-  if (searchEl) searchEl.value = '';
-
-  // 3-버튼 nav 활성 상태 갱신
-  document.getElementById('btn-sv')?.classList.toggle('active', view === 'student');
-  document.getElementById('btn-dv')?.classList.toggle('active', view === 'myrecords');
-  document.getElementById('btn-cal')?.classList.toggle('active', view === 'calendar');
-
-  // 컨텍스트 영역: 캘린더 뷰에서는 목록 숨김
-  const ctx = document.getElementById('sidebar-context');
-  if (ctx) ctx.style.display = view === 'calendar' ? 'none' : '';
-
-  // 추가 버튼 텍스트
-  const addBtn = document.getElementById('add-btn');
-  if (addBtn) addBtn.textContent =
-    view === 'student'    ? '+ 새 내담자' :
-    view === 'myrecords'  ? '+ 새 주제'   : '';
 
   logger.info('뷰 전환: %s', view);
   render();
@@ -52,6 +35,7 @@ function selectStudent(id) {
   state.selSession = null;
   state.mode       = 'list';
   state.filterTags = [];
+  state.view       = 'student';
   closePanels();
   render();
 }
@@ -71,6 +55,7 @@ function selectDateSession(sessionId) {
   state.selStudent = s.studentId;
   state.mode       = 'detail';
   state.sessionTab = 'verbatim';
+  state.view       = 'student';
   closePanels();
   render();
 }
@@ -104,7 +89,7 @@ function setSessionTab(tab) {
   if (state.vtInlineEdit) { _resetVtEditor(); state.vtInlineEdit = false; }
   state.sessionTab = tab;
   renderMain();
-  renderAIPanel();
+  renderRightPanel();
   if (tab === 'dialogue') {
     requestAnimationFrame(() => {
       const el = document.getElementById('chat-messages');
@@ -122,11 +107,13 @@ function selectTopic(id) {
   state.selRecord  = null;
   state.myMode     = 'list';
   state.filterTags = [];
+  state.view       = 'myrecords';
   closePanels();
   render();
 }
 
 function selectRecord(id) {
+  if (!id) return;
   state.selRecord = id;
   state.myMode    = 'detail';
   state.myTab     = 'content';
@@ -154,7 +141,7 @@ function backFromMyDetail() {
 function setMyTab(tab) {
   state.myTab = tab;
   renderMain();
-  renderAIPanel();
+  renderRightPanel();
 }
 
 // ---------------------------------------------------------------------------
@@ -173,17 +160,125 @@ function navCal(dir) {
 }
 
 // ---------------------------------------------------------------------------
-// 모바일 레이아웃 (오버레이 방식으로 통합)
+// 새 대화 모달 (주제/내담자 빠른 선택)
+// ---------------------------------------------------------------------------
+
+function openNewChatModal() {
+  const overlay = document.getElementById('new-chat-overlay');
+  const modal   = document.getElementById('new-chat-modal');
+  if (!modal) return;
+
+  modal.innerHTML = `
+    <div style="font-size:15px;font-weight:500;margin-bottom:16px;">대화 시작</div>
+
+    <div style="font-size:11px;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">나의 기록</div>
+    ${state.myTopics.map(t => `
+      <div class="sub-item" style="font-size:13px;padding:8px 10px;margin-bottom:2px;"
+        onclick="selectTopic('${t.id}');closeNewChatModal();">
+        <span style="color:#1D9E75;font-size:9px;">●</span> ${esc(t.title)}
+      </div>
+    `).join('')}
+    <div class="sub-item sub-item-add" style="font-size:13px;padding:8px 10px;"
+      onclick="closeNewChatModal();setView('myrecords');handleAdd();">
+      + 새 주제 만들기
+    </div>
+
+    <div style="border-top:0.5px solid var(--color-border);margin:12px 0;"></div>
+
+    <div style="font-size:11px;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">상담 기록</div>
+    ${state.students.map(s => `
+      <div class="sub-item" style="font-size:13px;padding:8px 10px;margin-bottom:2px;"
+        onclick="selectStudent('${s.id}');closeNewChatModal();">
+        <span style="color:#8B7EC8;font-size:9px;">●</span> ${esc(s.alias)}
+      </div>
+    `).join('')}
+    <div class="sub-item sub-item-add" style="font-size:13px;padding:8px 10px;"
+      onclick="closeNewChatModal();setView('student');handleAdd();">
+      + 새 내담자 추가
+    </div>
+
+    <button onclick="closeNewChatModal()"
+      style="margin-top:16px;width:100%;padding:8px;border:0.5px solid var(--color-border);
+             border-radius:var(--radius-md);background:transparent;cursor:pointer;font-size:13px;font-family:inherit;">
+      닫기
+    </button>`;
+
+  if (overlay) overlay.style.display = '';
+  modal.style.display = '';
+}
+
+function closeNewChatModal() {
+  const overlay = document.getElementById('new-chat-overlay');
+  const modal   = document.getElementById('new-chat-modal');
+  if (overlay) overlay.style.display = 'none';
+  if (modal)   modal.style.display   = 'none';
+}
+
+// 컨텍스트 칩 클릭 시 → 새 대화 모달 열기
+function openTopicPicker() {
+  openNewChatModal();
+}
+
+// ---------------------------------------------------------------------------
+// AI 역할 선택 (나의 기록)
+// ---------------------------------------------------------------------------
+
+function selectRole(presetId) {
+  const topic = state.myTopics.find(t => t.id === state.selTopic);
+  if (!topic) return;
+
+  const preset = AI_ROLE_PRESETS.find(p => p.id === presetId);
+  if (!preset) return;
+
+  topic.selectedRole = presetId;
+  if (presetId !== 'custom') {
+    topic.aiPrompt = preset.prompt;
+  }
+  saveData();
+  renderRightPanel();
+  updateContextChip();
+}
+
+// ---------------------------------------------------------------------------
+// AI 라우팅 (뷰에 따라 분기)
+// ---------------------------------------------------------------------------
+
+function runCurrentAI() {
+  if (state.view === 'myrecords') runMyAI();
+  else                            runAI();
+}
+
+function runCurrentPattern() {
+  if (state.view === 'myrecords') runMyPatternAnalysis();
+  else                            runPatternAnalysis();
+}
+
+// ---------------------------------------------------------------------------
+// 하단 입력창 라우팅
+// ---------------------------------------------------------------------------
+
+function sendCurrentChat() {
+  if (state.view === 'myrecords') sendMyChatMessage();
+  else                            sendChatMessage();
+}
+
+function handleChatKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendCurrentChat();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 모바일 레이아웃
 // ---------------------------------------------------------------------------
 
 function setMobilePanel(panel) {
-  // 하위 호환 — 새 방식으로 위임
   if (panel === 'sidebar') toggleSidebar();
   else if (panel === 'ai') toggleAIPanel();
   else closePanels();
 }
 
 function updateMobileLayout() {
-  // 새 오버레이 방식에서는 resize.js의 _updateMobileNavActive()가 담당
   _updateMobileNavActive();
 }

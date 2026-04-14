@@ -26,85 +26,134 @@
 <body>
   <div class="app" id="app">
 
-    <!-- 패널 백드롭 (패널 열릴 때 배경 어둡게) -->
+    <!-- 패널 백드롭 (모바일 전용) -->
     <div class="panel-backdrop" id="panel-backdrop" onclick="closePanels()"></div>
 
-    <!-- 사이드바 (왼쪽 오버레이) -->
+    <!-- 왼쪽 사이드바 (데스크탑: 항상 고정, 모바일: 오버레이) -->
     <aside class="sidebar" id="sidebar">
-      <!-- 로고 + 닫기 -->
-      <div class="sidebar-logo-area">
-        <div class="sidebar-logo" onclick="showHome();closePanels();" title="홈으로">自畵像</div>
-        <button class="panel-close-btn" onclick="closePanels()" title="닫기">✕</button>
-      </div>
+      <div class="sidebar-logo" onclick="showHome();closePanels();" title="홈으로">自畵像</div>
 
-      <!-- 3-버튼 네비게이션 -->
+      <button class="new-chat-btn" onclick="openNewChatModal()">
+        <span>+</span> 새 대화
+      </button>
+
       <nav class="sidebar-nav">
-        <button id="btn-dv" class="nav-btn nav-btn-my" onclick="setView('myrecords')">
-          <span class="nav-dot nav-dot-my">●</span>나의 기록
-        </button>
-        <button id="btn-sv" class="nav-btn nav-btn-counsel active" onclick="setView('student')">
-          <span class="nav-dot nav-dot-counsel">●</span>상담 기록
-        </button>
-        <button id="btn-cal" class="nav-btn nav-btn-cal" onclick="setView('calendar')">
-          <span class="nav-dot nav-dot-cal">○</span>캘린더
-        </button>
+        <!-- 나의 기록 -->
+        <div class="nav-section-label">기록</div>
+        <div class="nav-item" id="nav-my" onclick="setView('myrecords')">
+          <span class="nav-dot dot-my">●</span> 나의 기록
+        </div>
+        <div class="sub-items" id="sub-my"></div>
+
+        <!-- 상담 기록 -->
+        <div class="nav-item" id="nav-sv" onclick="setView('student')">
+          <span class="nav-dot dot-sv">●</span> 상담 기록
+        </div>
+        <div class="sub-items" id="sub-sv"></div>
+
+        <!-- 캘린더 -->
+        <div class="nav-item" id="nav-cal" onclick="setView('calendar')">
+          <span class="nav-dot dot-cal">○</span> 캘린더
+        </div>
       </nav>
 
-      <!-- 컨텍스트 영역 (주제/학생 목록) -->
-      <div class="sidebar-context" id="sidebar-context">
-        <input class="sidebar-search" id="sidebar-search" type="search"
-          placeholder="검색..." oninput="setSearchQuery(this.value)" autocomplete="off" />
-        <div class="sidebar-list" id="sidebar-list"></div>
-        <button class="add-btn" id="add-btn" onclick="handleAdd()">+ 새 내담자</button>
-      </div>
-
-      <!-- 하단 유틸 -->
       <div class="sidebar-footer">
         <button class="export-btn" onclick="exportData()" title="JSON 백업 다운로드">↓ 내보내기</button>
         <a href="/logout" class="logout-link">로그아웃</a>
       </div>
     </aside>
 
-    <!-- 메인 컨텐츠 (전체 너비) -->
+    <!-- 중앙 메인 -->
     <main class="main" id="main">
-      <div class="main-header">
-        <!-- 왼쪽: 목록 토글 -->
-        <button class="header-panel-btn" onclick="toggleSidebar()" title="목록">☰</button>
+      <!-- 상단 헤더 -->
+      <div class="main-header" id="main-header">
+        <!-- 모바일 토글 버튼 (모바일에서만 표시) -->
+        <button class="header-panel-btn mobile-only" onclick="toggleSidebar()" title="목록">☰</button>
 
-        <!-- 중앙: 타이틀 -->
-        <div class="main-header-center">
-          <div class="main-title" id="main-title">自畵像</div>
-          <div class="main-sub" id="main-sub"></div>
+        <!-- 컨텍스트 칩 -->
+        <div class="context-chip" id="ctx-topic" onclick="openTopicPicker()">
+          <span class="chip-dot" id="ctx-dot"></span>
+          <span id="ctx-topic-label">自畵像</span>
+          <span class="chip-arrow">▾</span>
         </div>
+        <div class="ctx-role-label" id="ctx-role-label"></div>
 
-        <!-- 오른쪽: 새 항목 버튼 + AI 토글 -->
+        <!-- 오른쪽: 새 항목 버튼 + 모바일 AI 토글 -->
         <div class="main-header-right">
           <button class="btn-secondary" id="ns-btn" style="display:none;" onclick="handleNsBtn()">
             + 회기 추가
           </button>
-          <button class="header-panel-btn" onclick="toggleAIPanel()" title="AI 도구">✦</button>
+          <button class="header-panel-btn mobile-only" onclick="toggleAIPanel()" title="AI 도구">✦</button>
         </div>
+
+        <!-- JS 호환용 히든 요소 -->
+        <div id="main-title" style="display:none;"></div>
+        <div id="main-sub" style="display:none;"></div>
       </div>
+
+      <!-- 메인 콘텐츠 -->
       <div class="main-content" id="main-content">
-        <div class="empty-state">왼쪽에서 학생을 선택하거나<br>새 학생을 추가해보세요</div>
+        <div class="empty-state">불러오는 중...</div>
+      </div>
+
+      <!-- 하단 입력창 (대화 탭 활성 시만 표시) -->
+      <div class="input-area" id="input-area" style="display:none;">
+        <div class="input-wrap">
+          <button class="input-plus" onclick="openTopicPicker()" title="주제 선택">+</button>
+          <textarea class="input-field" id="chat-input-bottom"
+            placeholder="메시지를 입력하세요 (Enter 전송 · Shift+Enter 줄바꿈)"
+            rows="1"
+            onkeydown="handleChatKey(event)"></textarea>
+          <button class="input-send" onclick="sendCurrentChat()">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M7 12V2M2 7l5-5 5 5" stroke="white" stroke-width="1.5"
+                stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
       </div>
     </main>
 
-    <!-- AI 분석 패널 (오른쪽 오버레이) -->
-    <aside class="ai-panel" id="ai-panel">
+    <!-- 오른쪽 패널 (데스크탑: 항상 고정, 모바일: 오버레이) -->
+    <aside class="right-panel ai-panel" id="right-panel">
       <div class="ai-header">
         <span id="ai-header-title">AI 도구</span>
-        <button class="panel-close-btn" onclick="closePanels()" title="닫기">✕</button>
+        <button class="panel-close-btn mobile-only" onclick="closePanels()" title="닫기">✕</button>
       </div>
+
+      <!-- 현재 주제/내담자 -->
+      <div class="rp-section">
+        <div class="rp-label">현재</div>
+        <div class="rp-value" id="rp-topic" onclick="openTopicPicker()">주제 없음</div>
+      </div>
+
+      <!-- AI 역할 (나의 기록 전용) -->
+      <div class="rp-section" id="rp-role-section" style="display:none;">
+        <div class="rp-label">AI 역할</div>
+        <div class="role-pills" id="rp-role-pills"></div>
+      </div>
+
+      <!-- 기간 선택 (나의 기록 보고서 전용) -->
+      <div class="rp-section" id="rp-period-section" style="display:none;">
+        <div class="rp-label">보고서 기간</div>
+        <div class="period-btns" id="rp-period-btns"></div>
+      </div>
+
       <div class="ai-content" id="ai-content">
-        <p class="ai-placeholder">회기를 선택하면<br>AI 분석을 요청할 수 있어요</p>
+        <p class="ai-placeholder">항목을 선택하면<br>정보가 표시됩니다</p>
       </div>
+
+      <!-- 도구 버튼 -->
       <div class="ai-footer">
-        <button class="analyze-btn" id="analyze-btn" disabled onclick="runAI()">
-          슈퍼비전 보고서 생성 ↗
+        <button class="analyze-btn" id="rp-report-btn" disabled onclick="runCurrentAI()">
+          보고서 생성 ↗
         </button>
-        <button class="transform-btn" id="transform-btn" disabled onclick="handleTransform()">
+        <button class="transform-btn" id="rp-transform-btn" disabled onclick="handleTransform()" style="display:none;">
           축어록 AI 정리 ↗
+        </button>
+        <button class="analyze-btn" id="rp-pattern-btn" disabled onclick="runCurrentPattern()"
+          style="margin-top:4px;background:var(--color-bg-tertiary);color:var(--color-text-secondary);font-size:12px;">
+          패턴 분석 ↗
         </button>
       </div>
     </aside>
@@ -137,7 +186,12 @@
     <div class="cal-popup-overlay" id="diary-draft-overlay" style="display:none;" onclick="closeDiaryDraft()"></div>
     <div class="diary-draft-modal" id="diary-draft-modal" style="display:none;"></div>
 
+    <!-- 새 대화 모달 -->
+    <div class="cal-popup-overlay" id="new-chat-overlay" style="display:none;" onclick="closeNewChatModal()"></div>
+    <div class="new-chat-modal" id="new-chat-modal" style="display:none;"></div>
+
   </div>
+
   <!-- 모듈 로드 순서: 의존성 순 -->
   <script src="js/logger.js"></script>
   <script src="js/state.js"></script>

@@ -55,28 +55,38 @@ class TestAuth:
 # ---------------------------------------------------------------------------
 
 class TestHomePage:
+    def _go_to_calendar(self, page):
+        """캘린더 뷰로 이동 (새 UI: #nav-cal 클릭)."""
+        page.wait_for_selector('#nav-cal', timeout=8_000)
+        page.click('#nav-cal')
+        page.wait_for_selector('.cal-grid', timeout=8_000)
+
     def test_calendar_renders(self, logged_in_page):
-        """홈 화면에 캘린더가 렌더링돼야 함."""
-        logged_in_page.wait_for_selector('.cal-grid', timeout=8_000)
+        """캘린더 뷰로 이동 후 캘린더가 렌더링돼야 함."""
+        self._go_to_calendar(logged_in_page)
         assert logged_in_page.locator('.cal-grid').is_visible()
 
     def test_calendar_has_date_cells(self, logged_in_page):
         """캘린더에 날짜 셀이 존재해야 함."""
-        logged_in_page.wait_for_selector('.cal-grid', timeout=8_000)
+        self._go_to_calendar(logged_in_page)
         cells = logged_in_page.locator('.cal-day').count()
         assert cells >= 28, f"날짜 셀이 너무 적음: {cells}"
 
     def test_calendar_navigation_buttons(self, logged_in_page):
         """이전/다음 월 이동 버튼이 있어야 함."""
-        logged_in_page.wait_for_selector('.cal-grid', timeout=8_000)
-        # 이전/다음 버튼 (◀ ▶ 또는 < > 형태)
-        nav_buttons = logged_in_page.locator('button:has-text("◀"), button:has-text("▶"), '
-                                              'button:has-text("<"), button:has-text(">")').count()
+        self._go_to_calendar(logged_in_page)
+        # 이전/다음 버튼 (‹ › 또는 ◀ ▶ 또는 < > 형태)
+        nav_buttons = logged_in_page.locator(
+            'button:has-text("‹"), button:has-text("›"), '
+            'button:has-text("◀"), button:has-text("▶"), '
+            'button:has-text("<"), button:has-text(">"), '
+            '.cal-nav'
+        ).count()
         assert nav_buttons >= 2, "이전/다음 월 버튼이 없음"
 
     def test_today_cell_is_highlighted(self, logged_in_page):
         """오늘 날짜 셀이 강조 표시돼야 함."""
-        logged_in_page.wait_for_selector('.cal-grid', timeout=8_000)
+        self._go_to_calendar(logged_in_page)
         today_cell = logged_in_page.locator('.cal-day.today, .cal-day--today, [data-today]')
         assert today_cell.count() >= 1, "오늘 날짜 셀 강조 없음"
 
@@ -105,16 +115,14 @@ class TestSidebar:
 
 class TestStudentCRUD:
     def _open_new_student_form(self, page):
-        """새 학생 폼 열기 (버튼 텍스트로 찾기)."""
-        page.wait_for_selector('#sidebar', timeout=8_000)
-        # "상담 기록" 모드로 전환 (이미 기본값일 수도 있음)
-        btn = page.locator('#sidebar button:has-text("상담"), #sidebar button:has-text("내담자")')
-        if btn.count():
-            btn.first.click()
-        # 새 학생 버튼
-        new_btn = page.locator('button:has-text("새 학생"), button:has-text("+ 내담자"), '
-                               'button:has-text("내담자 추가")')
-        new_btn.first.click()
+        """새 학생 폼 열기 (새 UI: #nav-sv 클릭 → sub-item-add 클릭)."""
+        page.wait_for_selector('#nav-sv', timeout=8_000)
+        # "상담 기록" 모드로 전환
+        page.click('#nav-sv')
+        page.wait_for_timeout(300)
+        # "새 내담자" sub-item-add 클릭 (#sub-sv 안)
+        new_btn = page.locator('#sub-sv .sub-item-add')
+        new_btn.click()
         page.wait_for_selector('input#falias', timeout=5_000)
 
     def test_new_student_form_opens(self, logged_in_page):
@@ -153,21 +161,16 @@ class TestStudentCRUD:
 
 class TestTopicCRUD:
     def _switch_to_myrecords(self, page):
-        """나의 기록 모드로 전환."""
-        page.wait_for_selector('#sidebar', timeout=8_000)
-        btn = page.locator('#sidebar button:has-text("나의"), '
-                           '#sidebar button:has-text("내 기록"), '
-                           '#sidebar [data-view=myrecords]')
-        if btn.count():
-            btn.first.click()
-            page.wait_for_timeout(500)
+        """나의 기록 모드로 전환 (새 UI: #nav-my 클릭)."""
+        page.wait_for_selector('#nav-my', timeout=8_000)
+        page.click('#nav-my')
+        page.wait_for_timeout(500)
 
     def test_myrecords_view_renders(self, logged_in_page):
         """나의 기록 모드 전환 시 사이드바가 변경돼야 함."""
         self._switch_to_myrecords(logged_in_page)
-        # "새 주제" 버튼이 나타나야 함
-        assert logged_in_page.locator('button:has-text("새 주제"), button:has-text("주제 추가"), '
-                                      'button:has-text("+ 주제")').count() >= 1
+        # "새 주제" sub-item-add가 나타나야 함 (새 UI: div.sub-item-add)
+        assert logged_in_page.locator('#sub-my .sub-item-add').count() >= 1
 
 
 # ---------------------------------------------------------------------------

@@ -14,8 +14,57 @@ function render() {
 
   renderSidebar();
   renderMain();
-  renderAIPanel();
+  renderRightPanel();
+  updateContextChip();
+  updateInputArea();
   updateMobileLayout();
+}
+
+// ---------------------------------------------------------------------------
+// 컨텍스트 칩 업데이트 (헤더)
+// ---------------------------------------------------------------------------
+
+function updateContextChip() {
+  const chipLabel = document.getElementById('ctx-topic-label');
+  const chipDot   = document.getElementById('ctx-dot');
+  const roleLabel = document.getElementById('ctx-role-label');
+  if (!chipLabel) return;
+
+  if (state.view === 'myrecords' && state.selTopic) {
+    const t = state.myTopics.find(t => t.id === state.selTopic);
+    chipLabel.textContent = t ? t.title : '나의 기록';
+    if (chipDot) chipDot.style.background = '#1D9E75';
+    if (roleLabel) {
+      const cnt = state.myRecords.filter(r => r.topicId === state.selTopic).length;
+      roleLabel.textContent = cnt ? `${cnt}개 기록` : '';
+    }
+  } else if (state.view === 'student' && state.selStudent) {
+    const s = state.students.find(s => s.id === state.selStudent);
+    chipLabel.textContent = s ? s.alias : '상담 기록';
+    if (chipDot) chipDot.style.background = '#8B7EC8';
+    if (roleLabel) {
+      const cnt = state.sessions.filter(ss => ss.studentId === state.selStudent).length;
+      roleLabel.textContent = s ? `${esc(s.grade)} · ${cnt}회기` : '';
+    }
+  } else if (state.view === 'calendar') {
+    chipLabel.textContent = '캘린더';
+    if (chipDot) chipDot.style.background = '#EF9F27';
+    if (roleLabel) roleLabel.textContent = '';
+  } else {
+    chipLabel.textContent = '自畵像';
+    if (chipDot) chipDot.style.background = 'var(--color-text-tertiary)';
+    if (roleLabel) roleLabel.textContent = '';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 하단 입력창 표시 여부
+// ---------------------------------------------------------------------------
+
+function updateInputArea() {
+  // 기존 인라인 채팅 입력창이 main-content 내에 있으므로 bottom input은 숨김
+  const inputArea = document.getElementById('input-area');
+  if (inputArea) inputArea.style.display = 'none';
 }
 
 // ---------------------------------------------------------------------------

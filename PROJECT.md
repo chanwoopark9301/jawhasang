@@ -77,11 +77,13 @@ counselingReport/
 │   └── resize.js           ← 오버레이 패널 토글 (toggleSidebar, toggleAIPanel, closePanels)
 │
 ├── tests/                  ← pytest 테스트
-│   ├── conftest.py         ← 공통 픽스처 (Flask 테스트 클라이언트, 샘플 데이터)
+│   ├── conftest.py         ← 공통 픽스처 (Flask 테스트 클라이언트, 샘플 데이터, Playwright live_server)
 │   ├── test_server.py      ← 서버 API + PII 스크러빙 + Stage A 테스트
 │   ├── test_stage_bc.py    ← Stage B+C 테스트 (찾기/바꾸기, 주석 버튼)
 │   ├── test_stage_d.py     ← Stage D 테스트 (블록 에디터)
-│   └── test_stage_e.py     ← Stage E 테스트 (PWA, dvh, 메타태그)
+│   ├── test_stage_e.py     ← Stage E 테스트 (PWA, dvh, 메타태그)
+│   ├── test_e2e.py         ← E2E 테스트 (Playwright, 인증·사이드바·CRUD·캘린더)
+│   └── test_ui_stage_a.py  ← UI Stage A 테스트 (긴 축어록 UX)
 │
 └── scripts/
     ├── stage_commit.sh     ← 테스트 후 자동 커밋 (bash)
@@ -204,53 +206,62 @@ const state = {
 
 ---
 
-## UI 레이아웃 (오버레이 패널 방식)
+## UI 레이아웃 (Claude.ai 스타일 고정 3열 방식)
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│  [☰]          自畵像 / 현재 화면 제목           [+ 버튼] [✦] │  ← 메인 헤더 (grid 3열, 항상 표시)
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│  메인 컨텐츠 (전체 너비)                                     │
-│  홈: 캘린더 + 오늘 카드                                      │
-│  상담 기록: 회기 상세 (축어록|보고서|대화 탭)                │
-│  나의 기록: 기록 상세 (본문|보고서|대화 탭)                  │
-│                                                              │
-├──────────────────────────────────────────────────────────────┤
-│  [목록]              [화면]              [AI]                 │  ← 모바일 하단 탭
-└──────────────────────────────────────────────────────────────┘
-
-  사이드바 (왼쪽 오버레이, ☰ 클릭 시 슬라이드인)
-  ┌────────────────────┐
-  │ 自畵像        [✕] │
-  │ [나의기록]        │
-  │ [상담기록]        │
-  │ [캘린더]          │
-  │ ─────────────── │
-  │ 검색...           │
-  │ 학생/주제 목록    │
-  │ [+ 새 추가]       │
-  │ ─────────────── │
-  │ ↓ 내보내기  로그아웃│
-  └────────────────────┘
-
-  AI 패널 (오른쪽 오버레이, ✦ 클릭 시 슬라이드인)
-  ┌────────────────────┐
-  │ AI 도구       [✕] │
-  │                   │
-  │ 학생 정보 / 컨텍스트│
-  │ 보고서 생성 버튼   │
-  │ 슈퍼비전 대화     │
-  └────────────────────┘
+┌─────────────────┬────────────────────────────┬────────────────┐
+│   사이드바       │         메인 컨텐츠          │   AI 패널      │
+│   220px (고정)  │         flex: 1            │   220px (고정) │
+│                 │                            │                │
+│ 自畵像 (로고)   │ ┌──── 메인 헤더 ────────┐  │ 현재 주제/학생  │
+│ [+ 새 대화]     │ │ [☰] [컨텍스트칩] [✦] │  │ AI 역할 pills  │
+│ ─────────────  │ └──────────────────────┘  │ 학생/주제 정보  │
+│ 기록 (섹션)     │                            │ ──────────── │
+│  ● 나의 기록    │  홈: 그리팅 화면            │ [보고서 생성 ↗] │
+│    ├ 일기       │  캘린더: 월별 캘린더        │ [축어록 정리 ↗] │
+│    └ 아쉬운 점  │  상담: 회기 목록/상세       │ [패턴 분석 ↗]  │
+│  ● 상담 기록    │  나의 기록: 기록 목록/상세  │                │
+│    ├ 별-01      │                            │                │
+│    └ + 새 내담자│                            │                │
+│  ○ 캘린더       │                            │                │
+│ ─────────────  │                            │                │
+│ ↓내보내기 로그아웃│                           │                │
+└─────────────────┴────────────────────────────┴────────────────┘
+│              [목록] [화면] [AI]                               │  ← 모바일 하단 탭
 ```
 
-### 패널 동작 원리
-- 사이드바·AI 패널: `position: fixed`, `transform: translateX(±100%)` → `.panel-open` 시 `translateX(0)`
-- 패널 뒤 백드롭: `z-index: 99`, 패널: `z-index: 100`
-- 패널 열리면 백드롭 표시 → 클릭 시 `closePanels()` 호출
-- 항목 선택 시 `closePanels()` 자동 호출 → 메인 컨텐츠 전체 너비로 복귀
+### 데스크탑 (≥768px)
+- 사이드바·AI 패널: **in-flow flex 자식** (`width: 220px; flex-shrink: 0`)
+- 항상 화면에 고정 표시 — 오버레이 없음
 
-### 사이드바 토글 색상
+### 모바일 (≤767px)
+- 사이드바·AI 패널: `position: fixed; transform: translateX(±100%)`로 전환
+- `.panel-open` 클래스 → `translateX(0)` 슬라이드인
+- 패널 뒤 백드롭: 클릭 시 `closePanels()` 호출
+- 하단 탭 `mobile-nav`: 목록(☰) / 화면(◧) / AI(✦)
+
+### 사이드바 구조 (nav-item / sub-items)
+```
+div.sidebar-logo           → 홈으로 (showHome)
+button.new-chat-btn        → 새 대화 모달 (openNewChatModal)
+nav.sidebar-nav
+  ├ .nav-section-label "기록"
+  ├ #nav-my.nav-item       → setView('myrecords')
+  │   └ #sub-my.sub-items  → 주제 sub-item 목록 + "+ 새 주제" add
+  ├ #nav-sv.nav-item       → setView('student')
+  │   └ #sub-sv.sub-items  → 학생 sub-item 목록 + "+ 새 내담자" add
+  └ #nav-cal.nav-item      → setView('calendar')
+div.sidebar-footer         → 내보내기 + 로그아웃
+```
+
+### 메인 헤더 요소
+- `button.header-panel-btn.mobile-only` (☰) → toggleSidebar
+- `div.context-chip#ctx-topic` → openTopicPicker (현재 주제/학생 표시)
+- `div#ctx-role-label` → 보조 정보 (기록 수, 회기 수)
+- `button#ns-btn` → + 회기 추가 / + 기록 추가
+- `button.header-panel-btn.mobile-only` (✦) → toggleAIPanel
+
+### 색상 테마
 - **상담 기록**: teal `#0F6E56`
 - **나의 기록**: green `#1D9E75`
 
