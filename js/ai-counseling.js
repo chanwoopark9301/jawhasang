@@ -213,49 +213,6 @@ ${reportPart}
 - 한국어 존댓말 사용`;
 }
 
-async function startSupervisionChat() {
-  const session = state.sessions.find(s => s.id === state.selSession);
-  if (!session) return;
-
-  const student = state.students.find(s => s.id === session.studentId);
-  logger.info('슈퍼비전 대화 시작: %s %d회기', student?.alias, session.sessionNum);
-
-  session.supervisionChat = [];
-  state.chatLoading = true;
-  renderMain();
-
-  const sysCtx = buildSupervisorContext(session, student);
-
-  try {
-    const res = await fetch('/api/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6', max_tokens: 700,
-        system: [{ type: 'text', text: sysCtx, cache_control: { type: 'ephemeral' } }],
-        messages: [{ role: 'user', content: '슈퍼비전을 시작해주세요. 이 회기에서 가장 탐색할 가치가 있는 순간을 하나 선택해서, 상담자가 자신의 개입을 성찰할 수 있는 첫 번째 질문을 해주세요.' }],
-      }),
-    });
-    if (!res.ok) throw new Error(`서버 오류 HTTP ${res.status}`);
-    const data = await res.json();
-    const text = data.content?.map(c => c.text || '').join('').trim();
-    if (!text) throw new Error('AI 응답이 비어 있습니다');
-    session.supervisionChat = [{ role: 'ai', text }];
-    saveData();
-    logger.info('슈퍼비전 대화 시작 완료');
-  } catch (e) {
-    logger.error('슈퍼비전 대화 시작 실패', e);
-    session.supervisionChat = [{ role: 'ai', text: '오류가 발생했습니다. 다시 시도해주세요.' }];
-  } finally {
-    state.chatLoading = false;
-  }
-  renderMain();
-  requestAnimationFrame(() => {
-    const el = document.getElementById('chat-messages');
-    if (el) el.scrollTop = el.scrollHeight;
-  });
-}
-
 async function sendChatMessage(textParam) {
   // 통합 입력창(chat.js)에서 text를 직접 받거나, 기존 chat-input에서 읽기
   let text = textParam;
@@ -318,11 +275,3 @@ async function sendChatMessage(textParam) {
   });
 }
 
-function clearSupervisionChat() {
-  if (!confirm('슈퍼비전 대화를 초기화할까요?')) return;
-  const session = state.sessions.find(s => s.id === state.selSession);
-  if (!session) return;
-  session.supervisionChat = [];
-  saveData();
-  renderMain();
-}

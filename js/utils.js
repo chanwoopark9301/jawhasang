@@ -165,25 +165,6 @@ function speakerType(label, allSpeakers) {
   return allSpeakers.indexOf(label) === 0 ? 'counselor' : 'client';
 }
 
-function renderVerbatimView(verbatim) {
-  const editBtn = `<div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
-    <button class="btn-secondary" style="font-size:12px;" onclick="startVtInlineEdit()">편집</button>
-  </div>`;
-
-  if (!verbatim) return editBtn + '<div class="empty-state">축어록이 없습니다</div>';
-  const turns = parseVerbatim(verbatim);
-  if (!turns.length) return editBtn + `<pre class="vt-raw">${esc(verbatim)}</pre>`;
-
-  const allSpeakers = [...new Set(turns.map(t => t.speaker).filter(Boolean))];
-  return editBtn + `<div class="vt-container">${turns.map(t => {
-    const type = speakerType(t.speaker, allSpeakers);
-    return `<div class="vt-turn vt-${type}">
-      ${t.speaker ? `<div class="vt-speaker">${esc(t.speaker)}</div>` : ''}
-      <div class="vt-text">${esc(t.text).replace(/\n/g, '<br>')}</div>
-    </div>`;
-  }).join('')}</div>`;
-}
-
 // ---------------------------------------------------------------------------
 // 축어록 글자수 카운터 + 긴 축어록 안내
 // ---------------------------------------------------------------------------

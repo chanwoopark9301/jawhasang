@@ -2,65 +2,14 @@
    自畵像 — CRUD (생성/수정/삭제)
    의존성: state.js, utils.js, data.js, nav.js
 
-   수정 (버그픽스):
-   - sessionNum/recordNum: 삭제 후 재추가 시 번호 중복 방지
-     (length+1 대신 max+1 사용)
+   참고:
+   - 생성/수정 폼: modal.js의 modalSave*/modalUpdate* 함수 사용
+   - 삭제: 아래 delete* 함수 사용
    ============================================= */
 
 // ---------------------------------------------------------------------------
-// 상담 기록 — 학생 CRUD
+// 상담 기록 — 학생 삭제
 // ---------------------------------------------------------------------------
-
-function saveStudent() {
-  const alias = document.getElementById('falias').value.trim();
-  if (!alias) { alert('식별 코드를 입력해주세요'); return; }
-
-  const student = {
-    id: 's' + Date.now(), alias,
-    grade:     document.getElementById('fg').value,
-    gender:    document.getElementById('fgd').value,
-    family:    document.getElementById('ffamily').value.trim(),
-    peers:     document.getElementById('fpeers').value.trim(),
-    situation: document.getElementById('fsituation').value.trim(),
-    notes:     document.getElementById('fnotes').value.trim(),
-    createdAt: new Date().toISOString().split('T')[0],
-  };
-
-  state.students.push(student);
-  state.selStudent = student.id;
-  state.mode       = 'list';
-  saveData(); render();
-}
-
-function editStudent(id) {
-  state.editingId = id;
-  state.mode      = 'edit-student';
-
-  render();
-}
-
-function updateStudent() {
-  const st = state.students.find(s => s.id === state.editingId);
-  if (!st) return;
-  const alias = document.getElementById('falias').value.trim();
-  if (!alias) { alert('식별 코드를 입력해주세요'); return; }
-  st.alias     = alias;
-  st.grade     = document.getElementById('fg').value;
-  st.gender    = document.getElementById('fgd').value;
-  st.family    = document.getElementById('ffamily').value.trim();
-  st.peers     = document.getElementById('fpeers').value.trim();
-  st.situation = document.getElementById('fsituation').value.trim();
-  st.notes     = document.getElementById('fnotes').value.trim();
-  state.editingId = null;
-  state.mode      = 'list';
-  saveData(); render();
-}
-
-function cancelEditStudent() {
-  state.editingId = null;
-  state.mode      = state.selStudent ? 'list' : 'welcome';
-  render();
-}
 
 function deleteStudent(id) {
   const s = state.students.find(s => s.id === id);
@@ -74,104 +23,8 @@ function deleteStudent(id) {
 }
 
 // ---------------------------------------------------------------------------
-// 상담 기록 — 회기 CRUD
+// 상담 기록 — 회기 삭제
 // ---------------------------------------------------------------------------
-
-function saveSession() {
-  syncVtBeforeSave();  // 블록 모드면 textarea에 동기화
-  const date     = document.getElementById('fd').value;
-  const verbatim = document.getElementById('fv').value.trim();
-  if (!date || !verbatim) { alert('날짜와 축어록을 입력해주세요'); return; }
-
-  let studentId = state.selStudent;
-  if (!studentId) {
-    const el = document.getElementById('fst');
-    if (el) studentId = el.value;
-  }
-  if (!studentId) { alert('내담자를 선택해주세요'); return; }
-
-  const tagsEl  = document.getElementById('ftags');
-  const tagsStr = tagsEl ? tagsEl.value.trim() : '';
-
-  const session = {
-    id: 'ss' + Date.now(), studentId, date,
-    sessionNum:      getNextSessionNum(studentId),
-    verbatim,
-    memo:            document.getElementById('fmemo').value.trim(),
-    tags:            tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : [],
-    analysis:        null,
-    supervisionChat: [],
-  };
-
-  state.sessions.push(session);
-  state.selSession = session.id;
-  state.selStudent = studentId;
-  state.mode       = 'detail';
-  state.sessionTab = 'verbatim';
-  saveData(); render();
-}
-
-function editSession(id) {
-  state.editingId = id;
-  state.mode      = 'edit-session';
-
-  render();
-}
-
-function updateSession() {
-  syncVtBeforeSave();  // 블록 모드면 textarea에 동기화
-  const session = state.sessions.find(s => s.id === state.editingId);
-  if (!session) return;
-  const date     = document.getElementById('fd').value;
-  const verbatim = document.getElementById('fv').value.trim();
-  if (!date || !verbatim) { alert('날짜와 축어록을 입력해주세요'); return; }
-  session.date     = date;
-  session.verbatim = verbatim;
-  session.memo     = document.getElementById('fmemo').value.trim();
-  const tagsEl     = document.getElementById('ftags');
-  const tagsStr    = tagsEl ? tagsEl.value.trim() : '';
-  session.tags     = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : [];
-  state.editingId  = null;
-  state.selSession = session.id;
-  state.mode       = 'detail';
-  state.sessionTab = 'verbatim';
-  saveData(); render();
-}
-
-function cancelEditSession() {
-  _resetVtEditor();
-  state.editingId = null;
-  state.mode      = state.selSession ? 'detail' : (state.selStudent ? 'list' : 'welcome');
-  render();
-}
-
-// ---------------------------------------------------------------------------
-// 축어록 인라인 편집
-// ---------------------------------------------------------------------------
-
-function startVtInlineEdit() {
-  state.vtInlineEdit = true;
-  render();
-}
-
-function cancelVtInlineEdit() {
-  _resetVtEditor();
-  state.vtInlineEdit = false;
-  render();
-}
-
-function saveVtInline() {
-  syncVtBeforeSave();
-  const session = state.sessions.find(s => s.id === state.selSession);
-  if (!session) return;
-  const ta = document.getElementById('fv');
-  if (!ta) return;
-  const verbatim = ta.value.trim();
-  if (!verbatim) { alert('축어록을 입력해주세요'); return; }
-  session.verbatim   = verbatim;
-  state.vtInlineEdit = false;
-  saveData(); render();
-}
 
 function deleteSession(id) {
   if (!confirm('이 회기 기록을 삭제할까요?')) return;
@@ -183,60 +36,9 @@ function deleteSession(id) {
   saveData(); render();
 }
 
-function loadVerbatimFile(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    const el = document.getElementById('fv');
-    if (el) el.value = e.target.result;
-  };
-  reader.onerror = () => alert('파일을 읽을 수 없습니다.');
-  reader.readAsText(file, 'UTF-8');
-}
-
 // ---------------------------------------------------------------------------
-// 나의 기록 — 주제 CRUD
+// 나의 기록 — 주제 삭제
 // ---------------------------------------------------------------------------
-
-function saveTopic() {
-  const title = document.getElementById('ft-title').value.trim();
-  if (!title) { alert('주제 이름을 입력해주세요'); return; }
-  const topic = {
-    id: 't' + Date.now(), title,
-    aiPrompt:  document.getElementById('ft-prompt').value.trim(),
-    createdAt: new Date().toISOString().split('T')[0],
-  };
-  state.myTopics.push(topic);
-  state.selTopic = topic.id;
-  state.myMode   = 'list';
-  saveData(); render();
-}
-
-function editTopic(id) {
-  state.editingId = id;
-  state.myMode    = 'edit-topic';
-
-  render();
-}
-
-function updateTopic() {
-  const topic = state.myTopics.find(t => t.id === state.editingId);
-  if (!topic) return;
-  const title = document.getElementById('ft-title').value.trim();
-  if (!title) { alert('주제 이름을 입력해주세요'); return; }
-  topic.title    = title;
-  topic.aiPrompt = document.getElementById('ft-prompt').value.trim();
-  state.editingId = null;
-  state.myMode    = 'list';
-  saveData(); render();
-}
-
-function cancelEditTopic() {
-  state.editingId = null;
-  state.myMode    = state.selTopic ? 'list' : 'welcome';
-  render();
-}
 
 function deleteTopic(id) {
   const t = state.myTopics.find(t => t.id === id);
@@ -252,64 +54,8 @@ function deleteTopic(id) {
 }
 
 // ---------------------------------------------------------------------------
-// 나의 기록 — 기록 CRUD
+// 나의 기록 — 기록 삭제
 // ---------------------------------------------------------------------------
-
-function saveRecord() {
-  const date    = document.getElementById('fr-date').value;
-  const content = document.getElementById('fr-content').value.trim();
-  if (!date || !content) { alert('날짜와 내용을 입력해주세요'); return; }
-
-  const rTagsEl  = document.getElementById('fr-tags');
-  const rTagsStr = rTagsEl ? rTagsEl.value.trim() : '';
-
-  const record = {
-    id: 'r' + Date.now(),
-    topicId:   state.selTopic, date,
-    recordNum: getNextRecordNum(state.selTopic),
-    content,
-    memo:  document.getElementById('fr-memo').value.trim(),
-    tags:  rTagsStr ? rTagsStr.split(',').map(t => t.trim()).filter(Boolean) : [],
-    analysis: null, aiChat: [],
-  };
-  state.myRecords.push(record);
-  state.selRecord = record.id;
-  state.myMode    = 'detail';
-  state.myTab     = 'content';
-  saveData(); render();
-}
-
-function editRecord(id) {
-  state.editingId = id;
-  state.myMode    = 'edit-record';
-
-  render();
-}
-
-function updateRecord() {
-  const record = state.myRecords.find(r => r.id === state.editingId);
-  if (!record) return;
-  const date    = document.getElementById('fr-date').value;
-  const content = document.getElementById('fr-content').value.trim();
-  if (!date || !content) { alert('날짜와 내용을 입력해주세요'); return; }
-  record.date    = date;
-  record.content = content;
-  record.memo    = document.getElementById('fr-memo').value.trim();
-  const tagsEl   = document.getElementById('fr-tags');
-  const tagsStr  = tagsEl ? tagsEl.value.trim() : '';
-  record.tags    = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : [];
-  state.editingId = null;
-  state.selRecord = record.id;
-  state.myMode    = 'detail';
-  state.myTab     = 'content';
-  saveData(); render();
-}
-
-function cancelEditRecord() {
-  state.editingId = null;
-  state.myMode    = state.selRecord ? 'detail' : (state.selTopic ? 'list' : 'welcome');
-  render();
-}
 
 function deleteRecord(id) {
   if (!confirm('이 기록을 삭제할까요?')) return;
@@ -322,22 +68,10 @@ function deleteRecord(id) {
 }
 
 // ---------------------------------------------------------------------------
-// 검색 / 태그 필터
+// 검색
 // ---------------------------------------------------------------------------
 
 function setSearchQuery(q) {
   state.searchQuery = q;
   renderSidebar();
-}
-
-function toggleFilterTag(tag) {
-  const idx = state.filterTags.indexOf(tag);
-  if (idx >= 0) state.filterTags.splice(idx, 1);
-  else          state.filterTags.push(tag);
-  renderMain();
-}
-
-function clearFilterTags() {
-  state.filterTags = [];
-  renderMain();
 }
