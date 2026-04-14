@@ -216,7 +216,16 @@ _LOGIN_HTML = """<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>自畵像</title>
+  <!-- iOS PWA: 로그인 페이지에서 홈 화면 추가해도 standalone 모드로 실행되도록 -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#8c7b6b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="自畵像">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:-apple-system,BlinkMacSystemFont,'Noto Sans KR',sans-serif;
@@ -292,9 +301,14 @@ def logout():
 def index():
     return send_from_directory('.', 'index.html')
 
+# PWA 필수 파일 — 인증 없이 서빙 (홈 화면 추가 시 iOS가 읽어야 함)
+_PUBLIC_FILES = {'manifest.json', 'sw.js', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon.svg'}
+
 @app.route('/<path:filename>')
-@require_auth
 def static_files(filename):
+    if filename not in _PUBLIC_FILES and not session.get('auth'):
+        log.debug('인증 없는 접근 → 로그인 리다이렉트: /%s', filename)
+        return redirect('/login')
     return send_from_directory('.', filename)
 
 # ---------------------------------------------------------------------------
