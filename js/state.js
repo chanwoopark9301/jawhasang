@@ -3,8 +3,39 @@
    의존성: 없음
    ============================================= */
 
+// ---------------------------------------------------------------------------
+// AI 역할 프리셋 (나의 기록 주제 생성 시 선택)
+// ---------------------------------------------------------------------------
+
+const AI_ROLE_PRESETS = [
+  {
+    id: 'coach',
+    label: '코치',
+    desc: '목표·실행 중심',
+    prompt: '목표를 명확히 하고, 현재 상황을 구조화하며, 실행 가능한 다음 단계를 함께 찾는 코치처럼. 질문으로 상대가 스스로 답을 발견하도록 안내한다.',
+  },
+  {
+    id: 'counselor',
+    label: '상담사',
+    desc: '감정·공감 중심',
+    prompt: '감정을 충분히 듣고 공감하며, 판단하지 않고, 상대가 자신의 감정을 이해하도록 돕는 상담사처럼. 해결보다 이해가 먼저다.',
+  },
+  {
+    id: 'advisor',
+    label: '조언가',
+    desc: '의견·방향 중심',
+    prompt: '상대의 상황을 파악한 뒤 경험과 지식을 바탕으로 솔직하고 구체적인 의견을 주는 조언가처럼. 듣는 것보다 말하는 것을 두려워하지 않는다.',
+  },
+  {
+    id: 'custom',
+    label: '직접 입력',
+    desc: '자유롭게 설정',
+    prompt: '',
+  },
+];
+
 const state = {
-  view:       'student',   // 'student' | 'myrecords'
+  view:       'student',   // 'student' | 'myrecords' | 'calendar'
   students:   [],
   sessions:   [],
   selStudent: null,
@@ -34,6 +65,11 @@ const state = {
   filterTags:     [],
   patternLoading:   false,
   myPatternLoading: false,
+
+  // Phase 4 — AI 텍스트 변환
+  selectedBlocks:  [],    // 선택된 대화 블록 인덱스 (일기 변환용)
+  diaryDraft:      null,  // AI 생성 일기 초안 (string | null)
+  transformLoading: false,
 };
 
 let mobilePanel = 'sidebar'; // 'sidebar'|'main'|'ai'

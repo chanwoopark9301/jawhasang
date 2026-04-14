@@ -16,10 +16,23 @@ function setView(view) {
   state.searchQuery = '';
   const searchEl = document.getElementById('sidebar-search');
   if (searchEl) searchEl.value = '';
-  document.getElementById('btn-sv').classList.toggle('active', view === 'student');
-  document.getElementById('btn-dv').classList.toggle('active', view === 'myrecords');
-  document.getElementById('add-btn').textContent =
-    view === 'student' ? '+ 새 내담자 추가' : '+ 새 주제';
+
+  // 3-버튼 nav 활성 상태 갱신
+  document.getElementById('btn-sv')?.classList.toggle('active', view === 'student');
+  document.getElementById('btn-dv')?.classList.toggle('active', view === 'myrecords');
+  document.getElementById('btn-cal')?.classList.toggle('active', view === 'calendar');
+
+  // 컨텍스트 영역: 캘린더 뷰에서는 목록 숨김
+  const ctx = document.getElementById('sidebar-context');
+  if (ctx) ctx.style.display = view === 'calendar' ? 'none' : '';
+
+  // 추가 버튼 텍스트
+  const addBtn = document.getElementById('add-btn');
+  if (addBtn) addBtn.textContent =
+    view === 'student'    ? '+ 새 내담자' :
+    view === 'myrecords'  ? '+ 새 주제'   : '';
+
+  logger.info('뷰 전환: %s', view);
   render();
 }
 

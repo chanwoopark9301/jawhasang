@@ -8,11 +8,15 @@
 // ---------------------------------------------------------------------------
 
 function renderMyAIPanel() {
-  const content    = document.getElementById('ai-content');
-  const analyzeBtn = document.getElementById('analyze-btn');
+  const content      = document.getElementById('ai-content');
+  const analyzeBtn   = document.getElementById('analyze-btn');
+  const transformBtn = document.getElementById('transform-btn');
 
   analyzeBtn.style.background = '#1D9E75';
   analyzeBtn.setAttribute('onclick', 'runMyAI()');
+
+  // 나의 기록에서는 축어록 정리 버튼 숨김
+  if (transformBtn) transformBtn.style.display = 'none';
 
   const record = state.selRecord ? state.myRecords.find(r => r.id === state.selRecord) : null;
   const topic  = record
@@ -83,8 +87,9 @@ function renderMyAIPanel() {
 function renderAIPanel() {
   if (state.view === 'myrecords') { renderMyAIPanel(); return; }
 
-  const content    = document.getElementById('ai-content');
-  const analyzeBtn = document.getElementById('analyze-btn');
+  const content      = document.getElementById('ai-content');
+  const analyzeBtn   = document.getElementById('analyze-btn');
+  const transformBtn = document.getElementById('transform-btn');
 
   analyzeBtn.style.background = '';
   analyzeBtn.setAttribute('onclick', 'runAI()');
@@ -96,6 +101,13 @@ function renderAIPanel() {
   analyzeBtn.disabled    = !hasVerbatim || state.aiLoading;
   analyzeBtn.textContent = state.aiLoading ? '분석 중...'
     : (session?.analysis ? '보고서 재생성 ↗' : '슈퍼비전 보고서 생성 ↗');
+
+  // 축어록 정리 버튼 상태
+  if (transformBtn) {
+    transformBtn.style.display  = '';
+    transformBtn.textContent    = state.transformLoading ? '정리 중...' : '축어록 AI 정리 ↗';
+    transformBtn.disabled       = !hasVerbatim || state.aiLoading || state.transformLoading;
+  }
 
   if (state.aiLoading) {
     content.innerHTML = `<div class="ai-loading">

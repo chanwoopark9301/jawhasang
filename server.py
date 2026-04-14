@@ -542,6 +542,119 @@ def analyze():
     return (resp.content, resp.status_code, {'Content-Type': 'application/json'})
 
 # ---------------------------------------------------------------------------
+# AI 텍스트 변환 (축어록 정리 / 일기 변환)
+# ---------------------------------------------------------------------------
+
+@app.route('/api/transform-text', methods=['POST'])
+@require_auth
+def transform_text():
+    """
+    mode='verbatim': 상담 축어록 서식 정리 (내용 보존, 화자·문단 정돈)
+    mode='diary'   : 대화 블록을 1인칭 일기체로 재구성
+    """
+    if not ANTHROPIC_API_KEY:
+        log.error('ANTHROPIC_API_KEY 없음 — transform-text 불가')
+        return jsonify({'error': 'ANTHROPIC_API_KEY가 ecrk.env에 없습니다'}), 500
+
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({'error': '유효하지 않은 요청 형식'}), 400
+
+    mode = payload.get('mode', 'verbatim')
+
+    if mode == 'verbatim':
+        text = (payload.get('text') or '').strip()
+        if not text:
+            return jsonify({'error': 'text 필드가 필요합니다'}), 400
+
+        prompt = (
+            "아래 상담 축어록을 읽기 쉽게 정리해 주세요.\n\n"
+            "규칙:\n"
+            "- 내용과 발화는 절대 바꾸거나 삭제하지 마세요. 있는 내용 그대로 유지.\n"
+            "- 화자 표기를 일관되게 정리하세요 (예: '상담자:', '내담자:')\n"
+            "- 문단 구분을 자연스럽게 정리하세요\n"
+            "- 명백한 오타만 수정하고, 구어체는 유지하세요\n"
+            "- 비언어적 주석([침묵], [눈물] 등)은 그대로 유지하세요\n\n"
+            "【원본 축어록】\n"
+            f"{text}\n\n"
+            "위 축어록을 정리한 결과만 반환하세요. 설명이나 주석 없이 정리된 텍스트만."
+        )
+        ai_payload = {
+            'model':      'claude-sonnet-4-6',
+            'max_tokens': 4000,
+            'messages':   [{'role': 'user', 'content': prompt}],
+        }
+        log.info('축어록 정리 요청: %d자', len(text))
+
+    elif mode == 'diary':
+        blocks = payload.get('blocks') or []
+        if not blocks:
+            return jsonify({'error': 'blocks 필드가 필요합니다'}), 400
+
+        blocks_text = '\n'.join(
+            f"{b.get('speaker', '')}: {b.get('text', '')}"
+            for b in blocks if isinstance(b, dict)
+        )
+        prompt = (
+            "아래 대화 블록을 바탕으로 1인칭 일기체로 재구성해 주세요.\n\n"
+            "규칙:\n"
+            "- 자연스러운 한국어 일기체로 작성\n"
+            "- 감정과 경험을 중심으로 서술\n"
+            "- 대화의 핵심 내용을 담되, 말투는 일기처럼 자연스럽게\n"
+            "- 존댓말 없이 일반체로 작성\n\n"
+            "【대화 블록】\n"
+            f"{blocks_text}\n\n"
+            "일기 형식의 텍스트만 반환하세요."
+        )
+        ai_payload = {
+            'model':      'claude-sonnet-4-6',
+            'max_tokens': 2000,
+            'messages':   [{'role': 'user', 'content': prompt}],
+        }
+        log.info('일기 변환 요청: 블록 %d개', len(blocks))
+
+    else:
+        log.warning('transform-text: 알 수 없는 mode=%s', mode)
+        return jsonify({'error': f'알 수 없는 mode: {mode}'}), 400
+
+    ai_payload = _scrub_payload(ai_payload)
+
+    try:
+        resp = requests.post(
+            'https://api.anthropic.com/v1/messages',
+            headers={
+                'x-api-key':          ANTHROPIC_API_KEY,
+                'anthropic-version':  '2023-06-01',
+                'Content-Type':       'application/json',
+            },
+            json=ai_payload,
+            timeout=90,
+        )
+    except requests.Timeout:
+        log.error('transform-text AI 호출 타임아웃 (90초)')
+        return jsonify({'error': 'AI 요청 타임아웃 (90초)'}), 504
+    except requests.RequestException as e:
+        log.error('transform-text AI 네트워크 오류: %s', e, exc_info=True)
+        return jsonify({'error': f'네트워크 오류: {e}'}), 502
+
+    if not resp.ok:
+        log.warning('transform-text AI 오류 응답: HTTP %d', resp.status_code)
+        return jsonify({'error': f'AI 오류: {resp.status_code}', 'detail': resp.text[:200]}), 502
+
+    try:
+        data   = resp.json()
+        result = ''.join(c.get('text', '') for c in data.get('content', []))
+        if not result.strip():
+            log.warning('transform-text AI 응답이 비어 있음')
+            return jsonify({'error': 'AI 응답이 비어 있습니다'}), 502
+        log.info('transform-text 완료 (mode=%s): %d자', mode, len(result))
+        return jsonify({'result': result.strip()})
+    except Exception as e:
+        log.error('transform-text 응답 파싱 실패: %s', e, exc_info=True)
+        return jsonify({'error': f'응답 파싱 실패: {str(e)}'}), 502
+
+
+# ---------------------------------------------------------------------------
 # 실행
 # ---------------------------------------------------------------------------
 

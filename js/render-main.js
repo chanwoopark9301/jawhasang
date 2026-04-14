@@ -28,6 +28,25 @@ function renderMain() {
   const content = document.getElementById('main-content');
   const nsBtn   = document.getElementById('ns-btn');
 
+  // ── 캘린더 뷰 ────────────────────────────────────────────────────────────
+  if (state.view === 'calendar') {
+    titleEl.textContent = '캘린더';
+    subEl.textContent   = '';
+    nsBtn.style.display = 'none';
+    content.innerHTML   = renderCalendar();
+    return;
+  }
+
+  // ── 오늘 화면 (welcome + 아무것도 선택 안 됨) ────────────────────────────
+  if (state.mode === 'welcome' && state.myMode === 'welcome' &&
+      !state.selStudent && !state.selTopic) {
+    titleEl.textContent = '';
+    subEl.textContent   = '';
+    nsBtn.style.display = 'none';
+    content.innerHTML   = renderTodayView();
+    return;
+  }
+
   // 상담 기록 — 새 내담자
   if (state.mode === 'new-student') {
     titleEl.textContent = '새 내담자 등록';

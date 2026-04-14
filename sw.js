@@ -5,13 +5,12 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v3'; // PWA 메타태그 수정 + logger.js 추가
+const CACHE_NAME = 'jip-v4'; // Stage E+: 3버튼 nav + 오늘 화면 + transform-text
 
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/style.css',
-  '/app.js',
   '/js/logger.js',
   '/js/state.js',
   '/js/utils.js',
@@ -23,15 +22,17 @@ const STATIC_ASSETS = [
   '/js/ai-pattern.js',
   '/js/render-sidebar.js',
   '/js/render-calendar.js',
+  '/js/verbatim-editor.js',
   '/js/render-forms.js',
   '/js/render-session.js',
   '/js/render-myrecords-view.js',
   '/js/render-aipanel.js',
   '/js/render-main.js',
+  '/js/render-home.js',
+  '/js/transform-text.js',
   '/js/resize.js',
-  '/js/verbatim-editor.js',
   '/app.js',
-  '/icons/icon.svg',
+  '/icons/icon-192.png',
   '/manifest.json',
 ];
 

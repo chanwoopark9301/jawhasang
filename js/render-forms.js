@@ -276,6 +276,13 @@ function cancelEditSession() {
 // ---------------------------------------------------------------------------
 
 function renderNewTopicForm() {
+  const presetBtns = AI_ROLE_PRESETS.map(p => `
+    <button type="button" class="role-preset-btn" data-id="${p.id}"
+      onclick="selectRolePreset('${p.id}')">
+      <span class="role-preset-label">${esc(p.label)}</span>
+      <span class="role-preset-desc">${esc(p.desc)}</span>
+    </button>`).join('');
+
   return `<div>
     <div class="form-notice my-notice">
       주제를 만들고 기록을 누적하세요.<br>AI가 쌓인 기록에서 패턴을 읽어드립니다.
@@ -285,13 +292,13 @@ function renderNewTopicForm() {
       <input class="form-input" id="ft-title" placeholder="예: 일기, 아쉬운 점, 임용 공부" autocomplete="off" />
     </div>
     <div class="form-group">
-      <label class="form-label">AI 역할 설정 <span style="color:var(--color-text-tertiary);font-weight:400;">(선택)</span></label>
-      <textarea class="form-textarea" id="ft-prompt" style="min-height:110px;"
+      <label class="form-label">AI 역할 프리셋 <span style="color:var(--color-text-tertiary);font-weight:400;">(선택)</span></label>
+      <div class="role-preset-grid">${presetBtns}</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">AI 역할 직접 입력 <span style="color:var(--color-text-tertiary);font-weight:400;">(프리셋 선택 시 자동 채워짐)</span></label>
+      <textarea class="form-textarea" id="ft-prompt" style="min-height:90px;"
         placeholder="이 주제에서 AI가 어떤 역할을 해줬으면 하는지 자유롭게 입력하세요.
-
-예: 나의 하루를 들어주고 감정을 정리하도록 도와주는 친구처럼
-예: 임용 공부 중 막히는 지점을 같이 생각해주는 학습 코치처럼
-예: 학교 상담 연구자 관점의 동료처럼
 
 비워두면 기본 성찰 코치로 동작합니다."></textarea>
     </div>
@@ -300,6 +307,22 @@ function renderNewTopicForm() {
       <button class="btn-primary-my" onclick="saveTopic()">만들기</button>
     </div>
   </div>`;
+}
+
+function selectRolePreset(presetId) {
+  const preset = AI_ROLE_PRESETS.find(p => p.id === presetId);
+  if (!preset) return;
+  document.querySelectorAll('.role-preset-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.id === presetId);
+  });
+  const textarea = document.getElementById('ft-prompt');
+  if (!textarea) return;
+  if (presetId === 'custom') {
+    textarea.value = '';
+    textarea.focus();
+  } else {
+    textarea.value = preset.prompt;
+  }
 }
 
 // ---------------------------------------------------------------------------

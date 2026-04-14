@@ -40,25 +40,37 @@
 
     <!-- 사이드바 -->
     <aside class="sidebar" id="sidebar">
-      <div class="sidebar-header">
-        <div class="view-toggle">
-          <button class="home-nav-btn" onclick="showHome()" title="홈으로">自</button>
-          <div class="view-toggle-pills">
-            <button id="btn-sv" class="active" onclick="setView('student')">상담 기록</button>
-            <button id="btn-dv" onclick="setView('myrecords')">나의 기록</button>
-          </div>
-          <button id="sidebar-collapse-btn" class="panel-collapse-btn" onclick="toggleSidebar()" title="사이드바 접기">◀</button>
-        </div>
+      <!-- 로고 -->
+      <div class="sidebar-logo-area">
+        <div class="sidebar-logo" onclick="showHome()" title="홈으로">自畵像</div>
+        <button id="sidebar-collapse-btn" class="panel-collapse-btn" onclick="toggleSidebar()" title="사이드바 접기">◀</button>
+      </div>
+
+      <!-- 3-버튼 네비게이션 -->
+      <nav class="sidebar-nav">
+        <button id="btn-dv" class="nav-btn nav-btn-my" onclick="setView('myrecords')">
+          <span class="nav-dot nav-dot-my">●</span>나의 기록
+        </button>
+        <button id="btn-sv" class="nav-btn nav-btn-counsel active" onclick="setView('student')">
+          <span class="nav-dot nav-dot-counsel">●</span>상담 기록
+        </button>
+        <button id="btn-cal" class="nav-btn nav-btn-cal" onclick="setView('calendar')">
+          <span class="nav-dot nav-dot-cal">○</span>캘린더
+        </button>
+      </nav>
+
+      <!-- 컨텍스트 영역 (주제/학생 목록) -->
+      <div class="sidebar-context" id="sidebar-context">
         <input class="sidebar-search" id="sidebar-search" type="search"
           placeholder="검색..." oninput="setSearchQuery(this.value)" autocomplete="off" />
+        <div class="sidebar-list" id="sidebar-list"></div>
+        <button class="add-btn" id="add-btn" onclick="handleAdd()">+ 새 내담자</button>
       </div>
-      <div class="sidebar-list" id="sidebar-list"></div>
+
+      <!-- 하단 유틸 -->
       <div class="sidebar-footer">
-        <button class="add-btn" id="add-btn" onclick="handleAdd()">+ 새 학생 추가</button>
-        <div class="sidebar-footer-row">
-          <button class="export-btn" onclick="exportData()" title="JSON 백업 다운로드">↓ 내보내기</button>
-          <a href="/logout" class="logout-link">로그아웃</a>
-        </div>
+        <button class="export-btn" onclick="exportData()" title="JSON 백업 다운로드">↓ 내보내기</button>
+        <a href="/logout" class="logout-link">로그아웃</a>
       </div>
     </aside>
 
@@ -86,8 +98,7 @@
     <aside class="ai-panel" id="ai-panel">
       <div class="ai-header">
         <button id="ai-collapse-btn" class="panel-collapse-btn" onclick="toggleAIPanel()" title="AI 패널 접기">▶</button>
-        <span id="ai-header-title">학생 정보</span>
-        <span class="ai-header-note" id="ai-header-note">현재 회기</span>
+        <span id="ai-header-title">AI 도구</span>
       </div>
       <div class="ai-content" id="ai-content">
         <p class="ai-placeholder">회기를 선택하면<br>AI 분석을 요청할 수 있어요</p>
@@ -95,6 +106,9 @@
       <div class="ai-footer">
         <button class="analyze-btn" id="analyze-btn" disabled onclick="runAI()">
           슈퍼비전 보고서 생성 ↗
+        </button>
+        <button class="transform-btn" id="transform-btn" disabled onclick="handleTransform()">
+          축어록 AI 정리 ↗
         </button>
       </div>
     </aside>
@@ -123,6 +137,10 @@
     <div class="cal-popup-overlay" id="pattern-modal-overlay" style="display:none;" onclick="closePatternModal()"></div>
     <div class="pattern-modal" id="pattern-modal" style="display:none;"></div>
 
+    <!-- 일기 초안 모달 (Phase 4) -->
+    <div class="cal-popup-overlay" id="diary-draft-overlay" style="display:none;" onclick="closeDiaryDraft()"></div>
+    <div class="diary-draft-modal" id="diary-draft-modal" style="display:none;"></div>
+
   </div>
   <!-- 모듈 로드 순서: 의존성 순 -->
   <script src="js/logger.js"></script>
@@ -142,6 +160,8 @@
   <script src="js/render-myrecords-view.js"></script>
   <script src="js/render-aipanel.js"></script>
   <script src="js/render-main.js"></script>
+  <script src="js/render-home.js"></script>
+  <script src="js/transform-text.js"></script>
   <script src="js/resize.js"></script>
   <script src="app.js"></script>
   <script>

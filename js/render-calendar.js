@@ -64,17 +64,23 @@ function renderCalendar() {
 }
 
 function showHome() {
-  const hv = document.getElementById('home-view');
-  if (hv) hv.style.display = '';
-  renderHomeCalendar();
+  // v3: 오버레이 대신 메인 콘텐츠에 오늘 화면 표시
+  state.selStudent = null;
+  state.selSession = null;
+  state.selTopic   = null;
+  state.selRecord  = null;
+  state.mode       = 'welcome';
+  state.myMode     = 'welcome';
+  mobilePanel      = 'main';
+  render();
 }
 
 function hideHome() {
-  const hv = document.getElementById('home-view');
-  if (hv) hv.style.display = 'none';
+  // v3: no-op (오버레이 방식 폐기)
 }
 
 function renderHomeCalendar() {
+  // v3: 캘린더 뷰 전환으로 대체 — 하위 호환 유지
   const wrap = document.getElementById('home-cal-wrap');
   if (wrap) wrap.innerHTML = renderCalendar();
 }
@@ -156,7 +162,6 @@ function buildCalPopupHTML(date) {
 
 function calPopupGoSession(id) {
   closeCalPopup();
-  hideHome();
   const s = state.sessions.find(s => s.id === id);
   if (!s) return;
   state.view       = 'student';
@@ -165,15 +170,12 @@ function calPopupGoSession(id) {
   state.mode       = 'detail';
   state.sessionTab = 'verbatim';
   mobilePanel      = 'main';
-  document.getElementById('btn-sv').classList.add('active');
-  document.getElementById('btn-dv').classList.remove('active');
-  document.getElementById('add-btn').textContent = '+ 새 내담자 추가';
+  _syncNavButtons('student');
   render();
 }
 
 function calPopupGoRecord(id) {
   closeCalPopup();
-  hideHome();
   const r = state.myRecords.find(r => r.id === id);
   if (!r) return;
   state.view      = 'myrecords';
@@ -182,20 +184,15 @@ function calPopupGoRecord(id) {
   state.myMode    = 'detail';
   state.myTab     = 'content';
   mobilePanel     = 'main';
-  document.getElementById('btn-sv').classList.remove('active');
-  document.getElementById('btn-dv').classList.add('active');
-  document.getElementById('add-btn').textContent = '+ 새 주제';
+  _syncNavButtons('myrecords');
   render();
 }
 
 function calPopupAddSession(date) {
   closeCalPopup();
-  hideHome();
   state.view = 'student';
   state.mode = 'new-session';
-  document.getElementById('btn-sv').classList.add('active');
-  document.getElementById('btn-dv').classList.remove('active');
-  document.getElementById('add-btn').textContent = '+ 새 내담자 추가';
+  _syncNavButtons('student');
   mobilePanel = 'main';
   render();
   requestAnimationFrame(() => {
@@ -207,19 +204,28 @@ function calPopupAddSession(date) {
 // Fix: selTopic이 있으면 new-record로, 없으면 new-topic으로
 function calPopupAddRecord(date) {
   closeCalPopup();
-  hideHome();
   state.view   = 'myrecords';
   state.myMode = state.selTopic ? 'new-record' : 'new-topic';
-  document.getElementById('btn-sv').classList.remove('active');
-  document.getElementById('btn-dv').classList.add('active');
-  document.getElementById('add-btn').textContent = '+ 새 주제';
+  _syncNavButtons('myrecords');
   mobilePanel = 'main';
   render();
-  // 날짜 자동 입력
   if (state.selTopic) {
     requestAnimationFrame(() => {
       const el = document.getElementById('fr-date');
       if (el) el.value = date;
     });
   }
+}
+
+/** 3-버튼 nav 활성 상태 동기화 헬퍼 */
+function _syncNavButtons(view) {
+  document.getElementById('btn-sv')?.classList.toggle('active', view === 'student');
+  document.getElementById('btn-dv')?.classList.toggle('active', view === 'myrecords');
+  document.getElementById('btn-cal')?.classList.toggle('active', view === 'calendar');
+  const addBtn = document.getElementById('add-btn');
+  if (addBtn) addBtn.textContent =
+    view === 'student'   ? '+ 새 내담자' :
+    view === 'myrecords' ? '+ 새 주제'   : '';
+  const ctx = document.getElementById('sidebar-context');
+  if (ctx) ctx.style.display = view === 'calendar' ? 'none' : '';
 }
