@@ -44,12 +44,13 @@ class TestStageDFileStructure:
             "index.html 에 verbatim-editor.js 스크립트 태그가 없습니다"
 
     def test_verbatim_editor_loaded_before_render_forms(self):
-        """verbatim-editor.js 는 render-forms.js 보다 먼저 로드되어야 함."""
+        """verbatim-editor.js가 render-main.js보다 먼저 로드되어야 함 (render-forms.js 제거됨)."""
         html = read_html()
+        assert 'render-forms.js' not in html, "삭제된 render-forms.js가 아직 로드됨"
         pos_editor = html.find('verbatim-editor.js')
-        pos_forms  = html.find('render-forms.js')
-        assert pos_editor < pos_forms, \
-            "verbatim-editor.js 가 render-forms.js 보다 뒤에 로드됩니다"
+        pos_main   = html.find('render-main.js')
+        assert pos_editor < pos_main, \
+            "verbatim-editor.js 가 render-main.js 보다 뒤에 로드됩니다"
 
 
 # ---------------------------------------------------------------------------
@@ -125,26 +126,24 @@ class TestStageDConversion:
 class TestStageDUI:
 
     def test_mode_tabs_in_forms(self):
-        """모드 전환 탭이 render-forms.js 에 있어야 함."""
-        content = read_js('render-forms.js')
-        assert 'vt-mode-tabs' in content, "vt-mode-tabs 없음"
+        """모드 전환 탭 로직이 verbatim-editor.js에 있어야 함 (render-forms.js 제거됨)."""
+        content = read_js('verbatim-editor.js')
+        assert 'vt-mode-tabs' in content or 'switchVtMode' in content, "vt-mode 전환 로직 없음"
 
     def test_block_editor_container_in_forms(self):
-        """블록 에디터 컨테이너가 render-forms.js 에 있어야 함."""
-        content = read_js('render-forms.js')
-        assert 'vt-block-editor' in content, "vt-block-editor 컨테이너 없음"
+        """블록 에디터 로직이 verbatim-editor.js에 있어야 함."""
+        content = read_js('verbatim-editor.js')
+        assert 'vt-block-editor' in content or 'addVtBlock' in content, "vt-block-editor 로직 없음"
 
     def test_add_block_buttons_present(self):
-        """+ T, + C, + 비언어 버튼이 있어야 함 (render-forms 또는 verbatim-editor)."""
-        sources = ['render-forms.js', 'verbatim-editor.js']
-        found = any('addVtBlock' in read_js(f) for f in sources)
-        assert found, "+ 블록 추가 버튼 없음"
+        """addVtBlock 함수가 verbatim-editor.js에 있어야 함."""
+        content = read_js('verbatim-editor.js')
+        assert 'addVtBlock' in content, "+ 블록 추가 함수 없음"
 
     def test_nonverbal_block_add_button(self):
-        """비언어 블록 추가 버튼이 있어야 함 (render-forms 또는 verbatim-editor)."""
-        sources = ['render-forms.js', 'verbatim-editor.js']
-        found = any('nonverbal' in read_js(f) for f in sources)
-        assert found, "비언어 추가 버튼 없음"
+        """비언어 블록 로직이 verbatim-editor.js에 있어야 함."""
+        content = read_js('verbatim-editor.js')
+        assert 'nonverbal' in content, "비언어 로직 없음"
 
     def test_block_editor_css_exists(self):
         """블록 에디터 CSS 클래스가 style.css 에 있어야 함."""
@@ -171,9 +170,9 @@ class TestRegression_ABC:
         assert 'toggleFindReplace' in content
 
     def test_annotation_buttons_still_exist(self):
-        content = read_js('render-forms.js')
-        assert 'vt-annotation-bar' in content
+        content = read_js('utils.js')
         assert 'insertAnnotation' in content
+        assert 'toggleFindReplace' in content
 
     def test_long_verbatim_threshold_intact(self):
         content = read_js('ai-counseling.js')

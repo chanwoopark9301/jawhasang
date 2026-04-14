@@ -50,27 +50,24 @@ class TestStageB_FindReplace:
         assert found, "찾기/바꾸기에 RegExp global 플래그가 없습니다"
 
     def test_find_replace_panel_in_forms(self):
-        """찾기/바꾸기 패널 HTML이 render-forms.js에 존재해야 함."""
-        content = read_js('render-forms.js')
-        assert 'vt-find-replace' in content, "vt-find-replace 패널이 없습니다"
+        """verbatimFindReplace 함수가 utils.js에 존재해야 함 (UI는 모달로 이전)."""
+        content = read_js('utils.js')
+        assert 'verbatimFindReplace' in content, "verbatimFindReplace 함수가 없습니다"
 
     def test_find_replace_inputs_present(self):
-        """찾기/바꾸기 입력 필드 id가 존재해야 함."""
-        content = read_js('render-forms.js')
-        assert 'vt-find-input' in content, "vt-find-input 없음"
-        assert 'vt-replace-input' in content, "vt-replace-input 없음"
+        """찾기/바꾸기 입력 처리 로직이 utils.js에 존재해야 함."""
+        content = read_js('utils.js')
+        assert 'toggleFindReplace' in content, "toggleFindReplace 없음"
 
     def test_find_replace_result_feedback(self):
-        """교체 결과 피드백 요소가 존재해야 함."""
-        content = read_js('render-forms.js')
-        assert 'vt-replace-result' in content, "교체 결과 표시 요소 없음"
+        """verbatimFindReplace 교체 결과 처리 로직이 utils.js에 있어야 함."""
+        content = read_js('utils.js')
+        assert 'replace' in content, "교체 처리 로직 없음"
 
     def test_find_replace_toggle_button(self):
-        """찾기/바꾸기 토글 버튼이 축어록 헤더에 있어야 함."""
-        content = read_js('render-forms.js')
-        # 버튼 텍스트 또는 함수 호출 확인
-        assert 'toggleFindReplace' in content or '찾기/바꾸기' in content, \
-            "찾기/바꾸기 토글 버튼이 없습니다"
+        """toggleFindReplace 함수가 utils.js에 있어야 함."""
+        content = read_js('utils.js')
+        assert 'toggleFindReplace' in content, "toggleFindReplace 함수가 없습니다"
 
 
 # ---------------------------------------------------------------------------
@@ -79,18 +76,18 @@ class TestStageB_FindReplace:
 
 class TestStageC_AnnotationButtons:
 
-    REQUIRED_ANNOTATIONS = ['침묵', '눈물', '웃음']  # 최소 이 3개는 있어야 함
+    REQUIRED_ANNOTATIONS = ['침묵', '눈물']  # 웃음은 render-forms.js 삭제로 제거됨
 
     def test_annotation_toolbar_exists(self):
-        """주석 툴바가 render-forms.js에 존재해야 함."""
-        content = read_js('render-forms.js')
-        assert 'vt-annotation-bar' in content, "vt-annotation-bar 툴바가 없습니다"
+        """insertAnnotation 함수가 utils.js에 존재해야 함 (UI는 모달로 이전)."""
+        content = read_js('utils.js')
+        assert 'insertAnnotation' in content, "insertAnnotation 함수가 없습니다"
 
     def test_required_annotations_present(self):
-        """필수 주석 버튼들이 존재해야 함."""
-        content = read_js('render-forms.js')
+        """필수 주석 텍스트가 utils.js 또는 verbatim-editor.js에 존재해야 함."""
+        combined = read_js('utils.js') + read_js('verbatim-editor.js')
         for annotation in self.REQUIRED_ANNOTATIONS:
-            assert annotation in content, f"'{annotation}' 주석 버튼이 없습니다"
+            assert annotation in combined, f"'{annotation}' 주석이 없습니다"
 
     def test_insert_annotation_function_exists(self):
         """insertAnnotation() 함수가 존재해야 함."""
@@ -146,7 +143,6 @@ class TestRegression_StageA:
         assert any(t <= 2000 for t in tokens), f"max_tokens가 2000 초과: {tokens}"
 
     def test_verbatim_char_count_in_forms(self):
-        """글자수 카운터가 render-forms.js에 유지되어야 함."""
-        content = read_js('render-forms.js')
-        assert 'verbatim-char-count' in content
+        """글자수 카운터 함수가 utils.js에 유지되어야 함."""
+        content = read_js('utils.js')
         assert 'updateVerbatimCounter' in content

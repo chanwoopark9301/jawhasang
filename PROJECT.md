@@ -66,15 +66,13 @@ counselingReport/
 │   ├── ai-pattern.js       ← 전체 패턴 분석
 │   ├── render-sidebar.js   ← 사이드바 렌더링 (학생/주제 목록)
 │   ├── render-calendar.js  ← 홈 캘린더 렌더링 (점 표시, 팝업)
-│   ├── render-forms.js     ← 폼 렌더링 (학생/회기/주제/기록 등록·수정)
-│   ├── render-session.js   ← 회기 상세 렌더링 (축어록, 보고서, 대화 탭)
-│   ├── render-myrecords-view.js ← 나의 기록 화면 렌더링
-│   ├── render-aipanel.js   ← AI 패널 렌더링
-│   ├── render-main.js      ← 메인 컨텐츠 라우팅
+│   ├── modal.js            ← 통합 모달 (폼, 보고서, 모드 선택 등 모든 오버레이)
+│   ├── chat.js             ← 대화창 통합 (renderChatView, startContextChat, sendCurrentChat)
+│   ├── render-aipanel.js   ← AI 패널 렌더링 (renderRightPanel)
+│   ├── render-main.js      ← 메인 컨텐츠 라우팅 (캘린더/홈/대화창 분기)
 │   ├── verbatim-editor.js  ← 블록 에디터 (텍스트↔블록 모드 전환)
-│   ├── render-home.js      ← 홈 화면 렌더링 (캘린더 + 오늘 카드)
-│   ├── transform-text.js   ← 축어록 AI 정리 클라이언트
-│   └── resize.js           ← 오버레이 패널 토글 (toggleSidebar, toggleAIPanel, closePanels)
+│   ├── render-home.js      ← 홈 화면 렌더링 (그리팅, 최근 7일, 퀵 카드)
+│   └── transform-text.js   ← 축어록 AI 정리 클라이언트
 │
 ├── tests/                  ← pytest 테스트
 │   ├── conftest.py         ← 공통 픽스처 (Flask 테스트 클라이언트, 샘플 데이터, Playwright live_server)
@@ -217,13 +215,13 @@ const state = {
 │ [+ 새 대화]     │ │ [☰] [컨텍스트칩] [✦] │  │ AI 역할 pills  │
 │ ─────────────  │ └──────────────────────┘  │ 학생/주제 정보  │
 │ 기록 (섹션)     │                            │ ──────────── │
-│  ● 나의 기록    │  홈: 그리팅 화면            │ [보고서 생성 ↗] │
+│  ● 나의 기록    │  홈: 그리팅 + 퀵 카드       │ [보고서 생성 ↗] │
 │    ├ 일기       │  캘린더: 월별 캘린더        │ [축어록 정리 ↗] │
-│    └ 아쉬운 점  │  상담: 회기 목록/상세       │ [패턴 분석 ↗]  │
-│  ● 상담 기록    │  나의 기록: 기록 목록/상세  │                │
+│    └ 아쉬운 점  │  주제/학생 선택 시: 대화창  │ [패턴 분석 ↗]  │
+│  ● 상담 기록    │    (AI 첫 마디 자동 시작)   │                │
 │    ├ 별-01      │                            │                │
-│    └ + 새 내담자│                            │                │
-│  ○ 캘린더       │                            │                │
+│    └ + 새 내담자│  [+] → 모달 (축어록/직접쓰기│                │
+│  ○ 캘린더       │         /모드/새 항목)      │                │
 │ ─────────────  │                            │                │
 │ ↓내보내기 로그아웃│                           │                │
 └─────────────────┴────────────────────────────┴────────────────┘
@@ -258,8 +256,17 @@ div.sidebar-footer         → 내보내기 + 로그아웃
 - `button.header-panel-btn.mobile-only` (☰) → toggleSidebar
 - `div.context-chip#ctx-topic` → openTopicPicker (현재 주제/학생 표시)
 - `div#ctx-role-label` → 보조 정보 (기록 수, 회기 수)
-- `button#ns-btn` → + 회기 추가 / + 기록 추가
+- `button#ns-btn` → 숨김 (대화창 구조에서 미사용)
 - `button.header-panel-btn.mobile-only` (✦) → toggleAIPanel
+
+### 화면 전환 흐름
+1. **홈** (아무것도 선택 안 됨): `renderTodayView()` — 그리팅 + 퀵 카드
+2. **주제/학생 선택**: `renderChatView()` — AI 대화창 + 하단 입력창
+   - 선택 직후 `startContextChat()` → AI가 첫 마디 자동 시작
+3. **캘린더**: `renderCalendar()`
+4. **폼 (등록/수정)**: `openModal()` → 통합 모달 오버레이
+   - `new-student` / `edit-student` / `new-topic` / `edit-topic`
+   - `verbatim` (축어록 첨부) / `write` (직접 쓰기) / `mode` (대화 모드)
 
 ### 색상 테마
 - **상담 기록**: teal `#0F6E56`
@@ -404,10 +411,14 @@ scripts\stage_commit.bat A "기능 설명"    # Windows
 | 파일 | 내용 | 테스트 수 |
 |------|------|----------|
 | test_server.py | API, PII 스크러빙, 긴 축어록 엔드포인트 | 15개 |
-| test_stage_bc.py | 찾기/바꾸기, 주석 버튼, Stage A 회귀 | 15개 |
-| test_stage_d.py | 블록 에디터 구조, 변환 함수, Stage ABC 회귀 | 23개 |
+| test_stage_bc.py | 찾기/바꾸기(utils.js), 주석 버튼, Stage A 회귀 | 15개 |
+| test_stage_d.py | 블록 에디터(verbatim-editor.js), 변환 함수, 회귀 | 23개 |
 | test_stage_e.py | PWA, dvh CSS, 메타태그, Stage ABCD 회귀 | 30개 |
-| **합계** | | **83개** |
+| test_e2e.py | E2E (Playwright) — 인증·사이드바·CRUD·캘린더 | 19개 |
+| test_ui_stage_a.py | 기본 로딩 3개 + 인라인폼 E2E 3개(skip) | 6개 |
+| **합계** | **105 통과, 3 skip** | **108개** |
+
+> **skip 사유**: 인라인 세션 폼(`#ns-btn` 기반)이 모달+대화창 구조로 전환됨
 
 ---
 
@@ -415,16 +426,13 @@ scripts\stage_commit.bat A "기능 설명"    # Windows
 
 | 커밋 | 내용 |
 |------|------|
-| (현재) | 오버레이 패널 UX, 홈 캘린더 뷰, 축어록 AI 정리, 헤더 대칭 레이아웃 |
-| `cea795d` | 축어록 탭 인라인 편집 기능 |
+| `1ea29ba` | 대화창 중심 아키텍처 전환 — render-forms/session/myrecords-view/resize 제거, 모든 폼을 modal.js로 통합, AI 첫 마디 자동 시작(startContextChat) |
+| `29ee168` | 통합 모달 아키텍처 도입 + 버그 수정 + 성능 개선 (테스트 108개 통과) |
+| `7838519` | Claude.ai 스타일 고정 3열 레이아웃 전환 |
 | `568c0c3` | Stage E: PWA + 아이패드 dvh 레이아웃 |
 | `167decd` | Stage D: 블록 에디터 |
 | `066413f` | Stage B+C: 찾기/바꾸기 + 주석 버튼 |
 | `e652942` | Stage A: 긴 축어록 2단계 처리 + 테스트 인프라 |
-| `8d94193` | 버그 수정 + 보안 패치 |
-| `f15fc7b` | 패널 접기/펼치기, 나의 기록 AI 역할 기반 자유화 |
-| `f77375f` | app.js → js/ 모듈 분리 |
-| `8133c69` | 수정, 검색, 태그, 패턴분석, 내보내기 구현 |
 
 ---
 
@@ -437,3 +445,5 @@ scripts\stage_commit.bat A "기능 설명"    # Windows
 5. **스트리밍**: 보고서 생성은 SSE 스트리밍. 대화(`startSupervisionChat`, `sendChatMessage`)는 일반 POST.
 6. **Railway 배포**: `Procfile` 존재. `DATABASE_URL` 환경변수 설정 시 PostgreSQL 자동 사용.
 7. **dvh 지원**: iOS Safari 15.4+, iPadOS 16+. 그 이하에서는 100vh로 fallback (큰 문제 없음).
+8. **대화창 중심 구조**: 주제/학생 선택 시 메인 영역은 항상 `renderChatView()`. 폼(등록/수정)은 전부 `openModal()`. 인라인 폼 렌더링 없음.
+9. **startContextChat()**: 주제/학생 선택 직후 AI 첫 마디 자동 생성 (`chat.js`). `state.currentChatMessages`가 비어있을 때 호출 권장.
