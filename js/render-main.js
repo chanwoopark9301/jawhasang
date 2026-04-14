@@ -1,7 +1,6 @@
 /* =============================================
    自畵像 — 메인 콘텐츠 렌더링
-   의존성: state.js, utils.js, render-forms.js,
-           render-session.js, render-myrecords-view.js
+   의존성: state.js, utils.js, modal.js
    ============================================= */
 
 // ---------------------------------------------------------------------------
@@ -113,30 +112,9 @@ function renderMain() {
     return;
   }
 
-  // 상담 기록 폼 분기 — 이제 모달로 처리 (하위 호환을 위해 폴백 유지)
-  if (state.mode === 'new-student' || state.mode === 'edit-student' ||
-      state.mode === 'new-session' || state.mode === 'edit-session') {
-    // 모달이 열리지 않은 경우 폴백: 기존 폼 렌더
-    if (typeof renderNewStudentForm === 'function') {
-      if (state.mode === 'new-student') {
-        nsBtn.style.display = 'none';
-        content.innerHTML   = renderNewStudentForm();
-        return;
-      }
-      if (state.mode === 'new-session') {
-        nsBtn.style.display = 'none';
-        content.innerHTML   = renderNewSessionForm?.() || '';
-        return;
-      }
-      if (state.mode === 'edit-student') {
-        const st = state.students.find(s => s.id === state.editingId);
-        if (st) { nsBtn.style.display = 'none'; content.innerHTML = renderEditStudentForm(st); return; }
-      }
-      if (state.mode === 'edit-session') {
-        const ss = state.sessions.find(s => s.id === state.editingId);
-        if (ss) { nsBtn.style.display = 'none'; content.innerHTML = renderEditSessionForm?.(ss) || ''; return; }
-      }
-    }
+  // 폼 모드 → 모달로 위임
+  if (['new-student','edit-student','new-session','edit-session'].includes(state.mode)) {
+    openModal(state.mode);
   }
 
   // 상담 기록 — 회기 상세
@@ -156,24 +134,9 @@ function renderMain() {
   // ── 나의 기록 뷰 ──────────────────────────────────────────────────────────
 
   if (state.view === 'myrecords') {
-    // 나의 기록 폼 분기 — 이제 모달로 처리 (하위 호환 폴백)
+    // 폼 모드 → 모달로 위임
     if (['new-topic','edit-topic','new-record','edit-record'].includes(state.myMode)) {
-      if (typeof renderNewTopicForm === 'function') {
-        if (state.myMode === 'new-topic') {
-          nsBtn.style.display = 'none'; content.innerHTML = renderNewTopicForm(); return;
-        }
-        if (state.myMode === 'edit-topic') {
-          const t = state.myTopics.find(t => t.id === state.editingId);
-          if (t) { nsBtn.style.display = 'none'; content.innerHTML = renderEditTopicForm(t); return; }
-        }
-        if (state.myMode === 'new-record' && state.selTopic) {
-          nsBtn.style.display = 'none'; content.innerHTML = renderNewRecordForm(); return;
-        }
-        if (state.myMode === 'edit-record') {
-          const r = state.myRecords.find(r => r.id === state.editingId);
-          if (r) { nsBtn.style.display = 'none'; content.innerHTML = renderEditRecordForm?.(r) || ''; return; }
-        }
-      }
+      openModal(state.myMode);
     }
     // 기록 상세
     if (state.myMode === 'detail' && state.selRecord) {

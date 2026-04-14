@@ -12,5 +12,4 @@
    ============================================= */
 
 loadData();
-initResize();
 initSidebarState(); // 사이드바 접기 상태 복원 (chat.js)
