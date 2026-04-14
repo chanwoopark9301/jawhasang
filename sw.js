@@ -5,7 +5,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v4'; // Stage E+: 3버튼 nav + 오늘 화면 + transform-text
+const CACHE_NAME = 'jip-v5'; // 대화창 중심 아키텍처 — render-forms/session/myrecords-view/resize 제거, modal+chat 통합
 
 const STATIC_ASSETS = [
   '/',
@@ -20,17 +20,15 @@ const STATIC_ASSETS = [
   '/js/ai-counseling.js',
   '/js/ai-myrecords.js',
   '/js/ai-pattern.js',
+  '/js/modal.js',
+  '/js/chat.js',
   '/js/render-sidebar.js',
   '/js/render-calendar.js',
   '/js/verbatim-editor.js',
-  '/js/render-forms.js',
-  '/js/render-session.js',
-  '/js/render-myrecords-view.js',
   '/js/render-aipanel.js',
   '/js/render-main.js',
   '/js/render-home.js',
   '/js/transform-text.js',
-  '/js/resize.js',
   '/app.js',
   '/icons/icon-192.png',
   '/manifest.json',
