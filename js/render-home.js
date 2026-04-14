@@ -176,6 +176,7 @@ function handleHomeMyRecords() {
   state.currentChatMessages = [];
   state.filterTags  = [];
   render();
+  startContextChat();
 }
 
 function handleHomeCounseling() {
@@ -191,4 +192,5 @@ function handleHomeCounseling() {
   state.currentChatMessages = [];
   state.filterTags = [];
   render();
+  startContextChat();
 }

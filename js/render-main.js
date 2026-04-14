@@ -118,20 +118,6 @@ function renderMain() {
     openModal(state.mode);
   }
 
-  // 상담 기록 — 회기 상세
-  if (state.mode === 'detail' && state.selSession) {
-    const session = state.sessions.find(s => s.id === state.selSession);
-    if (session) {
-      const st  = state.students.find(s => s.id === session.studentId);
-      const all = state.sessions.filter(s => s.studentId === session.studentId);
-      titleEl.textContent = st ? esc(st.alias) : '';
-      subEl.textContent   = st ? `${esc(st.grade)} · ${all.length}회기` : '';
-      nsBtn.style.display = 'block';
-      content.innerHTML   = renderSessionDetail(session, all.length);
-      return;
-    }
-  }
-
   // ── 나의 기록 뷰 ──────────────────────────────────────────────────────────
 
   if (state.view === 'myrecords') {
