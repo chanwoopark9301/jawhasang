@@ -256,9 +256,8 @@ function renderModalWrite() {
 
 function renderModalMode() {
   const modes = [
-    { id: 'general',        label: '일반 대화',   desc: '자유롭게 이야기하기' },
-    { id: 'supervision',    label: '슈퍼비전',    desc: '축어록 기반 임상 슈퍼비전' },
-    { id: 'diary-convert',  label: '일기 변환',   desc: '대화를 일기로 요약 저장' },
+    { id: 'general',     label: '일반 대화', desc: '자유롭게 이야기하기' },
+    { id: 'supervision', label: '슈퍼비전',  desc: '축어록 기반 임상 슈퍼비전' },
   ];
   return `
     <button class="modal-close" onclick="closeModal()">✕</button>

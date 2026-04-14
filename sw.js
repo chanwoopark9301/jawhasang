@@ -5,7 +5,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v6'; // 폰트 Nanum Myeongjo 통일, 채팅 localStorage 유지, 전송 버그 수정
+const CACHE_NAME = 'jip-v7'; // 말풍선 CSS 클래스화, 입력 중 표시기, font-weight 700, 일기변환 중복 제거
 
 const STATIC_ASSETS = [
   '/',

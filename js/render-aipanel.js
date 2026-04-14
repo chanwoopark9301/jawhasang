@@ -212,12 +212,9 @@ function _updateRpButtons() {
   }
 
   if (transformBtn) {
-    if (state.view === 'myrecords' && state.selTopic) {
-      // 나의 기록 — 일기로 변환 (대화 내용 있어야 활성)
-      transformBtn.style.display = '';
-      const hasMsgs = state.currentChatMessages.filter(m => m.role !== 'system').length > 0;
-      transformBtn.disabled    = !hasMsgs || isLoading;
-      transformBtn.textContent = state.transformLoading ? '변환 중...' : '일기로 변환 ↗';
+    if (state.view === 'myrecords') {
+      // 나의 기록 — '대화 요약·저장'과 기능 중복이므로 숨김
+      transformBtn.style.display = 'none';
     } else if (state.view === 'student') {
       // 상담 기록 — 축어록 AI 정리
       transformBtn.style.display = '';

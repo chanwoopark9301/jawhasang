@@ -47,6 +47,7 @@
 body {
   font-family: var(--font);
   font-size: 15px;
+  font-weight: 700;
   color: var(--color-text);
   background: var(--color-bg-tertiary);
   height: 100dvh;  /* dvh: 하드 키보드 툴바 포함한 동적 뷰포트 높이 */
@@ -3436,6 +3437,76 @@ body { height: 100dvh; }
   color: var(--color-text-tertiary); padding: 4px 12px;
   border: 0.5px solid var(--color-border-tertiary);
   border-radius: 20px; margin: 4px 0;
+}
+
+/* ── 채팅 말풍선 ── */
+.chat-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 24px 20px 12px;
+}
+
+.chat-bubble-wrap {
+  display: flex;
+  animation: bubbleFadeIn 0.18s ease;
+}
+.chat-bubble-wrap.user { justify-content: flex-end; }
+.chat-bubble-wrap.ai   { justify-content: flex-start; }
+
+/* 연속 같은 발화자 사이 간격 좁힘 */
+.chat-bubble-wrap.user + .chat-bubble-wrap.user,
+.chat-bubble-wrap.ai  + .chat-bubble-wrap.ai  { margin-top: -2px; }
+/* 발화자 전환 시 간격 넓힘 */
+.chat-bubble-wrap.user + .chat-bubble-wrap.ai,
+.chat-bubble-wrap.ai  + .chat-bubble-wrap.user { margin-top: 6px; }
+
+.chat-bubble {
+  max-width: 70%;
+  padding: 9px 14px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.chat-bubble-user {
+  background: var(--color-accent);
+  color: white;
+  border-radius: 16px 16px 4px 16px;
+}
+.chat-bubble-ai {
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+  border-radius: 16px 16px 16px 4px;
+  border: 0.5px solid var(--color-border);
+}
+
+/* ── 입력 중 표시 (점 3개 애니메이션) ── */
+.chat-typing {
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 52px;
+}
+.typing-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--color-text-tertiary);
+  animation: typingBlink 1.2s infinite ease-in-out;
+}
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typingBlink {
+  0%, 80%, 100% { opacity: 0.25; transform: scale(0.85); }
+  40%           { opacity: 1;    transform: scale(1); }
+}
+
+@keyframes bubbleFadeIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 /* ── 토스트 ── */
