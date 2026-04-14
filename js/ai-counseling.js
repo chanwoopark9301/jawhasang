@@ -1,6 +1,6 @@
 /* =============================================
    自畵像 — AI 슈퍼비전 (상담 기록)
-   의존성: state.js, utils.js, data.js
+   의존성: state.js, utils.js, data.js, logger.js
 
    수정 (버그픽스):
    - runAI(): try/finally로 state.aiLoading 항상 초기화
@@ -83,6 +83,9 @@ async function runAI() {
   const student  = state.students.find(s => s.id === session.studentId);
   const isLong   = session.verbatim.length >= LONG_VERBATIM_THRESHOLD;
 
+  logger.info('슈퍼비전 보고서 생성 시작: %s %d회기 (%d자)',
+    student?.alias, session.sessionNum, session.verbatim.length);
+
   state.aiLoading = true;
   renderAIPanel();
 
@@ -91,6 +94,7 @@ async function runAI() {
 
     // ── 1단계: 긴 축어록이면 먼저 요약 ──────────────────────────────────
     if (isLong && !verbatimSummary) {
+      logger.info('1단계: 긴 축어록 핵심 추출 (%d자)', session.verbatim.length);
       setAIStageLabel('1단계: 핵심 장면 추출 중...');
       verbatimSummary = await streamAnalyze(
         { model: 'claude-sonnet-4-6', max_tokens: 600,
@@ -98,10 +102,12 @@ async function runAI() {
         (acc) => setAIStageLabel(`1단계: 핵심 추출 중... ${acc.length}자`)
       );
       session.verbatimSummary = verbatimSummary;
+      logger.info('1단계 완료: 요약 %d자', verbatimSummary.length);
     }
 
     // ── 2단계: 보고서 생성 ────────────────────────────────────────────────
     const stageLabel = isLong ? '2단계: 보고서 작성 중...' : '보고서 작성 중...';
+    logger.info('보고서 생성 중 (isLong=%s)', isLong);
     setAIStageLabel(stageLabel);
 
     const text = await streamAnalyze(
@@ -115,8 +121,9 @@ async function runAI() {
     session.analysis  = result;
     saveData();
     state.sessionTab  = 'report';
+    logger.info('슈퍼비전 보고서 생성 완료: %s %d회기', student?.alias, session.sessionNum);
   } catch (e) {
-    console.error('보고서 생성 오류:', e);
+    logger.error('슈퍼비전 보고서 생성 실패', e);
     alert('보고서 생성 오류:\n' + e.message);
   } finally {
     state.aiLoading = false;
@@ -187,12 +194,14 @@ async function startSupervisionChat() {
   const session = state.sessions.find(s => s.id === state.selSession);
   if (!session) return;
 
+  const student = state.students.find(s => s.id === session.studentId);
+  logger.info('슈퍼비전 대화 시작: %s %d회기', student?.alias, session.sessionNum);
+
   session.supervisionChat = [];
   state.chatLoading = true;
   renderMain();
 
-  const student = state.students.find(s => s.id === session.studentId);
-  const sysCtx  = buildSupervisorContext(session, student);
+  const sysCtx = buildSupervisorContext(session, student);
 
   try {
     const res = await fetch('/api/analyze', {
@@ -204,13 +213,15 @@ async function startSupervisionChat() {
         messages: [{ role: 'user', content: '슈퍼비전을 시작해주세요. 이 회기에서 가장 탐색할 가치가 있는 순간을 하나 선택해서, 상담자가 자신의 개입을 성찰할 수 있는 첫 번째 질문을 해주세요.' }],
       }),
     });
-    if (!res.ok) throw new Error(`${res.status}`);
+    if (!res.ok) throw new Error(`서버 오류 HTTP ${res.status}`);
     const data = await res.json();
-    const text = data.content.map(c => c.text || '').join('').trim();
+    const text = data.content?.map(c => c.text || '').join('').trim();
+    if (!text) throw new Error('AI 응답이 비어 있습니다');
     session.supervisionChat = [{ role: 'ai', text }];
     saveData();
+    logger.info('슈퍼비전 대화 시작 완료');
   } catch (e) {
-    console.error('대화 시작 오류:', e);
+    logger.error('슈퍼비전 대화 시작 실패', e);
     session.supervisionChat = [{ role: 'ai', text: '오류가 발생했습니다. 다시 시도해주세요.' }];
   } finally {
     state.chatLoading = false;
@@ -231,6 +242,7 @@ async function sendChatMessage() {
   const session = state.sessions.find(s => s.id === state.selSession);
   if (!session) return;
 
+  logger.debug('슈퍼비전 메시지 전송 (%d자)', text.length);
   input.value = '';
   if (!session.supervisionChat) session.supervisionChat = [];
   session.supervisionChat.push({ role: 'user', text });
@@ -259,13 +271,15 @@ async function sendChatMessage() {
         messages,
       }),
     });
-    if (!res.ok) throw new Error(`${res.status}`);
+    if (!res.ok) throw new Error(`서버 오류 HTTP ${res.status}`);
     const data   = await res.json();
-    const aiText = data.content.map(c => c.text || '').join('').trim();
+    const aiText = data.content?.map(c => c.text || '').join('').trim();
+    if (!aiText) throw new Error('AI 응답이 비어 있습니다');
     session.supervisionChat.push({ role: 'ai', text: aiText });
     saveData();
+    logger.debug('슈퍼비전 AI 응답 수신 (%d자)', aiText.length);
   } catch (e) {
-    console.error('대화 오류:', e);
+    logger.error('슈퍼비전 메시지 전송 실패', e);
     session.supervisionChat.push({ role: 'ai', text: '오류가 발생했습니다. 다시 시도해주세요.' });
   } finally {
     state.chatLoading = false;

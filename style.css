@@ -57,6 +57,11 @@ body {
   display: flex;
   height: 100dvh;
   background: var(--color-bg);
+  /* black-translucent status bar: 콘텐츠가 status bar 뒤로 가지 않도록 */
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  box-sizing: border-box;
 }
 
 /* --- 리사이즈 핸들 --- */

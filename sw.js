@@ -5,13 +5,14 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v2'; // app.js 추가로 버전 업
+const CACHE_NAME = 'jip-v3'; // PWA 메타태그 수정 + logger.js 추가
 
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/style.css',
   '/app.js',
+  '/js/logger.js',
   '/js/state.js',
   '/js/utils.js',
   '/js/data.js',

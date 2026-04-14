@@ -9,11 +9,15 @@
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#8c7b6b" />
 
-  <!-- iOS PWA -->
+  <!-- iOS PWA — 홈 화면 추가 시 주소창 제거 -->
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="自畵像" />
-  <link rel="apple-touch-icon" href="/icons/icon.svg" />
+  <!-- iOS는 SVG 미지원 — PNG 필수 -->
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png" />
+  <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512.png" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -121,6 +125,7 @@
 
   </div>
   <!-- 모듈 로드 순서: 의존성 순 -->
+  <script src="js/logger.js"></script>
   <script src="js/state.js"></script>
   <script src="js/utils.js"></script>
   <script src="js/data.js"></script>

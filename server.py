@@ -11,6 +11,8 @@ import re
 import json
 import hashlib
 import base64
+import logging
+import logging.handlers
 import requests
 from functools import wraps
 from flask import (
@@ -26,6 +28,43 @@ ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
 APP_PASSWORD      = os.getenv('APP_PASSWORD', '')
 DATABASE_URL      = os.getenv('DATABASE_URL', '')
 DATA_FILE         = 'data.json'
+
+# ---------------------------------------------------------------------------
+# 로깅 설정
+# ---------------------------------------------------------------------------
+
+def _setup_logger() -> logging.Logger:
+    """구조화 로거 초기화. StreamHandler + RotatingFileHandler 병행."""
+    _logger = logging.getLogger('jwhwa')
+    if _logger.handlers:          # 중복 핸들러 방지 (pytest 재임포트 시)
+        return _logger
+    _logger.setLevel(logging.DEBUG)
+
+    fmt = logging.Formatter(
+        '%(asctime)s [%(levelname)-5s] %(name)s: %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S',
+    )
+
+    # 콘솔 출력 (INFO 이상)
+    sh = logging.StreamHandler()
+    sh.setLevel(logging.INFO)
+    sh.setFormatter(fmt)
+    _logger.addHandler(sh)
+
+    # 파일 출력 (DEBUG 이상, 최대 2MB × 3개 롤링)
+    try:
+        fh = logging.handlers.RotatingFileHandler(
+            'server.log', maxBytes=2_097_152, backupCount=3, encoding='utf-8',
+        )
+        fh.setLevel(logging.DEBUG)
+        fh.setFormatter(fmt)
+        _logger.addHandler(fh)
+    except OSError as e:
+        _logger.warning('로그 파일 생성 실패 (콘솔만 사용): %s', e)
+
+    return _logger
+
+log = _setup_logger()
 
 app = Flask(__name__, static_folder='.')
 app.secret_key = hashlib.sha256((APP_PASSWORD + '_sk').encode()).hexdigest()
@@ -98,29 +137,51 @@ def read_data() -> dict:
                 row = cur.fetchone()
             conn.close()
             if not row:
+                log.info('DB: 데이터 없음 → 빈 구조 반환')
                 return EMPTY()
-            return _decrypt(bytes(row[0]))
+            data = _decrypt(bytes(row[0]))
+            log.debug('DB: 데이터 로드 완료 (학생 %d명, 회기 %d건)',
+                      len(data.get('students', [])), len(data.get('sessions', [])))
+            return data
         except Exception as e:
-            print(f'DB read error: {e}')
+            log.error('DB 읽기 실패: %s', e, exc_info=True)
             return EMPTY()
     # 로컬 파일 폴백
     if not os.path.exists(DATA_FILE):
+        log.info('data.json 없음 → 빈 구조 반환')
         return EMPTY()
-    with open(DATA_FILE, 'rb') as f:
-        raw = f.read()
     try:
-        return _decrypt(raw)
-    except (InvalidToken, Exception):
+        with open(DATA_FILE, 'rb') as f:
+            raw = f.read()
+    except OSError as e:
+        log.error('data.json 읽기 실패: %s', e, exc_info=True)
+        return EMPTY()
+    try:
+        data = _decrypt(raw)
+        log.debug('파일: 데이터 로드 완료 (학생 %d명)', len(data.get('students', [])))
+        return data
+    except InvalidToken:
+        log.warning('복호화 실패 (InvalidToken) — JSON 평문 폴백 시도')
         try:
             data = json.loads(raw.decode())
             data.setdefault('aiResults', {})
             write_data(data)
+            log.info('평문 데이터 → 암호화 마이그레이션 완료')
             return data
-        except Exception:
+        except Exception as e2:
+            log.error('평문 파싱도 실패: %s', e2, exc_info=True)
             return EMPTY()
+    except Exception as e:
+        log.error('데이터 로드 중 예외: %s', e, exc_info=True)
+        return EMPTY()
 
 def write_data(data: dict):
-    encrypted = _encrypt(data)
+    try:
+        encrypted = _encrypt(data)
+    except Exception as e:
+        log.error('데이터 암호화 실패: %s', e, exc_info=True)
+        raise
+
     if DATABASE_URL:
         try:
             conn = _get_db_conn()
@@ -132,12 +193,20 @@ def write_data(data: dict):
                 """, (encrypted,))
             conn.commit()
             conn.close()
+            log.debug('DB: 데이터 저장 완료')
             return
         except Exception as e:
-            print(f'DB write error: {e}')
-    # 로컬 파일 폴백
-    with open(DATA_FILE, 'wb') as f:
-        f.write(encrypted)
+            log.error('DB 저장 실패: %s', e, exc_info=True)
+            # DB 실패 시 로컬 파일로 폴백하지 않음 (데이터 일관성 유지)
+            raise
+    # 로컬 파일
+    try:
+        with open(DATA_FILE, 'wb') as f:
+            f.write(encrypted)
+        log.debug('파일: 데이터 저장 완료 (%d bytes)', len(encrypted))
+    except OSError as e:
+        log.error('data.json 저장 실패: %s', e, exc_info=True)
+        raise
 
 # ---------------------------------------------------------------------------
 # 로그인
@@ -190,6 +259,7 @@ def require_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if not session.get('auth'):
+            log.debug('인증 없는 접근 → 로그인 리다이렉트: %s', request.path)
             return redirect('/login')
         return f(*args, **kwargs)
     return decorated
@@ -199,7 +269,9 @@ def login():
     if request.method == 'POST':
         if request.form.get('password', '') == APP_PASSWORD:
             session['auth'] = True
+            log.info('로그인 성공 (IP: %s)', request.remote_addr)
             return redirect('/')
+        log.warning('로그인 실패 (IP: %s)', request.remote_addr)
         return render_template_string(_LOGIN_HTML, error='비밀번호가 올바르지 않습니다')
     if session.get('auth'):
         return redirect('/')
@@ -207,6 +279,7 @@ def login():
 
 @app.route('/logout')
 def logout():
+    log.info('로그아웃 (IP: %s)', request.remote_addr)
     session.clear()
     return redirect('/login')
 
@@ -231,13 +304,26 @@ def static_files(filename):
 @app.route('/api/data', methods=['GET'])
 @require_auth
 def get_data():
-    return jsonify(read_data())
+    try:
+        data = read_data()
+        return jsonify(data)
+    except Exception as e:
+        log.error('GET /api/data 처리 실패: %s', e, exc_info=True)
+        return jsonify({'error': '데이터 로드 실패'}), 500
 
 @app.route('/api/data', methods=['POST'])
 @require_auth
 def save_data_route():
-    write_data(request.get_json())
-    return jsonify({'ok': True})
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        log.warning('POST /api/data: 유효하지 않은 페이로드')
+        return jsonify({'error': '유효하지 않은 데이터 형식'}), 400
+    try:
+        write_data(payload)
+        return jsonify({'ok': True})
+    except Exception as e:
+        log.error('POST /api/data 저장 실패: %s', e, exc_info=True)
+        return jsonify({'error': '데이터 저장 실패'}), 500
 
 # ---------------------------------------------------------------------------
 # PII 스크러빙 — AI 호출 전 개인식별정보 마스킹
@@ -358,26 +444,39 @@ def summarize_verbatim():
     }
     ai_payload = _scrub_payload(ai_payload)
 
-    resp = requests.post(
-        'https://api.anthropic.com/v1/messages',
-        headers={
-            'x-api-key': ANTHROPIC_API_KEY,
-            'anthropic-version': '2023-06-01',
-            'Content-Type': 'application/json',
-        },
-        json=ai_payload,
-        timeout=60,
-    )
+    log.info('축어록 요약 요청: %d자 → AI 호출', len(verbatim))
+    try:
+        resp = requests.post(
+            'https://api.anthropic.com/v1/messages',
+            headers={
+                'x-api-key': ANTHROPIC_API_KEY,
+                'anthropic-version': '2023-06-01',
+                'Content-Type': 'application/json',
+            },
+            json=ai_payload,
+            timeout=60,
+        )
+    except requests.Timeout:
+        log.error('축어록 요약 AI 호출 타임아웃 (60초)')
+        return jsonify({'error': 'AI 요청 타임아웃'}), 504
+    except requests.RequestException as e:
+        log.error('축어록 요약 AI 네트워크 오류: %s', e, exc_info=True)
+        return jsonify({'error': f'네트워크 오류: {e}'}), 502
+
     if not resp.ok:
+        log.warning('축어록 요약 AI 오류 응답: HTTP %d', resp.status_code)
         return jsonify({'error': f'AI 오류: {resp.status_code}', 'detail': resp.text[:200]}), 502
 
     try:
         data    = resp.json()
         summary = ''.join(c.get('text', '') for c in data.get('content', []))
         if not summary.strip():
+            log.warning('축어록 요약 AI 응답이 비어 있음')
             return jsonify({'error': 'AI 응답이 비어 있습니다'}), 502
+        log.info('축어록 요약 완료: %d자', len(summary))
         return jsonify({'summary': summary.strip()})
     except Exception as e:
+        log.error('축어록 요약 응답 파싱 실패: %s', e, exc_info=True)
         return jsonify({'error': f'응답 파싱 실패: {str(e)}'}), 502
 
 
@@ -389,26 +488,47 @@ def summarize_verbatim():
 @require_auth
 def analyze():
     if not ANTHROPIC_API_KEY:
+        log.error('ANTHROPIC_API_KEY 없음 — AI 기능 불가')
         return jsonify({'error': 'ANTHROPIC_API_KEY가 ecrk.env에 없습니다'}), 500
-    payload = request.get_json()
+
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        log.warning('POST /api/analyze: 유효하지 않은 페이로드')
+        return jsonify({'error': '유효하지 않은 요청 형식'}), 400
+
     use_stream = payload.get('stream', False)
+    model      = payload.get('model', '?')
+    max_tok    = payload.get('max_tokens', '?')
+    log.info('AI 분석 요청: model=%s, max_tokens=%s, stream=%s', model, max_tok, use_stream)
 
     # AI 호출 전 PII 스크러빙
     payload = _scrub_payload(payload)
 
-    resp = requests.post(
-        'https://api.anthropic.com/v1/messages',
-        headers={
-            'x-api-key': ANTHROPIC_API_KEY,
-            'anthropic-version': '2023-06-01',
-            'anthropic-beta': 'prompt-caching-2024-07-31',
-            'Content-Type': 'application/json',
-        },
-        json=payload,
-        timeout=120,
-        stream=use_stream,
-    )
+    try:
+        resp = requests.post(
+            'https://api.anthropic.com/v1/messages',
+            headers={
+                'x-api-key': ANTHROPIC_API_KEY,
+                'anthropic-version': '2023-06-01',
+                'anthropic-beta': 'prompt-caching-2024-07-31',
+                'Content-Type': 'application/json',
+            },
+            json=payload,
+            timeout=120,
+            stream=use_stream,
+        )
+    except requests.Timeout:
+        log.error('AI 호출 타임아웃 (120초)')
+        return jsonify({'error': 'AI 요청 타임아웃 (120초)'}), 504
+    except requests.RequestException as e:
+        log.error('AI 네트워크 오류: %s', e, exc_info=True)
+        return jsonify({'error': f'네트워크 오류: {e}'}), 502
+
+    if not resp.ok:
+        log.warning('AI 오류 응답: HTTP %d', resp.status_code)
+
     if use_stream:
+        log.debug('AI 스트리밍 응답 시작')
         def generate():
             for chunk in resp.iter_content(chunk_size=None):
                 yield chunk
@@ -417,6 +537,8 @@ def analyze():
             status=resp.status_code,
             content_type='text/event-stream',
         )
+
+    log.info('AI 분석 완료: HTTP %d', resp.status_code)
     return (resp.content, resp.status_code, {'Content-Type': 'application/json'})
 
 # ---------------------------------------------------------------------------
@@ -425,11 +547,9 @@ def analyze():
 
 if __name__ == '__main__':
     if not APP_PASSWORD:
-        print('경고: APP_PASSWORD가 ecrk.env에 없습니다. 로그인이 불가능합니다.')
-    if DATABASE_URL:
-        print('저장소: PostgreSQL (Supabase)')
-    else:
-        print('저장소: 로컬 data.json')
-    print('상담 일지 서버: http://localhost:5000')
-    print('종료: Ctrl+C')
+        log.warning('APP_PASSWORD가 ecrk.env에 없습니다. 로그인이 불가능합니다.')
+    if not ANTHROPIC_API_KEY:
+        log.warning('ANTHROPIC_API_KEY가 없습니다. AI 기능이 비활성화됩니다.')
+    storage = 'PostgreSQL (Supabase)' if DATABASE_URL else '로컬 data.json'
+    log.info('自畵像 서버 시작: http://localhost:5000 | 저장소: %s', storage)
     app.run(port=5000, debug=False)

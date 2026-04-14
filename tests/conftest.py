@@ -1,12 +1,16 @@
 """
 自畵像 — pytest 공통 설정
-- Flask 테스트 클라이언트 픽스처
+- Flask 테스트 클라이언트 픽스처 (단위/통합 테스트)
+- Playwright E2E 테스트용 live_server 픽스처
 - 임시 데이터 파일 격리
 - 환경변수 로드
 """
 
 import os
+import sys
 import json
+import time
+import threading
 import tempfile
 import pytest
 from dotenv import load_dotenv
@@ -14,6 +18,10 @@ from dotenv import load_dotenv
 # ecrk.env 로드 (프로젝트 루트 기준)
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 load_dotenv(os.path.join(ROOT, 'ecrk.env'))
+
+# E2E 테스트용 비밀번호 (실제 APP_PASSWORD 우선, 없으면 고정 테스트값)
+E2E_PASSWORD = os.getenv('APP_PASSWORD') or 'test-pw-e2e'
+E2E_PORT     = 15001
 
 
 @pytest.fixture
@@ -50,6 +58,70 @@ def client(app):
         password = os.getenv('APP_PASSWORD', '')
         c.post('/login', data={'password': password})
         yield c
+
+
+# ---------------------------------------------------------------------------
+# Playwright E2E 픽스처
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope='session')
+def live_server_url(tmp_path_factory):
+    """
+    실제 Flask 서버를 백그라운드 스레드에서 구동하고 URL을 반환.
+    scope='session' — 세션 전체에서 서버 1개 공유.
+    """
+    # 기존 모듈 캐시 제거 (단위 테스트와 격리)
+    for mod in list(sys.modules.keys()):
+        if mod == 'server':
+            del sys.modules[mod]
+
+    os.environ['DATABASE_URL'] = ''
+    os.environ['APP_PASSWORD'] = E2E_PASSWORD
+
+    import server as srv
+
+    tmp = tmp_path_factory.mktemp('e2e_data')
+    srv.DATA_FILE = str(tmp / 'data.json')
+    srv.APP_PASSWORD = E2E_PASSWORD
+    srv.app.config.update(
+        TESTING=False,         # 실제 서버처럼 동작
+        SECRET_KEY='e2e-secret',
+        SESSION_COOKIE_SECURE=False,
+    )
+
+    def _run():
+        # werkzeug 개발 서버 (use_reloader=False 필수)
+        srv.app.run(host='127.0.0.1', port=E2E_PORT, debug=False, use_reloader=False)
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+
+    # 서버 준비 대기 (최대 5초)
+    import urllib.request
+    for _ in range(50):
+        try:
+            urllib.request.urlopen(f'http://127.0.0.1:{E2E_PORT}/login', timeout=0.5)
+            break
+        except Exception:
+            time.sleep(0.1)
+
+    yield f'http://127.0.0.1:{E2E_PORT}'
+
+    # 스레드는 daemon=True이므로 프로세스 종료 시 자동 정리
+
+
+@pytest.fixture
+def logged_in_page(page, live_server_url):
+    """
+    로그인된 Playwright 페이지를 반환.
+    각 테스트 함수마다 호출됨 (function scope).
+    """
+    page.goto(f'{live_server_url}/login')
+    page.fill('input[name=password]', E2E_PASSWORD)
+    page.click('button[type=submit]')
+    # 메인 앱 로드 대기
+    page.wait_for_selector('#app', timeout=10_000)
+    return page
 
 
 @pytest.fixture

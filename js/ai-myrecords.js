@@ -1,6 +1,6 @@
 /* =============================================
    自畵像 — AI 나의 기록 (보고서 + 대화)
-   의존성: state.js, utils.js, data.js
+   의존성: state.js, utils.js, data.js, logger.js
 
    수정 (버그픽스):
    - runMyAI(): try/finally로 state.myAiLoading 항상 초기화
@@ -93,6 +93,9 @@ JSON 예시:
   "period": "${periodLabel}"
 }`;
 
+  logger.info('나의 기록 AI 보고서 생성 시작: 주제=%s, 기간=%s, 기록 %d건',
+    topic.title, periodLabel, records.length);
+
   state.myAiLoading = true;
   renderAIPanel();
 
@@ -114,9 +117,10 @@ JSON 예시:
       record.analysis = result;
       saveData();
       state.myTab = 'report';
+      logger.info('나의 기록 AI 보고서 완료: 주제=%s', topic.title);
     }
   } catch (e) {
-    console.error('보고서 생성 오류:', e);
+    logger.error('나의 기록 보고서 생성 실패', e);
     alert('보고서 생성 오류:\n' + e.message);
   } finally {
     state.myAiLoading = false;
@@ -161,11 +165,13 @@ async function startMyChat() {
   const record = state.myRecords.find(r => r.id === state.selRecord);
   if (!record || state.myChatLoading) return;
 
+  const topic = state.myTopics.find(t => t.id === record.topicId);
+  logger.info('나의 기록 AI 대화 시작: 주제=%s, 기록=%s', topic?.title, record.date);
+
   record.aiChat     = [];
   state.myChatLoading = true;
   renderMain();
 
-  const topic  = state.myTopics.find(t => t.id === record.topicId);
   const sysCtx = buildMyRecordContext(record, topic);
 
   try {
@@ -180,13 +186,15 @@ async function startMyChat() {
         messages: [{ role: 'user', content: startMsg }],
       }),
     });
-    if (!res.ok) throw new Error(`${res.status}`);
+    if (!res.ok) throw new Error(`서버 오류 HTTP ${res.status}`);
     const data = await res.json();
-    const text = data.content.map(c => c.text || '').join('').trim();
+    const text = data.content?.map(c => c.text || '').join('').trim();
+    if (!text) throw new Error('AI 응답이 비어 있습니다');
     record.aiChat = [{ role: 'ai', text }];
     saveData();
+    logger.info('나의 기록 AI 대화 시작 완료');
   } catch (e) {
-    console.error('대화 시작 오류:', e);
+    logger.error('나의 기록 대화 시작 실패', e);
     record.aiChat = [{ role: 'ai', text: '오류가 발생했습니다. 다시 시도해주세요.' }];
   } finally {
     state.myChatLoading = false;
@@ -207,6 +215,7 @@ async function sendMyChatMessage() {
   const record = state.myRecords.find(r => r.id === state.selRecord);
   if (!record) return;
 
+  logger.debug('나의 기록 AI 메시지 전송 (%d자)', text.length);
   input.value = '';
   if (!record.aiChat) record.aiChat = [];
   record.aiChat.push({ role: 'user', text });
@@ -235,13 +244,15 @@ async function sendMyChatMessage() {
         messages,
       }),
     });
-    if (!res.ok) throw new Error(`${res.status}`);
+    if (!res.ok) throw new Error(`서버 오류 HTTP ${res.status}`);
     const data   = await res.json();
-    const aiText = data.content.map(c => c.text || '').join('').trim();
+    const aiText = data.content?.map(c => c.text || '').join('').trim();
+    if (!aiText) throw new Error('AI 응답이 비어 있습니다');
     record.aiChat.push({ role: 'ai', text: aiText });
     saveData();
+    logger.debug('나의 기록 AI 응답 수신 (%d자)', aiText.length);
   } catch (e) {
-    console.error('대화 오류:', e);
+    logger.error('나의 기록 메시지 전송 실패', e);
     record.aiChat.push({ role: 'ai', text: '오류가 발생했습니다. 다시 시도해주세요.' });
   } finally {
     state.myChatLoading = false;
