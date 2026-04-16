@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v17'; // Fix: SW 업데이트 시 자동 새로고침 (postMessage → location.reload)
+const CACHE_NAME = 'jip-v18'; // Fix: 말풍선 색감/레이아웃, AI 컨텍스트 오염, 직접입력 역할 팝업
 
 const STATIC_ASSETS = [
   '/style.css',

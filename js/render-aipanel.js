@@ -272,13 +272,19 @@ function _updateRpButtons() {
 // ---------------------------------------------------------------------------
 
 function selectRole(presetId) {
+  // 직접 입력: 팝업 모달로 처리
+  if (presetId === 'custom') {
+    openModal('custom-role');
+    return;
+  }
+
   const prevRole = state.currentRole;
   state.currentRole = presetId;
 
   const topic = state.myTopics.find(t => t.id === state.selTopic);
   if (topic) {
     const preset = AI_ROLE_PRESETS.find(p => p.id === presetId);
-    if (preset && presetId !== 'custom') topic.aiPrompt = preset.prompt;
+    if (preset) topic.aiPrompt = preset.prompt;
     topic.selectedRole = presetId;
     saveData();
   }

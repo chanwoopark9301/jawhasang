@@ -3812,9 +3812,8 @@ body { height: 100dvh; }
   flex-direction: column;
   gap: 4px;
   padding: 20px 24px 12px;
-  max-width: 720px;
-  margin: 0 auto;
-  width: 100%;
+  width: 100%;           /* 전체 너비 사용 — max-width 중앙 집중 제거 */
+  box-sizing: border-box;
 }
 
 .chat-bubble-wrap {
@@ -3826,34 +3825,41 @@ body { height: 100dvh; }
 
 /* 연속 같은 발화자 사이 간격 좁힘 */
 .chat-bubble-wrap.user + .chat-bubble-wrap.user,
-.chat-bubble-wrap.ai  + .chat-bubble-wrap.ai  { margin-top: 1px; }
+.chat-bubble-wrap.ai  + .chat-bubble-wrap.ai  { margin-top: 2px; }
 /* 발화자 전환 시 간격 넓힘 */
 .chat-bubble-wrap.user + .chat-bubble-wrap.ai,
-.chat-bubble-wrap.ai  + .chat-bubble-wrap.user { margin-top: 10px; }
+.chat-bubble-wrap.ai  + .chat-bubble-wrap.user { margin-top: 12px; }
 
+/* 말풍선: 내용 길이에 맞춰 자동 너비, 최대 70% */
 .chat-bubble {
-  max-width: 68%;
-  padding: 9px 13px;
+  max-width: 70%;
+  padding: 10px 15px;
   font-size: 14px;
   font-weight: 400;
-  line-height: 1.65;
+  line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* 사용자 말풍선: 따뜻한 다크 브라운, 살짝 볼록 */
 .chat-bubble-user {
-  background: #2a2520;
+  background: #4a3324;
   color: rgba(255,255,255,0.92);
-  border-radius: 16px 16px 4px 16px;
+  border-radius: 20px 20px 5px 20px;
+  box-shadow: 0 2px 6px rgba(60,35,20,0.18), 0 0 0 0.5px rgba(60,35,20,0.08);
   letter-spacing: 0.01em;
 }
+
+/* AI 말풍선: 앱 배경보다 살짝 높은 톤, 따뜻한 느낌 */
 .chat-bubble-ai {
   background: var(--color-bg-secondary);
   color: var(--color-text);
-  border-radius: 4px 16px 16px 16px;
-  border: none;
+  border-radius: 5px 20px 20px 20px;
+  box-shadow: 0 1px 4px rgba(100,75,50,0.1), 0 0 0 0.5px var(--color-border);
 }
+
 @media (max-width: 767px) {
-  .chat-bubble { max-width: 85%; font-size: 14px; }
+  .chat-bubble { max-width: 86%; }
   .chat-messages { padding: 16px 14px 8px; }
 }
 

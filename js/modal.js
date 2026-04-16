@@ -51,6 +51,7 @@ function buildModalHTML(id, data) {
     case 'diary-result':  return renderModalDiaryResult(data.draft, data.date);
     case 'pattern':       return renderModalPattern(data.result);
     case 'chat-summary':  return renderModalChatSummary(data);
+    case 'custom-role':   return renderModalCustomRole(data);
     default:              return `<p>알 수 없는 팝업: ${esc(id)}</p>`;
   }
 }
@@ -945,6 +946,59 @@ function blockKeydown(e, ta, fieldName) {
       prevTa.selectionStart = prevTa.selectionEnd = prevTa.value.length;
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// AI 역할 직접 입력 모달
+// ---------------------------------------------------------------------------
+
+function renderModalCustomRole(data) {
+  const topic = state.myTopics.find(t => t.id === state.selTopic);
+  const current = topic?.aiPrompt || '';
+  return `
+    <div class="modal-header">
+      <div class="modal-title" style="color:#1D9E75;">AI 역할 직접 설정</div>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body" style="padding:20px 24px;">
+      <p style="font-size:13px;color:var(--color-text-secondary);margin-bottom:14px;line-height:1.6;">
+        이 주제에서 AI가 어떤 역할을 해줬으면 하는지 자유롭게 입력해주세요.
+      </p>
+      <textarea id="custom-role-input"
+        placeholder="예: 나의 하루를 들어주고 감정을 정리하도록 도와주는 친구처럼&#10;예: 임용 공부 중 막히는 지점을 같이 생각해주는 학습 코치처럼"
+        style="width:100%;min-height:110px;padding:10px 12px;font-size:13px;font-family:var(--font);
+               border:0.5px solid var(--color-border-strong);border-radius:var(--radius-md);
+               background:var(--color-bg);color:var(--color-text);resize:vertical;line-height:1.6;
+               box-sizing:border-box;"
+      >${esc(current)}</textarea>
+    </div>
+    <div class="modal-footer" style="padding:12px 24px;display:flex;justify-content:flex-end;gap:8px;border-top:0.5px solid var(--color-border);">
+      <button class="btn-secondary" onclick="closeModal()">취소</button>
+      <button class="btn-primary" style="background:#1D9E75;border-color:#1D9E75;" onclick="saveCustomRole()">적용</button>
+    </div>`;
+}
+
+function saveCustomRole() {
+  const input = document.getElementById('custom-role-input');
+  const roleText = input?.value.trim();
+  if (roleText === null || roleText === undefined) { closeModal(); return; }
+
+  const topic = state.myTopics.find(t => t.id === state.selTopic);
+  if (topic) {
+    topic.aiPrompt    = roleText;
+    topic.selectedRole = 'custom';
+    saveData();
+  }
+  state.currentRole = 'custom';
+
+  // 대화 중 역할 변경 알림
+  if (state.currentChatMessages.length > 0) {
+    appendSystemMessage(`— AI 역할이 '직접 입력'으로 변경되었습니다 —`);
+  }
+
+  closeModal();
+  renderRightPanel();
+  updateContextChip();
 }
 
 // ---------------------------------------------------------------------------
