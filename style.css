@@ -3291,10 +3291,12 @@ body { height: 100dvh; }
 
 /* ── 기록/회기 상세 팝업 내 스타일 ── */
 .detail-modal-content {
-  font-size: 15px;
-  line-height: 1.85;
+  font-size: 13px;
+  line-height: 1.65;
   color: var(--color-text);
-  margin-bottom: 14px;
+  margin-bottom: 12px;
+  max-height: 40vh;
+  overflow-y: auto;
 }
 .detail-modal-content p { margin-bottom: 0.7em; }
 .detail-modal-content strong { font-weight: 700; }
@@ -3409,8 +3411,8 @@ body { height: 100dvh; }
 .sub-child:hover { background: var(--color-bg-tertiary); color: var(--color-text); }
 .sub-child.active { background: var(--color-bg-secondary); color: var(--color-text); font-weight: 500; }
 .sub-child-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sub-child-actions { display: none; gap: 2px; flex-shrink: 0; }
-.sub-child:hover .sub-child-actions { display: flex; }
+.sub-child-actions { display: flex; gap: 2px; flex-shrink: 0; visibility: hidden; }
+.sub-child:hover .sub-child-actions { visibility: visible; }
 .sub-child-add { opacity: 0.55; font-style: italic; }
 .sub-child-add:hover { opacity: 1; background: none !important; }
 
@@ -3799,6 +3801,8 @@ body { height: 100dvh; }
   display: flex; justify-content: flex-end; gap: 8px;
   margin-top: 16px; padding-top: 14px;
   border-top: 0.5px solid var(--color-border);
+  position: sticky; bottom: 0;
+  background: var(--color-bg);
 }
 
 /* ── + 메뉴 ── */

@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v21'; // Feat: 슬라이딩 윈도우(20) + 패턴 분석 장기 기억 주입
+const CACHE_NAME = 'jip-v23'; // Fix: 하위기록 삭제 버튼 + 팝업 내용 크기 조정
 
 const STATIC_ASSETS = [
   '/style.css',
