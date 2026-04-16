@@ -231,7 +231,7 @@ function renderModalRecordDetail(data) {
       <div class="detail-modal-memo-label">메모</div>
       <div class="detail-modal-memo">${esc(record.memo)}</div>` : ''}
     <div class="modal-footer">
-      <button class="btn-secondary" style="color:#b94040;" onclick="modalDeleteRecord('${record.id}')">삭제</button>
+      <button class="btn-secondary" style="color:#b94040;" onclick="_showInlineDeleteConfirm('record','${record.id}')">삭제</button>
       <button class="btn-secondary" onclick="closeModal();openModal('edit-record',{id:'${record.id}'})">수정</button>
       <button class="btn-primary-my" onclick="closeModal()">AI 대화</button>
     </div>`;
@@ -262,7 +262,7 @@ function renderModalSessionDetail(data) {
         <button class="btn-link" onclick="closeModal();openModal('report',{analysis:state.sessions.find(s=>s.id==='${session.id}').analysis})">보고서 보기 →</button>
       </div>` : ''}
     <div class="modal-footer">
-      <button class="btn-secondary" style="color:#b94040;" onclick="modalDeleteSession('${session.id}')">삭제</button>
+      <button class="btn-secondary" style="color:#b94040;" onclick="_showInlineDeleteConfirm('session','${session.id}')">삭제</button>
       <button class="btn-secondary" onclick="closeModal();openModal('edit-session',{id:'${session.id}'})">수정</button>
       <button class="btn-primary" onclick="closeModal()">AI 슈퍼비전</button>
     </div>`;
@@ -827,33 +827,42 @@ function saveSummaryAsRecord() {
 }
 
 // ---------------------------------------------------------------------------
-// 팝업 내 삭제 (confirm 후 모달 닫기)
+// 팝업 내 삭제 — 인라인 확인 방식 (confirm() 대신 사용, iOS 호환)
 // ---------------------------------------------------------------------------
 
-function modalDeleteRecord(id) {
-  if (!confirm('이 기록을 삭제할까요?')) return;
-  state.myRecords = state.myRecords.filter(r => r.id !== id);
-  if (state.selRecord === id) {
-    state.selRecord = null;
-    state.myMode = state.selTopic ? 'list' : 'welcome';
-  }
-  saveData();
-  closeModal();
-  render();
-  showToast('기록이 삭제되었습니다');
+function _showInlineDeleteConfirm(type, id) {
+  const footer = document.querySelector('#modal-box .modal-footer');
+  if (!footer) return;
+  footer.innerHTML = `
+    <span style="font-size:12px;color:var(--color-text-secondary);margin-right:auto;">정말 삭제할까요?</span>
+    <button class="btn-secondary" onclick="closeModal()">아니오</button>
+    <button class="btn-secondary" style="color:#b94040;border-color:rgba(185,64,64,0.3);"
+      onclick="_executeModalDelete('${type}','${id}')">삭제</button>
+  `;
 }
 
-function modalDeleteSession(id) {
-  if (!confirm('이 회기 기록을 삭제할까요?')) return;
-  state.sessions = state.sessions.filter(s => s.id !== id);
-  if (state.selSession === id) {
-    state.selSession = null;
-    state.mode = state.selStudent ? 'list' : 'welcome';
+function _executeModalDelete(type, id) {
+  if (type === 'record') {
+    state.myRecords = state.myRecords.filter(r => r.id !== id);
+    if (state.selRecord === id) {
+      state.selRecord = null;
+      state.myMode = state.selTopic ? 'list' : 'welcome';
+    }
+    saveData();
+    closeModal();
+    render();
+    showToast('기록이 삭제되었습니다');
+  } else if (type === 'session') {
+    state.sessions = state.sessions.filter(s => s.id !== id);
+    if (state.selSession === id) {
+      state.selSession = null;
+      state.mode = state.selStudent ? 'list' : 'welcome';
+    }
+    saveData();
+    closeModal();
+    render();
+    showToast('회기가 삭제되었습니다');
   }
-  saveData();
-  closeModal();
-  render();
-  showToast('회기가 삭제되었습니다');
 }
 
 // ---------------------------------------------------------------------------

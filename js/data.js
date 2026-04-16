@@ -105,6 +105,9 @@ function saveData() {
   logger.debug('데이터 저장 요청 (학생 %d명, 회기 %d건)',
     payload.students.length, payload.sessions.length);
 
+  // localStorage 캐시도 즉시 업데이트 (새로고침 시 삭제 데이터 복원 방지)
+  _saveToLocalCache();
+
   fetch('/api/data', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },

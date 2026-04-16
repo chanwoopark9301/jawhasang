@@ -152,7 +152,8 @@ function _initVisualViewport() {
 
   function _onVVChange() {
     const vv = window.visualViewport;
-    const kbHeight = Math.max(0, window.innerHeight - vv.height);
+    // vv.offsetTop: iOS에서 키보드 등장 시 viewport가 위로 이동한 만큼 보정
+    const kbHeight = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
     const hasKeyboard = kbHeight > 50;
 
     // --kb-offset → CSS에서 input-area transform + chat-messages padding에 사용

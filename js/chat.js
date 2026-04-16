@@ -152,13 +152,11 @@ function appendSystemMessage(text) {
 }
 
 function scrollChatToBottom() {
-  // rAF 두 번 연속으로 렌더링 완료 후 확실히 스크롤
+  // main-content가 실제 스크롤 컨테이너 (chat-messages는 내부 flex 요소)
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      const el = document.getElementById('chat-messages');
-      if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-      const el2 = document.getElementById('my-chat-messages');
-      if (el2) el2.scrollTo({ top: el2.scrollHeight, behavior: 'smooth' });
+      const container = document.getElementById('main-content');
+      if (container) container.scrollTop = container.scrollHeight;
     });
   });
 }
