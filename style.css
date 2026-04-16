@@ -1752,7 +1752,7 @@ body {
   padding: 4px 0 12px;
   /* 키보드 올라올 때 마지막 메시지가 input-area 뒤에 가려지지 않도록 */
   padding-bottom: calc(12px + var(--kb-offset, 0px));
-  transition: padding-bottom 0.25s ease;
+  /* transition 없음 — input-area transform이 이미 부드러운 시각 효과를 담당 */
 }
 
 /* 구버전 .chat-msg 스타일 제거됨 — .chat-bubble-wrap 계열로 통일 */
@@ -3847,6 +3847,7 @@ body { height: var(--app-height, 100dvh); }
   flex-direction: column;
   gap: 4px;
   padding: 20px 24px 12px;
+  padding-bottom: calc(12px + var(--kb-offset, 0px)); /* 키보드 오프셋 반영 */
   width: 100%;           /* 전체 너비 사용 — max-width 중앙 집중 제거 */
   box-sizing: border-box;
 }
@@ -3896,7 +3897,11 @@ body { height: var(--app-height, 100dvh); }
 
 @media (max-width: 767px) {
   .chat-bubble { max-width: 86%; }
-  .chat-messages { padding: 16px 14px 8px; }
+  /* padding shorthand 후 padding-bottom을 덮어써야 --kb-offset가 적용됨 */
+  .chat-messages {
+    padding: 16px 14px 8px;
+    padding-bottom: calc(8px + var(--kb-offset, 0px));
+  }
 }
 
 /* ── 입력 중 표시 (점 3개 애니메이션) ── */

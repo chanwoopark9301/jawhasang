@@ -232,6 +232,174 @@ class TestDataPersistence:
 
 
 # ---------------------------------------------------------------------------
+# 대화(채팅) 화면
+# ---------------------------------------------------------------------------
+
+class TestChatDialogue:
+    """대화창 UI 동작 및 iOS 키보드 대응 테스트."""
+
+    def _select_student_via_js(self, page):
+        """
+        학생 데이터 삽입 + JS state 갱신 + selectStudent() 호출.
+        - networkidle 보장된 page에서만 사용할 것.
+        - startContextChat()이 AI 호출을 하므로 input-area 표시만 확인.
+        """
+        page.wait_for_load_state('networkidle')
+        page.evaluate("""async () => {
+            // 1. 학생 데이터 삽입
+            const res  = await fetch('/api/data');
+            const d    = await res.json();
+            const exists = d.students.find(s => s.id === 'e2e-chat-stu');
+            if (!exists) {
+                d.students.push({
+                    id: 'e2e-chat-stu', alias: 'chat-e2e',
+                    grade: '2', gender: '', family: '', peers: '',
+                    situation: '', notes: '', createdAt: '2026-04-16',
+                });
+                await fetch('/api/data', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(d),
+                });
+            }
+            // 2. JS state 갱신
+            await loadData();
+            // 3. 학생 선택 → 대화창 뷰
+            selectStudent('e2e-chat-stu');
+        }""")
+        # 입력창이 표시될 때까지 대기
+        page.wait_for_selector('#input-area:not([style*="none"])', timeout=8_000)
+
+    # ── --app-height CSS 변수 ──────────────────────────────────────────────
+
+    def test_app_height_css_var_is_set(self, logged_in_page):
+        """_lockAppHeight()가 --app-height CSS 변수를 px 값으로 설정해야 함."""
+        app_height = logged_in_page.evaluate(
+            "() => getComputedStyle(document.documentElement).getPropertyValue('--app-height').trim()"
+        )
+        assert app_height != '', "--app-height CSS 변수가 비어 있음"
+        assert 'px' in app_height, f"--app-height가 px 단위가 아님: {app_height}"
+
+    # ── 입력창 가시성 ─────────────────────────────────────────────────────
+
+    def test_chat_input_visible_when_student_selected(self, logged_in_page):
+        """학생 선택 시 하단 입력창(#input-area)이 표시돼야 함."""
+        self._select_student_via_js(logged_in_page)
+        assert logged_in_page.locator('#input-area').is_visible(), \
+            "#input-area가 표시되지 않음"
+        assert logged_in_page.locator('#chat-input-bottom').is_visible(), \
+            "#chat-input-bottom이 보이지 않음"
+
+    # ── 메시지 전송 ───────────────────────────────────────────────────────
+
+    def test_user_message_appears_after_send(self, logged_in_page):
+        """입력 후 전송 시 user 말풍선이 #chat-messages에 나타나야 함."""
+        self._select_student_via_js(logged_in_page)
+
+        input_el = logged_in_page.locator('#chat-input-bottom')
+        input_el.fill('E2E test message hello')
+        # Enter 전송
+        input_el.press('Enter')
+
+        logged_in_page.wait_for_selector('.chat-bubble-user', timeout=6_000)
+        bubble = logged_in_page.locator('.chat-bubble-user').first.inner_text()
+        assert 'E2E test message hello' in bubble, \
+            f"전송 메시지가 말풍선에 없음: {bubble}"
+
+    def test_chat_messages_scrolled_to_bottom_after_send(self, logged_in_page):
+        """메시지 전송 후 #chat-messages가 맨 아래로 스크롤돼야 함."""
+        self._select_student_via_js(logged_in_page)
+
+        input_el = logged_in_page.locator('#chat-input-bottom')
+        input_el.fill('scroll test message')
+        input_el.press('Enter')
+        logged_in_page.wait_for_selector('.chat-bubble-user', timeout=6_000)
+        logged_in_page.wait_for_timeout(400)  # scrollChatToBottom rAF 대기
+
+        # scrollTop + clientHeight ≈ scrollHeight 이면 맨 아래
+        at_bottom = logged_in_page.evaluate("""() => {
+            const el = document.getElementById('chat-messages');
+            if (!el) return false;
+            return (el.scrollTop + el.clientHeight) >= (el.scrollHeight - 10);
+        }""")
+        assert at_bottom, "메시지 전송 후 chat-messages가 맨 아래로 스크롤되지 않음"
+
+    # ── 키보드 오프셋 transform ───────────────────────────────────────────
+
+    def test_input_area_transforms_up_when_kb_offset_set(self, logged_in_page):
+        """--kb-offset 설정 시 .input-area에 translateY(-300px) transform이 걸려야 함."""
+        self._select_student_via_js(logged_in_page)
+
+        logged_in_page.evaluate(
+            "() => document.documentElement.style.setProperty('--kb-offset', '300px')"
+        )
+        logged_in_page.wait_for_timeout(350)  # transition 0.25s 대기
+
+        transform = logged_in_page.evaluate(
+            "() => getComputedStyle(document.querySelector('#input-area')).transform"
+        )
+        # matrix(1,0,0,1,0,-300) 형태 — y 값이 -300이어야 함
+        assert transform != 'none', "--kb-offset 설정 시 input-area에 transform이 없음"
+        # matrix의 ty 값 (6번째) 추출
+        ty = logged_in_page.evaluate("""() => {
+            const m = getComputedStyle(document.querySelector('#input-area')).transform;
+            const vals = m.replace('matrix(', '').replace(')', '').split(',');
+            return parseFloat(vals[5]);
+        }""")
+        assert ty < -50, f"input-area translateY 값이 충분히 올라가지 않음: {ty}"
+
+        # 원복
+        logged_in_page.evaluate(
+            "() => document.documentElement.style.setProperty('--kb-offset', '0px')"
+        )
+
+    def test_chat_messages_padding_grows_with_kb_offset(self, logged_in_page):
+        """--kb-offset 설정 시 .chat-messages의 padding-bottom이 커져야 함."""
+        self._select_student_via_js(logged_in_page)
+
+        # 서빙된 CSS에 --kb-offset 규칙이 있는지 먼저 확인
+        css_ok = logged_in_page.evaluate("""async () => {
+            const res = await fetch('/style.css?t=' + Date.now());
+            const txt = await res.text();
+            return (txt.match(/chat-messages[\s\S]*?kb-offset/g) || []).length;
+        }""")
+        assert css_ok and css_ok >= 1, \
+            f"서빙된 style.css에 chat-messages + kb-offset 규칙이 없음 (매치 수: {css_ok})"
+
+        # rAF 후 측정 (CSS 변수 변경이 paint cycle에 반영된 뒤 확인)
+        pb = logged_in_page.evaluate("""async () => {
+            document.documentElement.style.setProperty('--kb-offset', '250px');
+            await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+            const el = document.querySelector('.chat-messages')
+                     || document.querySelector('#chat-messages');
+            if (!el) return null;
+            const result = parseFloat(getComputedStyle(el).paddingBottom);
+            document.documentElement.style.setProperty('--kb-offset', '0px');
+            return result;
+        }""")
+
+        assert pb is not None, ".chat-messages 요소를 찾지 못함"
+        assert pb > 100, \
+            f"--kb-offset:250px 설정 시 padding-bottom이 충분히 크지 않음: {pb}px (예상 >100)"
+
+    # ── 모바일 가로 오버플로 ──────────────────────────────────────────────
+
+    def test_mobile_chat_no_horizontal_overflow(self, page, live_server_url):
+        """모바일(390px) 대화 화면에서 가로 스크롤 없어야 함."""
+        from tests.conftest import E2E_PASSWORD
+        page.set_viewport_size({'width': 390, 'height': 844})
+        page.goto(f'{live_server_url}/login')
+        page.fill('input[name=password]', E2E_PASSWORD)
+        page.click('button[type=submit]')
+        page.wait_for_selector('#app', timeout=10_000)
+
+        scroll_w = page.evaluate('document.body.scrollWidth')
+        client_w = page.evaluate('document.body.clientWidth')
+        assert scroll_w <= client_w + 2, \
+            f"모바일 대화 화면 가로 오버플로: scrollWidth={scroll_w}, clientWidth={client_w}"
+
+
+# ---------------------------------------------------------------------------
 # 접근성 / UI 기본 요소
 # ---------------------------------------------------------------------------
 
