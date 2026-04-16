@@ -248,13 +248,23 @@ function openTopicPicker() {
 // ---------------------------------------------------------------------------
 
 function runCurrentAI() {
-  if (state.view === 'myrecords') runMyAI();
-  else                            runAI();
+  // 나의 기록 보고서 버튼은 UI에서 제거 — 상담 기록 전용
+  if (state.view === 'student') runAI();
 }
 
 function runCurrentPattern() {
   if (state.view === 'myrecords') runMyPatternAnalysis();
   else                            runPatternAnalysis();
+}
+
+function runDeepQuestion() {
+  if (state.view === 'myrecords') runMyDeepQuestion();
+  else if (state.view === 'student') runCounselingDeepQuestion();
+}
+
+function runGrowthTimeline() {
+  if (state.view === 'myrecords') runMyGrowthTimeline();
+  else if (state.view === 'student') runCounselingGrowthTimeline();
 }
 
 // ---------------------------------------------------------------------------

@@ -191,3 +191,101 @@ function viewLastMyPatternAnalysis() {
   const topic = state.selTopic ? state.myTopics.find(t => t.id === state.selTopic) : null;
   if (topic?.patternAnalysis) showPatternModal(topic.patternAnalysis, true);
 }
+
+// ---------------------------------------------------------------------------
+// 심층 질문 모달
+// ---------------------------------------------------------------------------
+
+function showDeepQuestionModal(rawText, contextLabel, date) {
+  // 빈 줄 제거 후 질문 배열로 파싱
+  const questions = rawText.split('\n').map(q => q.trim()).filter(q => q.length > 0);
+
+  const overlay = document.getElementById('deep-q-overlay');
+  const modal   = document.getElementById('deep-q-modal');
+  if (!overlay || !modal) return;
+
+  const itemsHTML = questions.map(q =>
+    `<div class="deep-q-item" data-q="${esc(q)}">${esc(q)}</div>`
+  ).join('');
+
+  modal.innerHTML = `
+    <div class="deep-q-header">
+      <div>
+        <div class="deep-q-title">심층 질문</div>
+        <div class="deep-q-subtitle">${esc(contextLabel)} · ${esc(date)}</div>
+      </div>
+      <button class="popup-close-btn" onclick="closeDeepQuestion()">×</button>
+    </div>
+    <div class="deep-q-body">${itemsHTML}</div>
+    <div class="deep-q-hint">질문을 클릭하면 입력창에 바로 넣어드려요</div>`;
+
+  // 이벤트 위임 — 따옴표 문제 없이 data-q 사용
+  modal.querySelectorAll('.deep-q-item').forEach(el => {
+    el.addEventListener('click', () => {
+      insertQuestion(el.dataset.q);
+    });
+  });
+
+  overlay.style.display = '';
+  modal.style.display   = '';
+}
+
+function closeDeepQuestion() {
+  document.getElementById('deep-q-overlay').style.display = 'none';
+  document.getElementById('deep-q-modal').style.display   = 'none';
+}
+
+function insertQuestion(q) {
+  const input = document.getElementById('chat-input-bottom');
+  if (input) {
+    input.value = q;
+    input.focus();
+    // textarea 높이 자동 조절 트리거
+    input.dispatchEvent(new Event('input'));
+  }
+  closeDeepQuestion();
+}
+
+// ---------------------------------------------------------------------------
+// 성장 타임라인 모달
+// ---------------------------------------------------------------------------
+
+function showTimelineModal(result, contextLabel, date, isMy) {
+  const accentColor = isMy ? '#1D9E75' : '#0F6E56';
+
+  const sections = [
+    { key: 'start',     label: '시작',       cls: 'tl-start'     },
+    { key: 'journey',   label: '여정',       cls: 'tl-journey'   },
+    { key: 'now',       label: '지금',       cls: 'tl-now'       },
+    { key: 'highlight', label: '하이라이트', cls: 'tl-highlight' },
+    { key: 'overall',   label: '종합',       cls: 'tl-overall'   },
+  ];
+
+  const sectionsHTML = sections.map(s => `
+    <div class="timeline-section ${s.cls}">
+      <div class="timeline-label">${s.label}</div>
+      <div class="timeline-text">${esc(result[s.key] || '—')}</div>
+    </div>`
+  ).join('');
+
+  const overlay = document.getElementById('timeline-overlay');
+  const modal   = document.getElementById('timeline-modal');
+  if (!overlay || !modal) return;
+
+  modal.innerHTML = `
+    <div class="timeline-header">
+      <div class="timeline-title" style="color:${accentColor};">
+        성장 타임라인 · ${esc(contextLabel)}
+      </div>
+      <button class="popup-close-btn" onclick="closeTimeline()">×</button>
+    </div>
+    <div class="timeline-body">${sectionsHTML}</div>`;
+
+  overlay.style.display = '';
+  modal.style.display   = '';
+}
+
+function closeTimeline() {
+  document.getElementById('timeline-overlay').style.display = 'none';
+  document.getElementById('timeline-modal').style.display   = 'none';
+}

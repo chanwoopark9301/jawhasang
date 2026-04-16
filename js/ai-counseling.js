@@ -271,3 +271,130 @@ async function sendChatMessage(textParam) {
   scrollChatToBottom();
 }
 
+// ---------------------------------------------------------------------------
+// 상담 기록 — 심층 질문 (슈퍼비전 성찰 질문)
+// ---------------------------------------------------------------------------
+
+async function runCounselingDeepQuestion() {
+  const session = state.selSession ? state.sessions.find(s => s.id === state.selSession) : null;
+  if (!session?.verbatim?.trim()) {
+    showToast('축어록을 먼저 첨부해주세요.');
+    return;
+  }
+  const student = state.students.find(s => s.id === session.studentId);
+
+  const btn = document.getElementById('rp-deepq-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '질문 생성 중...'; }
+
+  const sysPrompt = `당신은 20년 경력의 학교상담 임상 슈퍼바이저입니다.`;
+  const userMsg = `아래 회기 축어록을 읽고, 상담자가 스스로 성찰할 수 있도록 돕는 슈퍼비전 질문 3개를 제안하세요.
+
+【내담자】 ${student?.alias || '내담자'} (${student?.grade || ''})
+【${session.sessionNum}회기 축어록】
+${session.verbatim.slice(0, 3000)}${session.verbatim.length > 3000 ? '\n...(이하 생략)' : ''}
+${session.memo ? `\n【메모】 ${session.memo}` : ''}
+
+규칙:
+- 질문은 상담자 자신의 감정·개입·판단에 대한 성찰을 유도하는 것
+- 구체적인 축어록 장면을 인용하거나 지목하는 질문 포함
+- 답을 제시하지 말 것, 오직 탐색을 돕는 질문만
+- 번호나 기호 없이 질문 텍스트만, 각 줄에 하나씩 (3줄)
+- 한국어 존댓말`;
+
+  try {
+    const res = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6', max_tokens: 400,
+        system: [{ type: 'text', text: sysPrompt }],
+        messages: [{ role: 'user', content: userMsg }],
+      }),
+    });
+    const data = await res.json();
+    const text = data.content?.map(c => c.text || '').join('').trim();
+    if (!text) throw new Error('빈 응답');
+    const label = `${student?.alias || '내담자'} · ${session.sessionNum}회기`;
+    showDeepQuestionModal(text, label, session.date);
+  } catch (e) {
+    showToast('질문 생성 중 오류가 발생했어요.');
+  } finally {
+    renderRightPanel();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 상담 기록 — 성장 타임라인 (내담자 회기별 변화 흐름)
+// ---------------------------------------------------------------------------
+
+async function runCounselingGrowthTimeline() {
+  const student = state.selStudent ? state.students.find(s => s.id === state.selStudent) : null;
+  if (!student) return;
+
+  const sessions = state.sessions
+    .filter(s => s.studentId === state.selStudent)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (sessions.length < 2) {
+    showToast('타임라인을 보려면 회기가 2개 이상 필요해요.');
+    return;
+  }
+
+  const btn = document.getElementById('rp-timeline-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '타임라인 생성 중...'; }
+
+  // 축어록 전체 대신 analysis.overall → verbatimSummary → verbatim 순 폴백 (토큰 절약)
+  const sessionsText = sessions.map(s =>
+    `${s.sessionNum}회기 (${s.date}): ${
+      s.analysis?.overall
+      || s.verbatimSummary
+      || (s.verbatim || '').slice(0, 200) + (s.verbatim?.length > 200 ? '...' : '')
+    }`
+  ).join('\n\n');
+
+  const sysPrompt = `당신은 학교상담 임상 슈퍼바이저입니다.`;
+  const userMsg = `아래는 ${student.alias} (${student.grade || ''}) 내담자의 전체 ${sessions.length}회기 흐름입니다.
+
+${sessionsText}
+
+회기 경과에 따른 내담자 변화를 JSON으로 정리해주세요.
+
+규칙:
+- 총 400단어 이내
+- JSON으로만 응답 (다른 텍스트 없이)
+
+{
+  "start": "초기 회기에서 내담자의 주요 호소와 상태를 2문장으로",
+  "journey": "중간 회기에서 눈에 띄는 변화나 전환점을 2~3문장으로",
+  "now": "최근 회기 기준 현재 상태와 변화를 2문장으로",
+  "highlight": "전체 기간 중 임상적으로 가장 의미 있는 변화 한 가지",
+  "overall": "종합적인 진전 평가와 향후 방향"
+}`;
+
+  try {
+    const res = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6', max_tokens: 800,
+        system: [{ type: 'text', text: sysPrompt }],
+        messages: [{ role: 'user', content: userMsg }],
+      }),
+    });
+    const data = await res.json();
+    const raw  = data.content?.map(c => c.text || '').join('').trim();
+    if (!raw) throw new Error('빈 응답');
+
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    const result = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+    if (!result) throw new Error('JSON 파싱 실패');
+
+    const today = new Date().toISOString().split('T')[0];
+    showTimelineModal(result, student.alias, today, false);
+  } catch (e) {
+    showToast('타임라인 생성 중 오류가 발생했어요.');
+  } finally {
+    renderRightPanel();
+  }
+}
+

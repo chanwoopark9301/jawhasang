@@ -190,33 +190,30 @@ function _updateRpButtons() {
   const reportBtn    = document.getElementById('rp-report-btn');
   const transformBtn = document.getElementById('rp-transform-btn');
   const patternBtn   = document.getElementById('rp-pattern-btn');
+  const deepqBtn     = document.getElementById('rp-deepq-btn');
+  const timelineBtn  = document.getElementById('rp-timeline-btn');
 
-  const isLoading = state.aiLoading || state.myAiLoading || state.transformLoading || state.patternLoading || state.myPatternLoading;
+  const isLoading = state.aiLoading || state.myAiLoading || state.transformLoading
+                  || state.patternLoading || state.myPatternLoading;
 
+  // ── 슈퍼비전 보고서 버튼 (상담 기록 전용) ──
   if (reportBtn) {
-    if (state.view === 'myrecords') {
-      // 나의 기록 — 보고서 (기록이 있어야 활성)
-      reportBtn.style.background = '#1D9E75';
-      const hasMsgs = state.currentChatMessages.filter(m => m.role !== 'system').length > 0;
-      reportBtn.disabled    = !hasMsgs || isLoading;
-      reportBtn.textContent = state.myAiLoading ? '분석 중...' : '보고서 생성 ↗';
-    } else {
-      // 상담 기록 — 슈퍼비전 보고서 (축어록 첨부 or 기존 회기에 축어록 있어야 활성)
-      reportBtn.style.background = '';
+    if (state.view === 'student') {
+      reportBtn.style.display = '';
       const session = state.selSession ? state.sessions.find(s => s.id === state.selSession) : null;
       const hasVt   = !!(session?.verbatim?.trim()) || !!(state.attachedVerbatim?.trim());
       reportBtn.disabled    = !hasVt || isLoading;
       reportBtn.textContent = state.aiLoading ? '분석 중...'
-        : (session?.analysis ? '보고서 재생성 ↗' : '슈퍼비전 보고서 생성 ↗');
+        : (session?.analysis ? '보고서 재생성 ↗' : '슈퍼비전 보고서 ↗');
+    } else {
+      // 나의 기록 — 보고서 버튼 숨김
+      reportBtn.style.display = 'none';
     }
   }
 
+  // ── 축어록 AI 정리 버튼 (상담 기록 전용) ──
   if (transformBtn) {
-    if (state.view === 'myrecords') {
-      // 나의 기록 — '대화 요약·저장'과 기능 중복이므로 숨김
-      transformBtn.style.display = 'none';
-    } else if (state.view === 'student') {
-      // 상담 기록 — 축어록 AI 정리
+    if (state.view === 'student') {
       transformBtn.style.display = '';
       const session = state.selSession ? state.sessions.find(s => s.id === state.selSession) : null;
       const hasVt   = !!(session?.verbatim?.trim()) || !!(state.attachedVerbatim?.trim());
@@ -227,21 +224,46 @@ function _updateRpButtons() {
     }
   }
 
+  // ── 패턴 분석 버튼 (공통, 뷰별 텍스트/조건 분기) ──
   if (patternBtn) {
     if (state.view === 'myrecords') {
-      // 나의 기록 — 대화 요약·저장 (대화 내용 있어야 활성)
-      patternBtn.style.display = '';
       const hasMsgs = state.currentChatMessages.filter(m => m.role !== 'system').length > 0;
       patternBtn.disabled    = !hasMsgs || isLoading;
       patternBtn.textContent = state.myPatternLoading ? '요약 중...' : '대화 요약·저장 ↗';
     } else if (state.view === 'student') {
-      // 상담 기록 — 전체 패턴 분석 (내담자 선택 시 활성)
-      patternBtn.style.display = '';
       patternBtn.disabled    = !state.selStudent || isLoading;
       patternBtn.textContent = state.patternLoading ? '분석 중...' : '전체 패턴 분석 ↗';
     } else {
-      patternBtn.style.display = 'none';
+      patternBtn.disabled = true;
     }
+  }
+
+  // ── 심층 질문 버튼 (공통) ──
+  if (deepqBtn) {
+    if (state.view === 'myrecords') {
+      const myRecordCount = state.myRecords.filter(r => r.topicId === state.selTopic).length;
+      deepqBtn.disabled = !(state.selTopic && myRecordCount > 0) || isLoading;
+    } else if (state.view === 'student') {
+      const session = state.selSession ? state.sessions.find(s => s.id === state.selSession) : null;
+      deepqBtn.disabled = !(session?.verbatim?.trim()) || isLoading;
+    } else {
+      deepqBtn.disabled = true;
+    }
+    deepqBtn.textContent = '심층 질문 ↗';
+  }
+
+  // ── 성장 타임라인 버튼 (공통) ──
+  if (timelineBtn) {
+    if (state.view === 'myrecords') {
+      const myRecordCount = state.myRecords.filter(r => r.topicId === state.selTopic).length;
+      timelineBtn.disabled = !(state.selTopic && myRecordCount >= 2) || isLoading;
+    } else if (state.view === 'student') {
+      const sessionCount = state.sessions.filter(s => s.studentId === state.selStudent).length;
+      timelineBtn.disabled = !(state.selStudent && sessionCount >= 2) || isLoading;
+    } else {
+      timelineBtn.disabled = true;
+    }
+    timelineBtn.textContent = '성장 타임라인 ↗';
   }
 }
 

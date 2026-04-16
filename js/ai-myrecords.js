@@ -182,3 +182,132 @@ async function sendMyChatMessage(textParam) {
   scrollChatToBottom();
 }
 
+// ---------------------------------------------------------------------------
+// 나의 기록 — 심층 질문
+// ---------------------------------------------------------------------------
+
+async function runMyDeepQuestion() {
+  const topic = state.myTopics.find(t => t.id === state.selTopic);
+  if (!topic) return;
+
+  // 선택된 기록 or 가장 최근 기록 우선 사용
+  const record = state.selRecord
+    ? state.myRecords.find(r => r.id === state.selRecord)
+    : state.myRecords
+        .filter(r => r.topicId === state.selTopic)
+        .sort((a, b) => b.date.localeCompare(a.date))[0];
+
+  if (!record) { showToast('기록이 없어요.'); return; }
+
+  const btn = document.getElementById('rp-deepq-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '질문 생성 중...'; }
+
+  const aiRole = topic.aiPrompt || '따뜻하게 경청하고 성찰을 돕는 코치';
+  const sysPrompt = `당신은 ${aiRole} 역할입니다.`;
+  const userMsg = `아래 기록을 읽고, 이 사람이 스스로 더 깊이 탐색할 수 있도록 돕는 질문 3개를 제안하세요.
+
+【주제】 ${topic.title}
+【기록 날짜】 ${record.date}
+【기록 내용】
+${record.content}
+${record.memo ? `\n【메모】 ${record.memo}` : ''}
+
+규칙:
+- 열린 질문으로 (예/아니오로 답할 수 없는 것)
+- 기록의 구체적인 내용을 근거로 한 질문이어야 함
+- 판단하거나 조언하지 말 것, 오직 탐색을 돕는 질문만
+- 번호나 기호 없이 질문 텍스트만, 각 줄에 하나씩 (3줄)
+- 한국어 존댓말`;
+
+  try {
+    const res = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6', max_tokens: 400,
+        system: [{ type: 'text', text: sysPrompt }],
+        messages: [{ role: 'user', content: userMsg }],
+      }),
+    });
+    const data = await res.json();
+    const text = data.content?.map(c => c.text || '').join('').trim();
+    if (!text) throw new Error('빈 응답');
+    showDeepQuestionModal(text, topic.title, record.date);
+  } catch (e) {
+    showToast('질문 생성 중 오류가 발생했어요.');
+  } finally {
+    renderRightPanel();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 나의 기록 — 성장 타임라인
+// ---------------------------------------------------------------------------
+
+async function runMyGrowthTimeline() {
+  const topic = state.myTopics.find(t => t.id === state.selTopic);
+  if (!topic) return;
+
+  const records = state.myRecords
+    .filter(r => r.topicId === state.selTopic)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (records.length < 2) {
+    showToast('타임라인을 보려면 기록이 2개 이상 필요해요.');
+    return;
+  }
+
+  const btn = document.getElementById('rp-timeline-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '타임라인 생성 중...'; }
+
+  const aiRole = topic.aiPrompt || '따뜻하게 경청하고 성찰을 돕는 코치';
+  const recordsText = records.map(r =>
+    `[${r.date}] ${r.content.slice(0, 300)}${r.content.length > 300 ? '...' : ''}`
+  ).join('\n\n');
+
+  const sysPrompt = `당신은 ${aiRole} 역할입니다.`;
+  const userMsg = `아래는 '${topic.title}' 주제의 기록을 시간순으로 정리한 것입니다.
+
+${recordsText}
+
+이 기록들을 바탕으로 시간 흐름에 따른 변화를 JSON으로 정리해주세요.
+
+규칙:
+- 총 400단어 이내
+- JSON으로만 응답 (다른 텍스트 없이)
+
+{
+  "start": "초기(첫 1~2개 기록)의 상태나 관심사를 2문장으로",
+  "journey": "중간 변화 과정에서 눈에 띄는 전환점이나 흐름을 2~3문장으로",
+  "now": "최근 기록에서 보이는 현재 상태나 성장을 2문장으로",
+  "highlight": "전체 기간에서 가장 의미 있는 변화 한 가지를 구체적으로",
+  "overall": "종합적인 성장 흐름과 앞으로의 방향"
+}`;
+
+  try {
+    const res = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6', max_tokens: 800,
+        system: [{ type: 'text', text: sysPrompt }],
+        messages: [{ role: 'user', content: userMsg }],
+      }),
+    });
+    const data = await res.json();
+    const raw  = data.content?.map(c => c.text || '').join('').trim();
+    if (!raw) throw new Error('빈 응답');
+
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    const result = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+    if (!result) throw new Error('JSON 파싱 실패');
+
+    const today = new Date().toISOString().split('T')[0];
+    showTimelineModal(result, topic.title, today, true);
+  } catch (e) {
+    showToast('타임라인 생성 중 오류가 발생했어요.');
+  } finally {
+    renderRightPanel();
+  }
+}
+

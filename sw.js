@@ -5,7 +5,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v14'; // UX 개선: 말풍선, 사이드바, 스크롤, iOS 키보드, 대화 유지
+const CACHE_NAME = 'jip-v15'; // Feat: 심층 질문·성장 타임라인 버튼, 도구 패널 개편
 
 const STATIC_ASSETS = [
   '/',

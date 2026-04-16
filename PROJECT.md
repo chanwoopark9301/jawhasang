@@ -444,7 +444,8 @@ scripts\stage_commit.bat A "기능 설명"    # Windows
 
 | 커밋 | 내용 |
 |------|------|
-| *(이번)* | Fix/Style: UX 개선 9종 — 말풍선·스크롤·사이드바·iOS키보드·대화유지·AI역할·삭제버튼 |
+| *(이번)* | Feat: 도구 패널 개편 — 심층 질문·성장 타임라인 버튼 추가, 나의 기록 보고서 버튼 제거, 팝업 모달 2종 |
+| *(직전)* | Fix/Style: UX 개선 9종 — 말풍선·스크롤·사이드바·iOS키보드·대화유지·AI역할·삭제버튼 |
 | `a4cd8d0` | Docs: PROJECT.md 최신화 |
 | `51e4201` | Feat: 기록/회기 팝업 상세 + 블록 에디터 — 사이드바 트리 클릭 시 팝업, 수정 모달 문단 단위 블록 편집 |
 | `cbea58c` | Fix: renderChatView 레이스 컨디션 — selRecord/selSession 시 chat이 detail 덮어쓰는 버그 |
@@ -477,7 +478,7 @@ scripts\stage_commit.bat A "기능 설명"    # Windows
 9. **startContextChat()**: 주제/학생 선택 직후 AI 첫 마디 자동 생성 (`chat.js`). 상담 기록은 `session.supervisionChat`에서 복원. 나의 기록은 최근 기록 3개를 시스템 프롬프트에 포함해 AI가 연속성 있게 시작. Anthropic API 규칙상 trigger 메시지를 `hidden:true`로 히스토리에 포함.
 10. **AI_ROLE_PRESETS**: `listener`(그냥 들어주기) / `coach` / `counselor`(감정 상담사) / `advisor`(조언가) / `companion`(생각 친구) / `custom`(직접 입력) 6종. 각 프리셋은 구체적인 행동 지침 포함.
 11. **폰트**: `--font` CSS 변수 = `Nanum Myeongjo` (serif). 自畵像 제목과 동일 폰트 전면 적용. Google Fonts `display=swap`으로 FOUT 방지.
-12. **SW 캐시**: `jip-v{n}` 버전 번호 — CSS/JS 변경 시 반드시 버전 올려야 구 캐시 무효화됨. 현재: `jip-v14`.
+12. **SW 캐시**: `jip-v{n}` 버전 번호 — CSS/JS 변경 시 반드시 버전 올려야 구 캐시 무효화됨. 현재: `jip-v15`.
 13. **기록/회기 상세**: 메인 영역 인라인 렌더링 없음. 사이드바 트리에서 클릭 시 `openModal('record-detail'/'session-detail')`로 팝업. AI 대화 버튼은 팝업 닫고 기존 채팅창 복귀.
 14. **블록 에디터 (modal.js)**: `renderBlockEditor()` / `collectBlocks()` / `addBlockToEditor()` / `removeBlock()`. verbatim-editor.js의 블록 에디터(축어록 전용)와 별개. edit-record(본문)·edit-session(축어록)에 적용. 문단 구분은 `\n\n`. Enter 두 번 → 새 블록, 빈 블록 Backspace → 위 블록 포커스.
 15. **modalDeleteRecord/Session**: crud.js의 deleteRecord/deleteSession은 confirm+render. 팝업 내 삭제 버튼은 modal.js의 래퍼 함수 사용 (confirm 후 closeModal() 추가 호출).
@@ -485,3 +486,6 @@ scripts\stage_commit.bat A "기능 설명"    # Windows
 17. **AI 역할 시스템 프롬프트**: `continueContextChat()`은 매 메시지마다 `_buildChatSysPrompt()`를 호출해 현재 `state.currentRole`을 최신 반영. 대화 중 역할 변경 시 시스템 메시지로 구분선 표시. `selectTopic()` 시 해당 주제의 `selectedRole` 자동 복원 (없으면 `listener`).
 18. **iOS 키보드 대응**: `--kb-offset` CSS 변수 방식 — `panels.js`의 `_initVisualViewport()`에서 `document.documentElement.style.setProperty('--kb-offset', ...)` 설정. `.input-area`의 `padding-bottom`에 적용. 키보드 올라올 때 채팅 자동 스크롤도 함께 실행.
 19. **사이드바 기록/회기 삭제 버튼**: `.sub-child-actions` CSS는 hover 시 표시. `deleteRecord(id)` / `deleteSession(id)` 함수 직접 호출 (modal.js 래퍼 없음).
+20. **심층 질문 버튼** (`rp-deepq-btn`): 나의 기록은 `selTopic`+기록 1개 이상 시 활성. 상담 기록은 축어록(`session.verbatim.trim()`) 있을 때만 활성. 결과는 `showDeepQuestionModal()` — 질문 3개 줄 파싱, `data-q` 속성으로 안전하게 텍스트 저장, 클릭 시 `insertQuestion()`으로 `chat-input-bottom`에 삽입 후 자동 닫힘.
+21. **성장 타임라인 버튼** (`rp-timeline-btn`): 나의 기록은 2개 이상 기록, 상담 기록은 2개 이상 회기 시 활성. JSON 5키(`start`/`journey`/`now`/`highlight`/`overall`) 색상별 섹션으로 `showTimelineModal()` 표시. 상담 기록은 `analysis.overall` → `verbatimSummary` → `verbatim.slice(0,200)` 순서로 폴백.
+22. **safe 질문 삽입**: `insertQuestion(q)` 내 `data-q` + addEventListener 패턴 — 질문 텍스트에 작은따옴표가 있어도 onclick 인라인 JS 없이 안전하게 처리. `input` 이벤트도 dispatch해 textarea 자동 높이 조절 트리거.

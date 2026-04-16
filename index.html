@@ -143,15 +143,22 @@
 
       <!-- 도구 버튼 -->
       <div class="ai-footer">
+        <!-- 상담 기록 전용 -->
         <button class="analyze-btn" id="rp-report-btn" disabled onclick="runCurrentAI()">
-          보고서 생성 ↗
+          슈퍼비전 보고서 ↗
         </button>
         <button class="transform-btn" id="rp-transform-btn" disabled onclick="handleTransform()" style="display:none;">
           축어록 AI 정리 ↗
         </button>
-        <button class="analyze-btn" id="rp-pattern-btn" disabled onclick="runCurrentPattern()"
-          style="margin-top:4px;background:var(--color-bg-tertiary);color:var(--color-text-secondary);font-size:12px;">
+        <!-- 공통 (뷰에 따라 활성 조건 분기) -->
+        <button class="ai-tool-btn-sm" id="rp-pattern-btn" disabled onclick="runCurrentPattern()">
           패턴 분석 ↗
+        </button>
+        <button class="ai-tool-btn-sm" id="rp-deepq-btn" disabled onclick="runDeepQuestion()">
+          심층 질문 ↗
+        </button>
+        <button class="ai-tool-btn-sm" id="rp-timeline-btn" disabled onclick="runGrowthTimeline()">
+          성장 타임라인 ↗
         </button>
       </div>
     </aside>
@@ -187,6 +194,14 @@
     <!-- 새 대화 모달 -->
     <div class="cal-popup-overlay" id="new-chat-overlay" style="display:none;" onclick="closeNewChatModal()"></div>
     <div class="new-chat-modal" id="new-chat-modal" style="display:none;"></div>
+
+    <!-- 심층 질문 모달 -->
+    <div class="cal-popup-overlay" id="deep-q-overlay" style="display:none;" onclick="closeDeepQuestion()"></div>
+    <div class="deep-q-modal" id="deep-q-modal" style="display:none;"></div>
+
+    <!-- 성장 타임라인 모달 -->
+    <div class="cal-popup-overlay" id="timeline-overlay" style="display:none;" onclick="closeTimeline()"></div>
+    <div class="timeline-modal" id="timeline-modal" style="display:none;"></div>
 
     <!-- 통합 모달 -->
     <div class="modal-overlay" id="modal-overlay" onclick="handleModalOverlayClick(event)">
