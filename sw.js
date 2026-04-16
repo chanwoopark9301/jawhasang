@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v27'; // Fix: iOS 입력창 자동 확대 방지 (font-size 16px)
+const CACHE_NAME = 'jip-v28'; // Fix: JS/CSS 공개 서빙 + SW install 내성 강화
 
 const STATIC_ASSETS = [
   '/style.css',
@@ -45,9 +45,17 @@ const HTML_PATHS = new Set(['/', '/index.html']);
 
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(STATIC_ASSETS))
-      .then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then(cache =>
+      // allSettled: 개별 파일 실패해도 install 전체가 깨지지 않음
+      // (인증 오류·404 등 한 파일 실패가 SW 설치 실패로 번지는 문제 방지)
+      Promise.allSettled(
+        STATIC_ASSETS.map(url =>
+          fetch(url, { credentials: 'same-origin' })
+            .then(r => { if (r.ok) return cache.put(url, r); })
+            .catch(() => { /* 실패 무시 — 온라인 시 재시도 */ })
+        )
+      )
+    ).then(() => self.skipWaiting())
   );
 });
 

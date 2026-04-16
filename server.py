@@ -304,9 +304,14 @@ def index():
 # PWA 필수 파일 — 인증 없이 서빙 (홈 화면 추가 시 iOS가 읽어야 함)
 _PUBLIC_FILES = {'manifest.json', 'sw.js', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon.svg'}
 
+# 정적 에셋 확장자 — 소스코드/스타일은 인증 없이 서빙 (SW가 캐시할 수 있어야 함)
+# 민감 데이터는 /api/* 에만 있으므로 JS/CSS 공개는 안전
+_PUBLIC_EXTENSIONS = {'.js', '.css', '.png', '.svg', '.ico', '.webp', '.woff', '.woff2'}
+
 @app.route('/<path:filename>')
 def static_files(filename):
-    if filename not in _PUBLIC_FILES and not session.get('auth'):
+    is_public_ext = any(filename.endswith(ext) for ext in _PUBLIC_EXTENSIONS)
+    if not is_public_ext and filename not in _PUBLIC_FILES and not session.get('auth'):
         log.debug('인증 없는 접근 → 로그인 리다이렉트: /%s', filename)
         return redirect('/login')
     return send_from_directory('.', filename)
