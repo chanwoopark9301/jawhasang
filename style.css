@@ -75,7 +75,7 @@ body {
   font-weight: 700;
   color: var(--color-text);
   background: var(--color-bg-tertiary);
-  height: 100dvh;  /* dvh: 하드 키보드 툴바 포함한 동적 뷰포트 높이 */
+  height: var(--app-height, 100dvh); /* JS로 고정 — 키보드에 반응하지 않음 */
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -86,7 +86,7 @@ body {
 /* --- 앱 레이아웃 --- */
 .app {
   display: flex;
-  height: 100dvh;
+  height: var(--app-height, 100dvh);
   background: var(--color-bg);
   padding-top: env(safe-area-inset-top);
   padding-left: env(safe-area-inset-left);
@@ -153,7 +153,7 @@ body {
   width: 220px;
   min-width: 220px;
   flex-shrink: 0;
-  height: 100dvh;
+  height: var(--app-height, 100dvh);
   display: flex;
   flex-direction: column;
   background: var(--color-bg-secondary);
@@ -892,7 +892,7 @@ body {
   width: 220px;
   min-width: 220px;
   flex-shrink: 0;
-  height: 100dvh;
+  height: var(--app-height, 100dvh);
   display: flex;
   flex-direction: column;
   background: var(--color-bg-secondary);
@@ -909,7 +909,7 @@ body {
   width: 220px;
   min-width: 220px;
   flex-shrink: 0;
-  height: 100dvh;
+  height: var(--app-height, 100dvh);
   display: flex;
   flex-direction: column;
   background: var(--color-bg-secondary);
@@ -1739,7 +1739,7 @@ body {
 .chat-wrap {
   display: flex;
   flex-direction: column;
-  height: calc(100dvh - 280px);
+  height: calc(var(--app-height, 100dvh) - 280px);
   min-height: 300px;
 }
 
@@ -1750,6 +1750,9 @@ body {
   flex-direction: column;
   gap: 12px;
   padding: 4px 0 12px;
+  /* 키보드 올라올 때 마지막 메시지가 input-area 뒤에 가려지지 않도록 */
+  padding-bottom: calc(12px + var(--kb-offset, 0px));
+  transition: padding-bottom 0.25s ease;
 }
 
 /* 구버전 .chat-msg 스타일 제거됨 — .chat-bubble-wrap 계열로 통일 */
@@ -1907,11 +1910,12 @@ button,
 
 /* =============================================
    iOS Safari 뷰포트 높이 픽스
+   JS의 _lockAppHeight()가 --app-height 설정 → dvh 대신 사용
    ============================================= */
-body { height: 100dvh; }
-.app { height: 100dvh; }
+body { height: var(--app-height, 100dvh); }
+.app { height: var(--app-height, 100dvh); }
 .chat-wrap {
-  height: calc(100dvh - 280px);
+  height: calc(var(--app-height, 100dvh) - 280px);
 }
 
 /* =============================================
@@ -2014,9 +2018,9 @@ body { height: 100dvh; }
     padding-bottom: calc(52px + env(safe-area-inset-bottom));
   }
 
-  /* 채팅 높이 — 하단 내비게이션(52px) + 키보드 오프셋 고려 */
+  /* 채팅 높이 — 하단 내비게이션(52px) 고려 (키보드는 transform으로 처리) */
   .chat-wrap {
-    height: calc(100dvh - 52px - 280px - var(--kb-offset));
+    height: calc(var(--app-height, 100dvh) - 52px - 280px);
     min-height: 200px;
   }
 
@@ -3594,9 +3598,11 @@ body { height: 100dvh; }
   padding: 10px 16px 14px;
   border-top: 0.5px solid var(--color-border);
   flex-shrink: 0;
-  /* iOS 키보드 대응: CSS 변수로 올라오는 높이 보정 */
-  padding-bottom: calc(14px + var(--kb-offset));
-  transition: padding-bottom 0.15s ease;
+  position: relative;
+  z-index: 10;
+  /* iOS 키보드 대응: 앱 높이를 고정한 채 input-area만 키보드 위로 올림 */
+  transform: translateY(calc(-1 * var(--kb-offset, 0px)));
+  transition: transform 0.25s ease;
 }
 .input-wrap {
   display: flex;

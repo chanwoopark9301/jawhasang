@@ -135,21 +135,34 @@ function _updateMobileNavActive() {
 // iOS Safari 키보드 대응 — Visual Viewport API
 // ---------------------------------------------------------------------------
 
+// 앱 높이를 window.innerHeight 기준으로 한 번 고정.
+// dvh는 키보드 올라올 때마다 재계산돼 레이아웃 전체가 흔들리므로 사용 금지.
+function _lockAppHeight() {
+  document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');
+}
+
 function _initVisualViewport() {
   if (!window.visualViewport) return;
+
+  // 최초 1회 고정 + 가로/세로 전환 시만 재측정 (키보드 이벤트에는 반응 안 함)
+  _lockAppHeight();
+  window.addEventListener('orientationchange', () => {
+    setTimeout(_lockAppHeight, 300);
+  });
 
   function _onVVChange() {
     const vv = window.visualViewport;
     const kbHeight = Math.max(0, window.innerHeight - vv.height);
     const hasKeyboard = kbHeight > 50;
 
-    // CSS 변수로 키보드 높이를 전달 → CSS에서 레이아웃 처리
+    // --kb-offset → CSS에서 input-area transform + chat-messages padding에 사용
     document.documentElement.style.setProperty('--kb-offset', hasKeyboard ? kbHeight + 'px' : '0px');
 
+    // 모바일 하단 내비게이션은 키보드가 올라오면 숨김 (transform으로 처리됨)
     const mobileNav = document.getElementById('mobile-nav');
     if (mobileNav) mobileNav.style.opacity = hasKeyboard ? '0' : '';
 
-    // 키보드 올라올 때 대화창도 맨 아래로 (iOS 키보드 애니메이션 ~300ms 대기)
+    // 키보드 완전히 올라온 후 대화창 맨 아래로 (iOS 키보드 애니메이션 ~300ms)
     if (hasKeyboard) {
       setTimeout(() => scrollChatToBottom(), 300);
     }

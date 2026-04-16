@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v24'; // Fix: iOS 좌우 흔들림 + 키보드 스크롤 대응
+const CACHE_NAME = 'jip-v25'; // Fix: iOS 세로 흔들림 + 키보드 overlay 대응
 
 const STATIC_ASSETS = [
   '/style.css',
