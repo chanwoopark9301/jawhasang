@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v23'; // Fix: 하위기록 삭제 버튼 + 팝업 내용 크기 조정
+const CACHE_NAME = 'jip-v24'; // Fix: iOS 좌우 흔들림 + 키보드 스크롤 대응
 
 const STATIC_ASSETS = [
   '/style.css',

@@ -140,7 +140,7 @@ function _initVisualViewport() {
 
   function _onVVChange() {
     const vv = window.visualViewport;
-    const kbHeight = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    const kbHeight = Math.max(0, window.innerHeight - vv.height);
     const hasKeyboard = kbHeight > 50;
 
     // CSS 변수로 키보드 높이를 전달 → CSS에서 레이아웃 처리
@@ -149,9 +149,9 @@ function _initVisualViewport() {
     const mobileNav = document.getElementById('mobile-nav');
     if (mobileNav) mobileNav.style.opacity = hasKeyboard ? '0' : '';
 
-    // 키보드 올라올 때 대화창도 맨 아래로
+    // 키보드 올라올 때 대화창도 맨 아래로 (iOS 키보드 애니메이션 ~300ms 대기)
     if (hasKeyboard) {
-      setTimeout(() => scrollChatToBottom(), 80);
+      setTimeout(() => scrollChatToBottom(), 300);
     }
   }
 
