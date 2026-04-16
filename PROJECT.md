@@ -433,10 +433,12 @@ scripts\stage_commit.bat A "기능 설명"    # Windows
 | test_stage_e.py | PWA, dvh CSS, 메타태그, Stage ABCD 회귀 | 30개 |
 | test_e2e.py | E2E (Playwright) — 인증·사이드바·CRUD·캘린더 | 19개 |
 | test_ui_stage_a.py | 기본 로딩 3개 + 인라인폼 E2E 3개(skip) | 6개 |
-| **합계** | **102 통과, 3 실패(서버 미실행), 3 skip** | **108개** |
+| test_tool_panel.py | 도구 패널 E2E — 심층질문·타임라인 버튼·모달·삽입 | 25개 |
+| **합계** | **127 통과, 3 실패(서버 미실행), 3 skip** | **133개** |
 
 > **실패 사유**: `test_ui_stage_a.py` 3개 — Playwright가 `localhost:5000`에 연결 실패 (서버 미실행 시 항상 발생, CI에서는 서버 선기동 필요)
 > **skip 사유**: 인라인 세션 폼(`#ns-btn` 기반)이 모달+대화창 구조로 전환됨
+> **TDD 방침**: 기능 추가 시 Playwright E2E 테스트를 먼저 작성(RED) → 구현 → 통과 확인(GREEN) 순서 준수. 커스텀 JS 함수 호출 테스트는 `wait_for_load_state('networkidle')` 보장 필수 (`app_page` 픽스처 사용)
 
 ---
 
