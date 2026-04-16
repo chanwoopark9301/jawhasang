@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v20'; // Fix: FOUC 방지 스플래시 추가
+const CACHE_NAME = 'jip-v21'; // Feat: 슬라이딩 윈도우(20) + 패턴 분석 장기 기억 주입
 
 const STATIC_ASSETS = [
   '/style.css',

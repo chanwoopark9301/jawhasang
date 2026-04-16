@@ -50,9 +50,12 @@ async function continueContextChat(text) {
   // AI 역할: state.currentRole → AI_ROLE_PRESETS에서 prompt 조회. 없으면 topic.aiPrompt 폴백
   const sysPrompt = _buildChatSysPrompt(isMyRecords, topic, student);
 
-  // hidden 포함, system 제외 → Anthropic messages 형식
+  // 슬라이딩 윈도우: 최근 20개만 전송 (토큰 절약)
+  // 장기 맥락은 topic.patternAnalysis(사용자가 저장한 분석)가 시스템 프롬프트로 대체
+  const WINDOW = 20;
   const messages = state.currentChatMessages
     .filter(m => m.role !== 'system')
+    .slice(-WINDOW)
     .map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.text }));
 
   try {
@@ -275,10 +278,27 @@ async function startContextChat() {
 
   const aiRole = topic?.aiPrompt || '따뜻하게 경청하고 공감하는 친구처럼';
 
+  // 저장된 패턴 분석 → 장기 기억으로 주입 (사용자가 직접 저장한 체크포인트)
+  const savedAnalysis   = topic?.patternAnalysis;
+  const savedStudentPat = student?.patternAnalysis;
+
+  const myMemoryBlock = savedAnalysis ? `
+[장기 기억 — 이전에 저장된 분석 (${savedAnalysis.savedAt})]
+${savedAnalysis.overall ? '종합: ' + savedAnalysis.overall : ''}
+${savedAnalysis.recurring ? '반복 주제: ' + savedAnalysis.recurring : ''}
+${savedAnalysis.growth ? '성장: ' + savedAnalysis.growth : ''}
+` : '';
+
+  const svMemoryBlock = savedStudentPat ? `
+[저장된 패턴 분석 (${savedStudentPat.savedAt})]
+${savedStudentPat.overall ? '종합: ' + savedStudentPat.overall : ''}
+${savedStudentPat.progress ? '진전: ' + savedStudentPat.progress : ''}
+` : '';
+
   const sysPrompt = isMyRecords
     ? `당신은 ${aiRole} 역할입니다.
 주제: '${topic?.title || '나의 기록'}'
-
+${myMemoryBlock}
 ${recentRecordContext}
 
 대화 원칙:
@@ -295,7 +315,7 @@ ${recentRecordContext}
 가정: ${student?.family || '정보 없음'}
 교우: ${student?.peers || '정보 없음'}
 상황: ${student?.situation || '정보 없음'}
-
+${svMemoryBlock}
 ${recentSessionContext}
 
 대화 원칙:
