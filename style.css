@@ -3626,7 +3626,7 @@ body { height: var(--app-height, 100dvh); }
 }
 .input-field {
   flex: 1;
-  font-size: 15px;
+  font-size: 16px; /* iOS: 16px 미만이면 자동 확대 발생 */
   font-family: var(--font);
   background: transparent;
   border: none;

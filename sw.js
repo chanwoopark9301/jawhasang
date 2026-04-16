@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v26'; // Fix: 모달 삭제 인라인 확인 + 키보드 이격 + 자동 스크롤
+const CACHE_NAME = 'jip-v27'; // Fix: iOS 입력창 자동 확대 방지 (font-size 16px)
 
 const STATIC_ASSETS = [
   '/style.css',
