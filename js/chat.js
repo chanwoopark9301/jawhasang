@@ -185,11 +185,8 @@ function renderChatBubble(m) {
     return `<div class="chat-system-msg">${esc(m.text)}</div>`;
   }
   const isUser = m.role === 'user';
-  return `<div class="chat-bubble-wrap ${isUser ? 'user' : 'ai'}">
-    <div class="chat-bubble ${isUser ? 'chat-bubble-user' : 'chat-bubble-ai'}">
-      ${esc(m.text)}
-    </div>
-  </div>`;
+  // 들여쓰기 없이 인라인 — white-space:pre-wrap 이 템플릿 공백을 그대로 렌더링하므로
+  return `<div class="chat-bubble-wrap ${isUser ? 'user' : 'ai'}"><div class="chat-bubble ${isUser ? 'chat-bubble-user' : 'chat-bubble-ai'}">${esc(m.text)}</div></div>`;
 }
 
 // ---------------------------------------------------------------------------

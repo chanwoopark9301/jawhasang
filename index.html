@@ -240,15 +240,11 @@
         navigator.serviceWorker.register('/sw.js')
           .catch(err => console.warn('SW 등록 실패:', err));
       });
-      // SW 업데이트 시 자동 새로고침 — 한 세션당 한 번만 (무한루프 방지)
-      navigator.serviceWorker.addEventListener('message', event => {
-        if (event.data?.type === 'SW_UPDATED') {
-          const ver = event.data.version;
-          if (sessionStorage.getItem('sw_ver') !== ver) {
-            sessionStorage.setItem('sw_ver', ver);
-            window.location.reload();
-          }
-        }
+      // SW 교체 감지 → 자동 새로고침 (무한루프 방지: controllerchange 는 reload 후 재발화 안 함)
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (sessionStorage.getItem('sw_reloaded')) return;
+        sessionStorage.setItem('sw_reloaded', '1');
+        window.location.reload();
       });
     }
   </script>

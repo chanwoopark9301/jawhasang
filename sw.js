@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v18'; // Fix: 말풍선 색감/레이아웃, AI 컨텍스트 오염, 직접입력 역할 팝업
+const CACHE_NAME = 'jip-v19'; // Fix: 말풍선 내용크기 맞춤, SW controllerchange 방식으로 교체
 
 const STATIC_ASSETS = [
   '/style.css',
@@ -62,13 +62,8 @@ self.addEventListener('activate', event => {
         keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
       ))
       .then(() => self.clients.claim())
-      .then(() => self.clients.matchAll({ type: 'window' }))
-      .then(clients => {
-        // 새 SW가 활성화됐음을 기존 페이지에 알려 자동 새로고침 유도
-        clients.forEach(client =>
-          client.postMessage({ type: 'SW_UPDATED', version: CACHE_NAME })
-        );
-      })
+      // clients.claim() 이후 브라우저가 controllerchange 이벤트를 페이지에 자동 발화
+      // → index.html의 controllerchange 리스너가 자동 새로고침 처리
   );
 });
 

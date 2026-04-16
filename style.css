@@ -3833,6 +3833,7 @@ body { height: 100dvh; }
 /* 말풍선: 내용 길이에 맞춰 자동 너비, 최대 70% */
 .chat-bubble {
   max-width: 70%;
+  width: fit-content;  /* 내용만큼만 늘어남 */
   padding: 10px 15px;
   font-size: 14px;
   font-weight: 400;
