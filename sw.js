@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v16'; // Fix: index.html Network First — 배포 후 일반 탭 구버전 캐시 문제 해결
+const CACHE_NAME = 'jip-v17'; // Fix: SW 업데이트 시 자동 새로고침 (postMessage → location.reload)
 
 const STATIC_ASSETS = [
   '/style.css',
@@ -52,16 +52,23 @@ self.addEventListener('install', event => {
 });
 
 // ---------------------------------------------------------------------------
-// 활성화: 이전 캐시 정리
+// 활성화: 이전 캐시 정리 + 모든 클라이언트에 업데이트 알림
 // ---------------------------------------------------------------------------
 
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(
+    caches.keys()
+      .then(keys => Promise.all(
         keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
-      )
-    ).then(() => self.clients.claim())
+      ))
+      .then(() => self.clients.claim())
+      .then(() => self.clients.matchAll({ type: 'window' }))
+      .then(clients => {
+        // 새 SW가 활성화됐음을 기존 페이지에 알려 자동 새로고침 유도
+        clients.forEach(client =>
+          client.postMessage({ type: 'SW_UPDATED', version: CACHE_NAME })
+        );
+      })
   );
 });
 
