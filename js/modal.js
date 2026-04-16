@@ -831,8 +831,9 @@ function saveSummaryAsRecord() {
 // ---------------------------------------------------------------------------
 
 function _showInlineDeleteConfirm(type, id) {
+  logger.debug('[DELETE] _showInlineDeleteConfirm called', type, id);
   const footer = document.querySelector('#modal-box .modal-footer');
-  if (!footer) return;
+  if (!footer) { logger.error('[DELETE] modal-footer not found'); return; }
   footer.innerHTML = `
     <span style="font-size:12px;color:var(--color-text-secondary);margin-right:auto;">정말 삭제할까요?</span>
     <button class="btn-secondary" onclick="closeModal()">아니오</button>
@@ -842,6 +843,7 @@ function _showInlineDeleteConfirm(type, id) {
 }
 
 function _executeModalDelete(type, id) {
+  logger.debug('[DELETE] _executeModalDelete called', type, id);
   if (type === 'record') {
     state.myRecords = state.myRecords.filter(r => r.id !== id);
     if (state.selRecord === id) {
@@ -1014,10 +1016,26 @@ function saveCustomRole() {
 // 토스트
 // ---------------------------------------------------------------------------
 
-function showToast(msg) {
+function showToast(msg, opts = {}) {
   const el = document.getElementById('toast');
   if (!el) return;
-  el.textContent = msg;
-  el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 2200);
+  if (el._hideTimer) clearTimeout(el._hideTimer);
+
+  if (opts.action) {
+    el.innerHTML = `<span>${msg}</span><button class="toast-action-btn" id="toast-action-btn">${opts.btnLabel || '보기'}</button>`;
+    el.classList.add('show', 'toast-has-action');
+    el.style.pointerEvents = 'auto';
+    document.getElementById('toast-action-btn').onclick = () => {
+      el.classList.remove('show', 'toast-has-action');
+      el.style.pointerEvents = 'none';
+      opts.action();
+    };
+  } else {
+    el.innerHTML = '';
+    el.textContent = msg;
+    el.classList.remove('toast-has-action');
+    el.classList.add('show');
+    el.style.pointerEvents = 'none';
+    el._hideTimer = setTimeout(() => el.classList.remove('show'), 2200);
+  }
 }

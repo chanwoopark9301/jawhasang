@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v28'; // Fix: JS/CSS 공개 서빙 + SW install 내성 강화
+const CACHE_NAME = 'jip-v31'; // UX: AI 보고서 백그라운드 생성 + 액션 토스트
 
 const STATIC_ASSETS = [
   '/style.css',
