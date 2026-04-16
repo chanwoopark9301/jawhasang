@@ -446,6 +446,10 @@ scripts\stage_commit.bat A "기능 설명"    # Windows
 
 | 커밋 | 내용 |
 |------|------|
+| `2a4e642` | Feat: 슬라이딩 윈도우(20) + patternAnalysis 장기 기억 주입 (jip-v21) |
+| `c1cbddc` | Fix: FOUC 방지 스플래시 + SW controllerchange 첫설치 리로드 제거 (jip-v20) |
+| `18000df` | Fix: 말풍선 fit-content + pre-wrap 공백 제거 + SW controllerchange 방식 (jip-v19) |
+| `3099040` | Fix: 말풍선 색감·레이아웃, AI 컨텍스트 오염, 직접입력 역할 팝업 (jip-v18) |
 | `8018eb2` | Test: 도구 패널 E2E 25개 — 심층질문·타임라인 버튼·모달·삽입 검증, app_page 픽스처(networkidle) |
 | `b4894f9` | Feat: 도구 패널 개편 — 심층 질문·성장 타임라인 버튼 추가, 나의 기록 보고서 버튼 제거, 팝업 모달 2종 |
 | `b382c90` | Fix/Style: UX 개선 9종 — 말풍선·스크롤·사이드바·iOS키보드·대화유지·AI역할·삭제버튼 |
@@ -478,10 +482,11 @@ scripts\stage_commit.bat A "기능 설명"    # Windows
 6. **Railway 배포**: `Procfile` 존재. `DATABASE_URL` 환경변수 설정 시 PostgreSQL 자동 사용.
 7. **dvh 지원**: iOS Safari 15.4+, iPadOS 16+. 그 이하에서는 100vh로 fallback (큰 문제 없음).
 8. **대화창 중심 구조**: 주제/학생 선택 시 메인 영역은 항상 `renderChatView()`. 폼(등록/수정)은 전부 `openModal()`. 인라인 폼 렌더링 없음.
-9. **startContextChat()**: 주제/학생 선택 직후 AI 첫 마디 자동 생성 (`chat.js`). 상담 기록은 `session.supervisionChat`에서 복원. 나의 기록은 최근 기록 3개를 시스템 프롬프트에 포함해 AI가 연속성 있게 시작. Anthropic API 규칙상 trigger 메시지를 `hidden:true`로 히스토리에 포함.
+9. **startContextChat()**: 주제/학생 선택 직후 AI 첫 마디 자동 생성 (`chat.js`). 상담 기록은 `session.supervisionChat`에서 복원. 나의 기록은 최근 기록 3개 + `topic.patternAnalysis`(사용자가 저장한 전체 패턴 분석)를 시스템 프롬프트에 포함 → AI 장기 기억 역할. 상담 기록은 `student.patternAnalysis` 주입. Anthropic API 규칙상 trigger 메시지를 `hidden:true`로 히스토리에 포함.
+23. **AI 대화 토큰 관리**: `continueContextChat()`에서 슬라이딩 윈도우(최근 20개 메시지)만 API 전송. 장기 기억은 "전체 패턴 분석" 저장본(`topic.patternAnalysis`)이 시스템 프롬프트로 주입. "대화 요약·저장"은 Record로 저장되어 최근 3개 기록 컨텍스트에 자동 포함.
 10. **AI_ROLE_PRESETS**: `listener`(그냥 들어주기) / `coach` / `counselor`(감정 상담사) / `advisor`(조언가) / `companion`(생각 친구) / `custom`(직접 입력) 6종. 각 프리셋은 구체적인 행동 지침 포함.
 11. **폰트**: `--font` CSS 변수 = `Nanum Myeongjo` (serif). 自畵像 제목과 동일 폰트 전면 적용. Google Fonts `display=swap`으로 FOUT 방지.
-12. **SW 캐시**: `jip-v{n}` 버전 번호 — CSS/JS 변경 시 반드시 버전 올려야 구 캐시 무효화됨. 현재: `jip-v17`. `index.html`/`/`는 **Network First** 전략 — 새 배포 즉시 최신 HTML 수신, 오프라인만 캐시 폴백. JS·CSS는 Cache First 유지. SW 업데이트 시 `activate`에서 `postMessage({ type: 'SW_UPDATED' })` → 클라이언트 `location.reload()` (세션당 1회, 무한루프 방지).
+12. **SW 캐시**: `jip-v{n}` 버전 번호 — CSS/JS 변경 시 반드시 버전 올려야 구 캐시 무효화됨. 현재: `jip-v21`. `index.html`/`/`는 **Network First** 전략. JS·CSS는 Cache First. SW 업데이트 감지는 `controllerchange` 이벤트 방식 — `_swPrev`(이전 controller)가 있을 때만 `location.reload()` (첫 설치는 무시, 무한루프 방지). FOUC 방지용 `#app-splash` 스플래시가 `render()` 완료 후 fade-out.
 13. **기록/회기 상세**: 메인 영역 인라인 렌더링 없음. 사이드바 트리에서 클릭 시 `openModal('record-detail'/'session-detail')`로 팝업. AI 대화 버튼은 팝업 닫고 기존 채팅창 복귀.
 14. **블록 에디터 (modal.js)**: `renderBlockEditor()` / `collectBlocks()` / `addBlockToEditor()` / `removeBlock()`. verbatim-editor.js의 블록 에디터(축어록 전용)와 별개. edit-record(본문)·edit-session(축어록)에 적용. 문단 구분은 `\n\n`. Enter 두 번 → 새 블록, 빈 블록 Backspace → 위 블록 포커스.
 15. **modalDeleteRecord/Session**: crud.js의 deleteRecord/deleteSession은 confirm+render. 팝업 내 삭제 버튼은 modal.js의 래퍼 함수 사용 (confirm 후 closeModal() 추가 호출).

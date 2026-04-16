@@ -50,9 +50,11 @@ def _inject_data(page, data: dict):
 
 
 def _reload_app(page):
-    """페이지를 새로고침하고 앱 로딩 대기."""
+    """페이지를 새로고침하고 앱 JS 초기화 완료까지 대기."""
     page.reload()
-    page.wait_for_selector('#app', timeout=10_000)
+    page.wait_for_load_state('networkidle', timeout=15_000)
+    # 스플래시가 사라지면 render() 완료 — 없으면 즉시 통과
+    page.wait_for_selector('#app-splash', state='hidden', timeout=8_000)
 
 
 def _select_topic(page, topic_id: str):

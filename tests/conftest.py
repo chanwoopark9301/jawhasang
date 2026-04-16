@@ -119,8 +119,9 @@ def logged_in_page(page, live_server_url):
     page.goto(f'{live_server_url}/login')
     page.fill('input[name=password]', E2E_PASSWORD)
     page.click('button[type=submit]')
-    # 메인 앱 로드 대기
-    page.wait_for_selector('#app', timeout=10_000)
+    # 메인 앱 JS 초기화 완료 대기 (networkidle + 스플래시 소멸)
+    page.wait_for_load_state('networkidle', timeout=15_000)
+    page.wait_for_selector('#app-splash', state='hidden', timeout=8_000)
     return page
 
 
