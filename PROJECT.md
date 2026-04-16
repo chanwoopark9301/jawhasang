@@ -446,8 +446,9 @@ scripts\stage_commit.bat A "기능 설명"    # Windows
 
 | 커밋 | 내용 |
 |------|------|
-| *(이번)* | Feat: 도구 패널 개편 — 심층 질문·성장 타임라인 버튼 추가, 나의 기록 보고서 버튼 제거, 팝업 모달 2종 |
-| *(직전)* | Fix/Style: UX 개선 9종 — 말풍선·스크롤·사이드바·iOS키보드·대화유지·AI역할·삭제버튼 |
+| `8018eb2` | Test: 도구 패널 E2E 25개 — 심층질문·타임라인 버튼·모달·삽입 검증, app_page 픽스처(networkidle) |
+| `b4894f9` | Feat: 도구 패널 개편 — 심층 질문·성장 타임라인 버튼 추가, 나의 기록 보고서 버튼 제거, 팝업 모달 2종 |
+| `b382c90` | Fix/Style: UX 개선 9종 — 말풍선·스크롤·사이드바·iOS키보드·대화유지·AI역할·삭제버튼 |
 | `a4cd8d0` | Docs: PROJECT.md 최신화 |
 | `51e4201` | Feat: 기록/회기 팝업 상세 + 블록 에디터 — 사이드바 트리 클릭 시 팝업, 수정 모달 문단 단위 블록 편집 |
 | `cbea58c` | Fix: renderChatView 레이스 컨디션 — selRecord/selSession 시 chat이 detail 덮어쓰는 버그 |

@@ -182,6 +182,57 @@ run.bat   # 또는 python server.py
 open index.html
 ```
 
+---
+
+## TDD 원칙 (필수)
+
+**모든 기능 추가는 TDD 순서를 따른다.**
+
+### 순서
+
+1. **RED** — 테스트 먼저 작성 후 실패 확인
+2. **GREEN** — 구현 → 테스트 통과 확인
+3. **COMMIT** — 구현 커밋 + 테스트 커밋 (분리 또는 합산)
+
+### 테스트 종류
+
+- **프론트엔드**: Playwright E2E (`tests/test_*.py`) — 정적 분석(타입체크 등)은 테스트로 보지 않음
+- **백엔드**: pytest (`tests/test_server.py` 등) — API, PII 스크러빙, 엔드포인트
+
+### Playwright E2E 규칙
+
+```python
+# 1. DOM 상태·버튼 확인 → logged_in_page 사용 가능
+btn = logged_in_page.locator('#rp-deepq-btn')
+assert btn.is_disabled()
+
+# 2. 커스텀 JS 함수 직접 호출 → 반드시 app_page (networkidle 보장) 사용
+# logged_in_page는 #app 선택자만 기다려 JS 로딩 전에 반환될 수 있음
+def app_page(logged_in_page):
+    logged_in_page.wait_for_load_state('networkidle')
+    return logged_in_page
+
+app_page.evaluate("() => { showDeepQuestionModal(...) }")
+
+# 3. evaluate에 한국어 텍스트 직접 삽입 시 터미널 인코딩 깨짐 → ASCII로 처리
+```
+
+### 테스트 실행
+
+```bash
+# E2E 전체 (서버 자동 기동)
+python -m pytest tests/test_tool_panel.py tests/test_e2e.py -v
+
+# 서버 테스트만
+python -m pytest tests/test_server.py -v
+
+# 전체
+python -m pytest tests/ -v
+```
+
+> **주의**: `test_ui_stage_a.py` 3개는 별도 서버(`localhost:5000`) 미실행 시 항상 실패.
+> E2E 테스트는 픽스처가 내부 서버를 자동 기동하므로 별도 실행 불필요.
+
 # 상담 일지 앱 — 추가 명세 (v2)
 
 기존 CLAUDE.md 아래에 이어 붙일 것.
