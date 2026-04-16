@@ -481,7 +481,7 @@ scripts\stage_commit.bat A "기능 설명"    # Windows
 9. **startContextChat()**: 주제/학생 선택 직후 AI 첫 마디 자동 생성 (`chat.js`). 상담 기록은 `session.supervisionChat`에서 복원. 나의 기록은 최근 기록 3개를 시스템 프롬프트에 포함해 AI가 연속성 있게 시작. Anthropic API 규칙상 trigger 메시지를 `hidden:true`로 히스토리에 포함.
 10. **AI_ROLE_PRESETS**: `listener`(그냥 들어주기) / `coach` / `counselor`(감정 상담사) / `advisor`(조언가) / `companion`(생각 친구) / `custom`(직접 입력) 6종. 각 프리셋은 구체적인 행동 지침 포함.
 11. **폰트**: `--font` CSS 변수 = `Nanum Myeongjo` (serif). 自畵像 제목과 동일 폰트 전면 적용. Google Fonts `display=swap`으로 FOUT 방지.
-12. **SW 캐시**: `jip-v{n}` 버전 번호 — CSS/JS 변경 시 반드시 버전 올려야 구 캐시 무효화됨. 현재: `jip-v15`.
+12. **SW 캐시**: `jip-v{n}` 버전 번호 — CSS/JS 변경 시 반드시 버전 올려야 구 캐시 무효화됨. 현재: `jip-v16`. `index.html`/`/`는 **Network First** 전략 — 새 배포 즉시 최신 HTML 수신, 오프라인만 캐시 폴백. JS·CSS는 Cache First 유지.
 13. **기록/회기 상세**: 메인 영역 인라인 렌더링 없음. 사이드바 트리에서 클릭 시 `openModal('record-detail'/'session-detail')`로 팝업. AI 대화 버튼은 팝업 닫고 기존 채팅창 복귀.
 14. **블록 에디터 (modal.js)**: `renderBlockEditor()` / `collectBlocks()` / `addBlockToEditor()` / `removeBlock()`. verbatim-editor.js의 블록 에디터(축어록 전용)와 별개. edit-record(본문)·edit-session(축어록)에 적용. 문단 구분은 `\n\n`. Enter 두 번 → 새 블록, 빈 블록 Backspace → 위 블록 포커스.
 15. **modalDeleteRecord/Session**: crud.js의 deleteRecord/deleteSession은 confirm+render. 팝업 내 삭제 버튼은 modal.js의 래퍼 함수 사용 (confirm 후 closeModal() 추가 호출).
