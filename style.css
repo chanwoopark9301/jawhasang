@@ -44,6 +44,27 @@
   }
 }
 
+/* ── 앱 초기화 스플래시 (FOUC 방지) ── */
+#app-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: var(--color-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.25s ease;
+}
+#app-splash.hiding { opacity: 0; pointer-events: none; }
+#app-splash-logo {
+  font-family: var(--font);
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--color-text);
+  opacity: 0.55;
+  letter-spacing: 0.04em;
+}
+
 body {
   font-family: var(--font);
   font-size: 15px;

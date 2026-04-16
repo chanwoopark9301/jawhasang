@@ -25,6 +25,7 @@ async function loadData() {
     _useSampleData();
   }
   render(); // 초기 상태가 이미 welcome이므로 홈 화면이 그대로 표시됨
+  _hideSplash(); // 첫 render() 완료 후 스플래시 제거
 
   // 2단계: 서버에서 최신 데이터 백그라운드 수신 후 재렌더
   try {
@@ -115,6 +116,14 @@ function saveData() {
     logger.error('데이터 저장 실패', e);
     _showSaveError();
   });
+}
+
+// FOUC 방지 스플래시 제거 — render() 호출 직후 실행
+function _hideSplash() {
+  const el = document.getElementById('app-splash');
+  if (!el) return;
+  el.classList.add('hiding');
+  setTimeout(() => el.remove(), 260); // transition(0.25s) 후 DOM 제거
 }
 
 function _showSaveError() {

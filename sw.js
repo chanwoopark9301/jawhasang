@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v19'; // Fix: 말풍선 내용크기 맞춤, SW controllerchange 방식으로 교체
+const CACHE_NAME = 'jip-v20'; // Fix: FOUC 방지 스플래시 추가
 
 const STATIC_ASSETS = [
   '/style.css',

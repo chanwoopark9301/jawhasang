@@ -24,6 +24,11 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <!-- 앱 초기화 완료 전 FOUC 방지 스플래시 (JS가 render() 후 제거) -->
+  <div id="app-splash">
+    <div id="app-splash-logo">自畵像</div>
+  </div>
+
   <div class="app" id="app">
 
     <!-- 패널 백드롭 (모바일 전용) -->
