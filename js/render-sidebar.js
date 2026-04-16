@@ -72,6 +72,9 @@ function _renderRecordChildren(topicId) {
   const items = records.map(r => {
     return `<div class="sub-child" onclick="openModal('record-detail',{id:'${r.id}'})">
       <span class="sub-child-label">${_sbDate(r.date)} · ${r.recordNum}번째</span>
+      <span class="sub-child-actions">
+        <button class="sub-item-btn sub-item-del" onclick="event.stopPropagation();deleteRecord('${r.id}')" title="삭제">×</button>
+      </span>
     </div>`;
   }).join('');
 
@@ -93,6 +96,9 @@ function _renderSessionChildren(studentId) {
   const items = sessions.map(s => {
     return `<div class="sub-child" onclick="openModal('session-detail',{id:'${s.id}'})">
       <span class="sub-child-label">${_sbDate(s.date)} · ${s.sessionNum}회기</span>
+      <span class="sub-child-actions">
+        <button class="sub-item-btn sub-item-del" onclick="event.stopPropagation();deleteSession('${s.id}')" title="삭제">×</button>
+      </span>
     </div>`;
   }).join('');
 

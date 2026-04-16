@@ -140,25 +140,18 @@ function _initVisualViewport() {
 
   function _onVVChange() {
     const vv = window.visualViewport;
-    const inputArea = document.getElementById('input-area');
-    const mobileNav = document.getElementById('mobile-nav');
     const kbHeight = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
     const hasKeyboard = kbHeight > 50;
 
-    if (inputArea && inputArea.style.display !== 'none') {
-      if (hasKeyboard) {
-        inputArea.style.marginBottom = kbHeight + 'px';
-        if (mobileNav) mobileNav.style.opacity = '0';
-      } else {
-        inputArea.style.marginBottom = '';
-        if (mobileNav) mobileNav.style.opacity = '';
-      }
-      const focused = document.activeElement;
-      if (focused && focused.id === 'chat-input-bottom') {
-        setTimeout(() => focused.scrollIntoView({ block: 'nearest' }), 50);
-      }
-    } else {
-      if (mobileNav) mobileNav.style.opacity = '';
+    // CSS 변수로 키보드 높이를 전달 → CSS에서 레이아웃 처리
+    document.documentElement.style.setProperty('--kb-offset', hasKeyboard ? kbHeight + 'px' : '0px');
+
+    const mobileNav = document.getElementById('mobile-nav');
+    if (mobileNav) mobileNav.style.opacity = hasKeyboard ? '0' : '';
+
+    // 키보드 올라올 때 대화창도 맨 아래로
+    if (hasKeyboard) {
+      setTimeout(() => scrollChatToBottom(), 80);
     }
   }
 

@@ -37,11 +37,7 @@ function sendCurrentChat() {
 }
 
 async function continueContextChat(text) {
-  console.log('[chat] continueContextChat 진입, _ctxChatLoading=', state._ctxChatLoading);
-  if (!text || state._ctxChatLoading) {
-    console.warn('[chat] 조기 리턴 — text:', text, '_ctxChatLoading:', state._ctxChatLoading);
-    return;
-  }
+  if (!text || state._ctxChatLoading) return;
   state._ctxChatLoading = true;
 
   appendMessage('user', text);
@@ -51,18 +47,13 @@ async function continueContextChat(text) {
   const topic   = isMyRecords ? state.myTopics.find(t => t.id === state.selTopic) : null;
   const student = !isMyRecords ? state.students.find(s => s.id === state.selStudent) : null;
 
-  const aiRole = topic?.aiPrompt || '따뜻하게 경청하고 공감하는 친구처럼';
-  const sysPrompt = isMyRecords
-    ? `당신은 ${aiRole} 역할입니다. 주제는 '${topic?.title || '나의 기록'}'입니다. 한국어 존댓말 사용.`
-    : `당신은 학교상담 슈퍼바이저입니다. 내담자: ${student?.alias || '?'} (${student?.grade || ''}). 한국어 존댓말 사용.`;
+  // AI 역할: state.currentRole → AI_ROLE_PRESETS에서 prompt 조회. 없으면 topic.aiPrompt 폴백
+  const sysPrompt = _buildChatSysPrompt(isMyRecords, topic, student);
 
-  // currentChatMessages → Anthropic messages 형식 변환
-  // system 메시지 제외, hidden 메시지는 UI엔 안 보이지만 API context엔 포함
+  // hidden 포함, system 제외 → Anthropic messages 형식
   const messages = state.currentChatMessages
     .filter(m => m.role !== 'system')
     .map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.text }));
-
-  console.log('[chat] API 전송 직전 — messages:', JSON.stringify(messages));
 
   try {
     const res = await fetch('/api/analyze', {
@@ -74,17 +65,38 @@ async function continueContextChat(text) {
         messages,
       }),
     });
-    console.log('[chat] API 응답 status:', res.status, res.ok);
     const data = await res.json();
-    console.log('[chat] API 응답 data:', JSON.stringify(data).slice(0, 300));
     const reply = data.content?.map(c => c.text || '').join('').trim();
-    if (reply) appendMessage('ai', reply); // appendMessage가 renderChatView 호출 → 표시기 자동 제거
-    else { hideTypingIndicator(); console.warn('[chat] reply 비어있음 — data.content:', data.content, 'data.error:', data.error); }
+    if (reply) appendMessage('ai', reply);
+    else hideTypingIndicator();
   } catch (e) {
-    console.error('[chat] 예외 발생:', e);
     appendMessage('ai', '죄송해요, 오류가 발생했어요. 다시 시도해주세요.');
   } finally {
     state._ctxChatLoading = false;
+  }
+}
+
+// AI 대화용 시스템 프롬프트 생성 (현재 역할 기준으로 매 메시지마다 최신 반영)
+function _buildChatSysPrompt(isMyRecords, topic, student) {
+  if (isMyRecords) {
+    // currentRole → preset 조회, 없으면 topic.aiPrompt, 없으면 기본값
+    let rolePrompt = '따뜻하게 경청하고 공감하는 친구처럼';
+    const preset = AI_ROLE_PRESETS.find(p => p.id === state.currentRole);
+    if (preset && preset.id !== 'custom' && preset.prompt) {
+      rolePrompt = preset.prompt;
+    } else if (topic?.aiPrompt) {
+      rolePrompt = topic.aiPrompt;
+    }
+    return `당신은 다음 역할입니다: ${rolePrompt}
+
+주제: '${topic?.title || '나의 기록'}'
+한국어 존댓말 사용. 질문은 한 번에 하나만.`;
+  } else {
+    const student_ = student;
+    return `당신은 학교상담 임상 슈퍼바이저입니다.
+내담자: ${student_?.alias || '?'} (${student_?.grade || ''}${student_?.gender ? ' · ' + student_.gender : ''})
+가정: ${student_?.family || '정보 없음'} / 교우: ${student_?.peers || '정보 없음'}
+한국어 존댓말 사용. 판단보다 질문으로 안내.`;
   }
 }
 
@@ -137,12 +149,14 @@ function appendSystemMessage(text) {
 }
 
 function scrollChatToBottom() {
+  // rAF 두 번 연속으로 렌더링 완료 후 확실히 스크롤
   requestAnimationFrame(() => {
-    const el = document.getElementById('chat-messages');
-    if (el) el.scrollTop = el.scrollHeight;
-    // 기존 대화 컨테이너도 함께 처리
-    const el2 = document.getElementById('my-chat-messages');
-    if (el2) el2.scrollTop = el2.scrollHeight;
+    requestAnimationFrame(() => {
+      const el = document.getElementById('chat-messages');
+      if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      const el2 = document.getElementById('my-chat-messages');
+      if (el2) el2.scrollTo({ top: el2.scrollHeight, behavior: 'smooth' });
+    });
   });
 }
 

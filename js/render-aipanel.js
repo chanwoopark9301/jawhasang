@@ -250,7 +250,9 @@ function _updateRpButtons() {
 // ---------------------------------------------------------------------------
 
 function selectRole(presetId) {
+  const prevRole = state.currentRole;
   state.currentRole = presetId;
+
   const topic = state.myTopics.find(t => t.id === state.selTopic);
   if (topic) {
     const preset = AI_ROLE_PRESETS.find(p => p.id === presetId);
@@ -258,6 +260,14 @@ function selectRole(presetId) {
     topic.selectedRole = presetId;
     saveData();
   }
+
+  // 대화 중 역할 변경 시 시스템 메시지로 구분선 표시
+  if (prevRole !== presetId && state.currentChatMessages.length > 0) {
+    const preset = AI_ROLE_PRESETS.find(p => p.id === presetId);
+    const label  = preset ? preset.label : presetId;
+    appendSystemMessage(`— AI 역할이 '${label}'(으)로 변경되었습니다 —`);
+  }
+
   renderRightPanel();
   updateContextChip();
 }

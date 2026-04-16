@@ -31,15 +31,24 @@ function handleAdd() {
 // ---------------------------------------------------------------------------
 
 function selectStudent(id) {
+  // 같은 학생 재선택이면 대화 유지 (초기화 안 함)
+  const isSame = state.selStudent === id;
   state.selStudent = id;
   state.selSession = null;
   state.mode       = 'list';
   state.filterTags = [];
   state.view       = 'student';
-  state.currentChatMessages = [];
   closePanels();
-  render();
-  startContextChat();
+  if (!isSame) {
+    // 다른 학생으로 전환: localStorage에서 복원 시도
+    state.currentChatMessages = [];
+    const restored = loadChatHistory();
+    render();
+    if (!restored) startContextChat();
+    else renderChatView();
+  } else {
+    render();
+  }
 }
 
 function selectSession(id) {
@@ -105,14 +114,26 @@ function setSessionTab(tab) {
 // ---------------------------------------------------------------------------
 
 function selectTopic(id) {
+  // 같은 주제 재선택이면 대화 유지 (초기화 안 함)
+  const isSame = state.selTopic === id;
   state.selTopic   = id;
   state.selRecord  = null;
   state.myMode     = 'list';
   state.filterTags = [];
-  state.currentChatMessages = [];
+  // 해당 주제의 저장된 AI 역할 복원 (없으면 listener 기본값)
+  const topic = state.myTopics.find(t => t.id === id);
+  state.currentRole = topic?.selectedRole || 'listener';
   closePanels();
-  render();
-  startContextChat();
+  if (!isSame) {
+    // 다른 주제로 전환: localStorage에서 복원 시도
+    state.currentChatMessages = [];
+    const restored = loadChatHistory();
+    render();
+    if (!restored) startContextChat();
+    else renderChatView();
+  } else {
+    render();
+  }
 }
 
 function selectRecord(id) {

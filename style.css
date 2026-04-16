@@ -1585,38 +1585,7 @@ body {
   padding: 4px 0 12px;
 }
 
-.chat-msg {
-  display: flex;
-}
-
-.chat-ai {
-  justify-content: flex-start;
-}
-
-.chat-user {
-  justify-content: flex-end;
-}
-
-.chat-bubble {
-  max-width: 85%;
-  padding: 10px 14px;
-  border-radius: 14px;
-  font-size: 13px;
-  line-height: 1.7;
-}
-
-.chat-ai .chat-bubble {
-  background: var(--color-bg-secondary);
-  border: 0.5px solid var(--color-border);
-  color: var(--color-text);
-  border-bottom-left-radius: 3px;
-}
-
-.chat-user .chat-bubble {
-  background: var(--color-accent);
-  color: #fff;
-  border-bottom-right-radius: 3px;
-}
+/* 구버전 .chat-msg 스타일 제거됨 — .chat-bubble-wrap 계열로 통일 */
 
 .chat-input-row {
   display: flex;
@@ -3450,10 +3419,15 @@ body { height: 100dvh; }
 }
 
 /* 하단 입력창 */
+:root { --kb-offset: 0px; }
+
 .input-area {
   padding: 10px 16px 14px;
   border-top: 0.5px solid var(--color-border);
   flex-shrink: 0;
+  /* iOS 키보드 대응: CSS 변수로 올라오는 높이 보정 */
+  padding-bottom: calc(14px + var(--kb-offset));
+  transition: padding-bottom 0.15s ease;
 }
 .input-wrap {
   display: flex;
@@ -3603,8 +3577,18 @@ body { height: 100dvh; }
 .sidebar.collapsed .nav-section-label,
 .sidebar.collapsed .sub-items,
 .sidebar.collapsed .sidebar-footer { display: none; }
-.sidebar.collapsed .nav-item { justify-content: center; padding: 8px 0; }
-.sidebar.collapsed .nav-item span:not(.nav-dot) { display: none; }
+.sidebar.collapsed .nav-item {
+  justify-content: center;
+  padding: 8px 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.sidebar.collapsed .nav-item span:not(.nav-dot) {
+  display: none;
+}
+.sidebar.collapsed .nav-dot {
+  font-size: 11px;
+}
 
 .right-panel {
   transition: width 0.2s ease, min-width 0.2s ease;
@@ -3614,10 +3598,18 @@ body { height: 100dvh; }
 
 .sb-toggle {
   display: flex; align-items: center; justify-content: center;
-  width: 26px; height: 26px; margin: 0 9px 10px;
-  border: 0.5px solid var(--color-border-tertiary); border-radius: 6px;
-  cursor: pointer; color: var(--color-text-tertiary); font-size: 12px;
+  width: 32px; height: 32px; margin: 0 10px 10px;
+  border: 1px solid var(--color-border); border-radius: 8px;
+  cursor: pointer; color: var(--color-text-secondary); font-size: 16px;
   background: transparent; flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.sb-toggle:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text);
+}
+@media (max-width: 767px) {
+  .sb-toggle { width: 36px; height: 36px; font-size: 18px; }
 }
 
 /* ── 통합 모달 ── */
@@ -3676,43 +3668,51 @@ body { height: 100dvh; }
 .chat-messages {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 24px 20px 12px;
+  gap: 4px;
+  padding: 20px 24px 12px;
+  max-width: 720px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 .chat-bubble-wrap {
   display: flex;
-  animation: bubbleFadeIn 0.18s ease;
+  animation: bubbleFadeIn 0.15s ease;
 }
 .chat-bubble-wrap.user { justify-content: flex-end; }
 .chat-bubble-wrap.ai   { justify-content: flex-start; }
 
 /* 연속 같은 발화자 사이 간격 좁힘 */
 .chat-bubble-wrap.user + .chat-bubble-wrap.user,
-.chat-bubble-wrap.ai  + .chat-bubble-wrap.ai  { margin-top: -2px; }
+.chat-bubble-wrap.ai  + .chat-bubble-wrap.ai  { margin-top: 1px; }
 /* 발화자 전환 시 간격 넓힘 */
 .chat-bubble-wrap.user + .chat-bubble-wrap.ai,
-.chat-bubble-wrap.ai  + .chat-bubble-wrap.user { margin-top: 6px; }
+.chat-bubble-wrap.ai  + .chat-bubble-wrap.user { margin-top: 10px; }
 
 .chat-bubble {
-  max-width: 70%;
-  padding: 9px 14px;
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 1.6;
+  max-width: 68%;
+  padding: 9px 13px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.65;
   white-space: pre-wrap;
   word-break: break-word;
 }
 .chat-bubble-user {
-  background: var(--color-accent);
-  color: white;
+  background: #2a2520;
+  color: rgba(255,255,255,0.92);
   border-radius: 16px 16px 4px 16px;
+  letter-spacing: 0.01em;
 }
 .chat-bubble-ai {
   background: var(--color-bg-secondary);
   color: var(--color-text);
-  border-radius: 16px 16px 16px 4px;
-  border: 0.5px solid var(--color-border);
+  border-radius: 4px 16px 16px 16px;
+  border: none;
+}
+@media (max-width: 767px) {
+  .chat-bubble { max-width: 85%; font-size: 14px; }
+  .chat-messages { padding: 16px 14px 8px; }
 }
 
 /* ── 입력 중 표시 (점 3개 애니메이션) ── */
