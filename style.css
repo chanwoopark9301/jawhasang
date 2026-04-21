@@ -3743,50 +3743,6 @@ body { height: var(--app-height, 100dvh); }
   padding: 20px;
 }
 
-/* ── 사이드바 접기 ── */
-.sidebar {
-  transition: width 0.2s ease, min-width 0.2s ease;
-}
-.sidebar.collapsed { width: 44px; min-width: 44px; overflow: hidden; }
-.sidebar.collapsed .sidebar-logo,
-.sidebar.collapsed .new-chat-btn,
-.sidebar.collapsed .nav-section-label,
-.sidebar.collapsed .sub-items,
-.sidebar.collapsed .sidebar-footer { display: none; }
-.sidebar.collapsed .nav-item {
-  justify-content: center;
-  padding: 8px 0;
-  overflow: hidden;
-  white-space: nowrap;
-}
-.sidebar.collapsed .nav-item span:not(.nav-dot) {
-  display: none;
-}
-.sidebar.collapsed .nav-dot {
-  font-size: 11px;
-}
-
-.right-panel {
-  transition: width 0.2s ease, min-width 0.2s ease;
-}
-.right-panel.collapsed { width: 44px; min-width: 44px; overflow: hidden; }
-.right-panel.collapsed > *:not(.rp-toggle) { display: none; }
-
-.sb-toggle {
-  display: flex; align-items: center; justify-content: center;
-  width: 32px; height: 32px; margin: 0 10px 10px;
-  border: 1px solid var(--color-border); border-radius: 8px;
-  cursor: pointer; color: var(--color-text-secondary); font-size: 16px;
-  background: transparent; flex-shrink: 0;
-  transition: background 0.15s, color 0.15s;
-}
-.sb-toggle:hover {
-  background: var(--color-bg-tertiary);
-  color: var(--color-text);
-}
-@media (max-width: 767px) {
-  .sb-toggle { width: 36px; height: 36px; font-size: 18px; }
-}
 
 /* ── 통합 모달 ── */
 .modal-overlay {

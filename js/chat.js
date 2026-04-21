@@ -225,10 +225,8 @@ function hideTypingIndicator() {
 // 컨텍스트 대화 시작 (주제/내담자 선택 직후 AI 첫 마디)
 // ---------------------------------------------------------------------------
 
-async function startContextChat() {
+function startContextChat() {
   const isMyRecords = state.view === 'myrecords';
-  const topic   = isMyRecords ? state.myTopics.find(t => t.id === state.selTopic) : null;
-  const student = !isMyRecords ? state.students.find(s => s.id === state.selStudent) : null;
 
   // 상담 기록 — 기존 슈퍼비전 대화 이력 복원
   if (!isMyRecords && state.selSession) {
@@ -242,117 +240,5 @@ async function startContextChat() {
     }
   }
 
-  // 나의 기록 — 최근 기록 컨텍스트
-  const recentRecords = isMyRecords
-    ? state.myRecords
-        .filter(r => r.topicId === state.selTopic)
-        .sort((a, b) => b.date.localeCompare(a.date))
-        .slice(0, 3)
-    : [];
-  const isFirstRecord = recentRecords.length === 0;
-  const recentRecordContext = isFirstRecord
-    ? '이 주제의 첫 번째 대화입니다.'
-    : `최근 기록 ${recentRecords.length}개:\n` +
-      recentRecords.map(r =>
-        `[${r.date}] ${r.content.substring(0, 150)}`
-      ).join('\n\n');
-
-  // 상담 기록 — 최근 회기 컨텍스트
-  const recentSessions = !isMyRecords
-    ? state.sessions
-        .filter(s => s.studentId === state.selStudent)
-        .sort((a, b) => b.date.localeCompare(a.date))
-        .slice(0, 2)
-    : [];
-  const isFirstSession = recentSessions.length === 0;
-  const recentSessionContext = isFirstSession
-    ? '첫 번째 상담입니다.'
-    : `최근 회기:\n` +
-      recentSessions.map(s =>
-        `[${s.date} · ${s.sessionNum}회기] ${
-          s.analysis?.overall || s.verbatim?.substring(0, 150) || '기록 없음'
-        }`
-      ).join('\n\n');
-
-  const aiRole = topic?.aiPrompt || '따뜻하게 경청하고 공감하는 친구처럼';
-
-  // 저장된 패턴 분석 → 장기 기억으로 주입 (사용자가 직접 저장한 체크포인트)
-  const savedAnalysis   = topic?.patternAnalysis;
-  const savedStudentPat = student?.patternAnalysis;
-
-  const myMemoryBlock = savedAnalysis ? `
-[장기 기억 — 이전에 저장된 분석 (${savedAnalysis.savedAt})]
-${savedAnalysis.overall ? '종합: ' + savedAnalysis.overall : ''}
-${savedAnalysis.recurring ? '반복 주제: ' + savedAnalysis.recurring : ''}
-${savedAnalysis.growth ? '성장: ' + savedAnalysis.growth : ''}
-` : '';
-
-  const svMemoryBlock = savedStudentPat ? `
-[저장된 패턴 분석 (${savedStudentPat.savedAt})]
-${savedStudentPat.overall ? '종합: ' + savedStudentPat.overall : ''}
-${savedStudentPat.progress ? '진전: ' + savedStudentPat.progress : ''}
-` : '';
-
-  const sysPrompt = isMyRecords
-    ? `당신은 ${aiRole} 역할입니다.
-주제: '${topic?.title || '나의 기록'}'
-${myMemoryBlock}
-${recentRecordContext}
-
-대화 원칙:
-- 처음 만난 사람처럼 대하지 말 것. 이 사람의 흐름을 알고 있는 사람처럼.
-- 칭찬보다 관심. 조언보다 공감이 먼저.
-- 최근 기록의 분위기와 흐름은 파악하되, 네가 먼저 기록의 구체적 내용을 꺼내지 말 것. 상대방이 꺼낸 말에 자연스럽게 반응할 것.
-- ${isFirstRecord
-    ? '첫 기록이니 어떤 계기로 시작했는지 자연스럽게 물어볼 것.'
-    : '가장 최근 기록에서 자연스럽게 이어받되, 구체적 내용 언급보다는 분위기와 감정에서 출발할 것.'}
-- 질문은 한 번에 하나만. 짧고 자연스럽게.
-- 한국어 존댓말 사용.`
-    : `당신은 학교상담 임상 슈퍼바이저입니다.
-내담자: ${student?.alias || '?'} (${student?.grade || ''}${student?.gender ? ' · ' + student.gender : ''})
-가정: ${student?.family || '정보 없음'}
-교우: ${student?.peers || '정보 없음'}
-상황: ${student?.situation || '정보 없음'}
-${svMemoryBlock}
-${recentSessionContext}
-
-대화 원칙:
-- 상담사의 감각과 경험을 먼저 물어볼 것. 정보 수집보다 성찰이 먼저.
-- ${isFirstSession
-    ? '첫 회기이니 이 내담자를 맡게 된 배경이나 첫인상을 물어볼 것.'
-    : '직전 회기에서 자연스럽게 이어받을 것.'}
-- 판단하지 말고, 상담사가 스스로 발견하도록 질문으로 안내.
-- 질문은 한 번에 하나만.
-- 한국어 존댓말 사용.`;
-
-  const startMsg = isMyRecords
-    ? (isFirstRecord
-        ? '지금 이 주제로 첫 대화를 시작합니다. 자연스럽게 첫 마디를 해주세요.'
-        : '최근 기록을 바탕으로 자연스럽게 대화를 이어받아 첫 마디를 해주세요. 요약하거나 정리하지 말고, 그냥 이어서 대화하듯이.')
-    : (isFirstSession
-        ? '첫 회기입니다. 자연스럽게 첫 인삿말을 해주세요.'
-        : '직전 회기를 바탕으로 자연스럽게 이어받아 첫 마디를 해주세요.');
-
-  // hidden trigger — Anthropic API first-message-must-be-user 준수
-  state.currentChatMessages.push({ role: 'user', text: startMsg, hidden: true });
-  showTypingIndicator();
-
-  try {
-    const res = await fetch('/api/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6', max_tokens: 400,
-        system: [{ type: 'text', text: sysPrompt, cache_control: { type: 'ephemeral' } }],
-        messages: [{ role: 'user', content: startMsg }],
-      }),
-    });
-    const data = await res.json();
-    const text = data.content?.map(c => c.text || '').join('').trim();
-    if (text) appendMessage('ai', text);
-    else hideTypingIndicator();
-  } catch (e) {
-    hideTypingIndicator();
-    appendMessage('ai', '안녕하세요. 오늘 어떤 이야기를 나눠볼까요?');
-  }
+  appendSystemMessage('대화 준비가 되었어요!');
 }

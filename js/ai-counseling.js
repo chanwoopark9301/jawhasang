@@ -105,53 +105,54 @@ async function runAI() {
 
   state.aiLoading = true;
   renderAIPanel();
+  showToast('보고서 생성 중이에요. 자유롭게 이용하세요 :)');
 
-  try {
-    let verbatimSummary = workSession.verbatimSummary || null;
+  // 백그라운드 실행 — 완료 시 액션 토스트 알림
+  (async () => {
+    try {
+      let verbatimSummary = workSession.verbatimSummary || null;
 
-    // ── 1단계: 긴 축어록이면 먼저 요약 ──────────────────────────────────
-    if (isLong && !verbatimSummary) {
-      logger.info('1단계: 긴 축어록 핵심 추출 (%d자)', workSession.verbatim.length);
-      setAIStageLabel('1단계: 핵심 장면 추출 중...');
-      verbatimSummary = await streamAnalyze(
-        { model: 'claude-sonnet-4-6', max_tokens: 600,
-          messages: [{ role: 'user', content: buildSummaryPrompt(workSession, student) }] },
-        (acc) => setAIStageLabel(`1단계: 핵심 추출 중... ${acc.length}자`)
+      // ── 1단계: 긴 축어록이면 먼저 요약 ──────────────────────────────────
+      if (isLong && !verbatimSummary) {
+        logger.info('1단계: 긴 축어록 핵심 추출 (%d자)', workSession.verbatim.length);
+        verbatimSummary = await streamAnalyze(
+          { model: 'claude-sonnet-4-6', max_tokens: 600,
+            messages: [{ role: 'user', content: buildSummaryPrompt(workSession, student) }] },
+          () => {}
+        );
+        if (session) session.verbatimSummary = verbatimSummary;
+        logger.info('1단계 완료: 요약 %d자', verbatimSummary.length);
+      }
+
+      // ── 2단계: 보고서 생성 ────────────────────────────────────────────────
+      logger.info('보고서 생성 중 (isLong=%s)', isLong);
+      const text = await streamAnalyze(
+        { model: 'claude-sonnet-4-6', max_tokens: 2000,
+          messages: [{ role: 'user', content: buildReportPrompt(workSession, student, verbatimSummary) }] },
+        () => {}
       );
-      if (session) session.verbatimSummary = verbatimSummary;
-      logger.info('1단계 완료: 요약 %d자', verbatimSummary.length);
+
+      const result   = parseJSON(text);
+      result.savedAt = new Date().toISOString().split('T')[0];
+
+      if (session) {
+        session.analysis = result;
+        saveData();
+      }
+
+      logger.info('슈퍼비전 보고서 생성 완료: %s', student?.alias);
+      showToast('슈퍼비전 보고서 완성!', {
+        btnLabel: '지금 보기',
+        action: () => openModal('report', { analysis: result }),
+      });
+    } catch (e) {
+      logger.error('슈퍼비전 보고서 생성 실패', e);
+      showToast('보고서 생성 오류: ' + e.message);
+    } finally {
+      state.aiLoading = false;
+      renderAIPanel();
     }
-
-    // ── 2단계: 보고서 생성 ────────────────────────────────────────────────
-    const stageLabel = isLong ? '2단계: 보고서 작성 중...' : '보고서 작성 중...';
-    logger.info('보고서 생성 중 (isLong=%s)', isLong);
-    setAIStageLabel(stageLabel);
-
-    const text = await streamAnalyze(
-      { model: 'claude-sonnet-4-6', max_tokens: 2000,
-        messages: [{ role: 'user', content: buildReportPrompt(workSession, student, verbatimSummary) }] },
-      (acc) => setAIStageLabel(`${stageLabel} ${acc.length}자`)
-    );
-
-    const result   = parseJSON(text);
-    result.savedAt = new Date().toISOString().split('T')[0];
-
-    if (session) {
-      // 기존 회기에 바로 저장
-      session.analysis = result;
-      saveData();
-    }
-
-    // 결과를 모달로 표시 (저장/슈퍼비전 버튼 포함)
-    openModal('report', { analysis: result });
-    logger.info('슈퍼비전 보고서 생성 완료: %s', student?.alias);
-  } catch (e) {
-    logger.error('슈퍼비전 보고서 생성 실패', e);
-    showToast('보고서 생성 오류: ' + e.message);
-  } finally {
-    state.aiLoading = false;
-  }
-  renderAIPanel();
+  })();
 }
 
 // ---------------------------------------------------------------------------

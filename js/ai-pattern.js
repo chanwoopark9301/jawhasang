@@ -286,6 +286,8 @@ function showTimelineModal(result, contextLabel, date, isMy) {
 }
 
 function closeTimeline() {
-  document.getElementById('timeline-overlay').style.display = 'none';
-  document.getElementById('timeline-modal').style.display   = 'none';
+  const overlay = document.getElementById('timeline-overlay');
+  const modal   = document.getElementById('timeline-modal');
+  if (overlay) overlay.style.display = 'none';
+  if (modal)   modal.style.display   = 'none';
 }

@@ -56,41 +56,6 @@ function _closePlusMenuOutside(e) {
 }
 
 // ---------------------------------------------------------------------------
-// 사이드바 접기 토글 (데스크탑)
-// ---------------------------------------------------------------------------
-
-function toggleLeftSidebar() {
-  const sb = document.getElementById('sidebar');
-  if (!sb) return;
-  const collapsed = sb.classList.toggle('collapsed');
-  localStorage.setItem('sb_left_collapsed', collapsed ? '1' : '');
-  const btn = document.getElementById('sb-left-toggle');
-  if (btn) btn.textContent = collapsed ? '›' : '‹';
-}
-
-function toggleRightPanel() {
-  const rp = document.getElementById('right-panel');
-  if (!rp) return;
-  const collapsed = rp.classList.toggle('collapsed');
-  localStorage.setItem('sb_right_collapsed', collapsed ? '1' : '');
-  const btn = document.getElementById('sb-right-toggle');
-  if (btn) btn.textContent = collapsed ? '‹' : '›';
-}
-
-function initSidebarState() {
-  if (localStorage.getItem('sb_left_collapsed')) {
-    document.getElementById('sidebar')?.classList.add('collapsed');
-    const btn = document.getElementById('sb-left-toggle');
-    if (btn) btn.textContent = '›';
-  }
-  if (localStorage.getItem('sb_right_collapsed')) {
-    document.getElementById('right-panel')?.classList.add('collapsed');
-    const btn = document.getElementById('sb-right-toggle');
-    if (btn) btn.textContent = '‹';
-  }
-}
-
-// ---------------------------------------------------------------------------
 // 모바일 패널 토글
 // ---------------------------------------------------------------------------
 

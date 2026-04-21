@@ -98,33 +98,34 @@ JSON 예시:
 
   state.myAiLoading = true;
   renderAIPanel();
+  showToast('보고서 생성 중이에요. 자유롭게 이용하세요 :)');
 
-  try {
-    const text = await streamAnalyze(
-      { model: 'claude-sonnet-4-6', max_tokens: 6000,
-        messages: [{ role: 'user', content: prompt }] },
-      (acc) => {
-        const lbl = document.querySelector('#ai-content .ai-loading-label');
-        if (lbl) lbl.textContent = `작성 중... ${acc.length}자`;
-      }
-    );
-    const result   = parseJSON(text);
-    // AI가 포함하지 않은 경우 보장
-    result.savedAt = result.savedAt || today;
-    result.period  = result.period  || periodLabel;
-    // topic에 패턴 분석 결과 저장
-    topic.patternAnalysis = result;
-    saveData();
-    logger.info('나의 기록 AI 보고서 완료: 주제=%s', topic.title);
-    // 결과를 모달로 표시
-    openModal('pattern', { result });
-  } catch (e) {
-    logger.error('나의 기록 보고서 생성 실패', e);
-    showToast('보고서 생성 오류: ' + e.message);
-  } finally {
-    state.myAiLoading = false;
-  }
-  renderAIPanel();
+  // 백그라운드 실행 — await 없이 즉시 반환, 완료 시 액션 토스트 알림
+  (async () => {
+    try {
+      const text = await streamAnalyze(
+        { model: 'claude-sonnet-4-6', max_tokens: 6000,
+          messages: [{ role: 'user', content: prompt }] },
+        () => {}
+      );
+      const result   = parseJSON(text);
+      result.savedAt = result.savedAt || today;
+      result.period  = result.period  || periodLabel;
+      topic.patternAnalysis = result;
+      saveData();
+      logger.info('나의 기록 AI 보고서 완료: 주제=%s', topic.title);
+      showToast('보고서 완성!', {
+        btnLabel: '지금 보기',
+        action: () => openModal('pattern', { result }),
+      });
+    } catch (e) {
+      logger.error('나의 기록 보고서 생성 실패', e);
+      showToast('보고서 생성 오류: ' + e.message);
+    } finally {
+      state.myAiLoading = false;
+      renderAIPanel();
+    }
+  })();
 }
 
 // ---------------------------------------------------------------------------

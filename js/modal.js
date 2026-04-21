@@ -233,7 +233,6 @@ function renderModalRecordDetail(data) {
     <div class="modal-footer">
       <button class="btn-secondary" style="color:#b94040;" onclick="_showInlineDeleteConfirm('record','${record.id}')">삭제</button>
       <button class="btn-secondary" onclick="closeModal();openModal('edit-record',{id:'${record.id}'})">수정</button>
-      <button class="btn-primary-my" onclick="closeModal()">AI 대화</button>
     </div>`;
 }
 
