@@ -231,8 +231,10 @@ function showDeepQuestionModal(rawText, contextLabel, date) {
 }
 
 function closeDeepQuestion() {
-  document.getElementById('deep-q-overlay').style.display = 'none';
-  document.getElementById('deep-q-modal').style.display   = 'none';
+  const overlay = document.getElementById('deep-q-overlay');
+  const modal   = document.getElementById('deep-q-modal');
+  if (overlay) overlay.style.display = 'none';
+  if (modal)   modal.style.display   = 'none';
 }
 
 function insertQuestion(q) {
