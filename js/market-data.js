@@ -6,10 +6,15 @@
 const INVESTMENT_INDEX_SYMBOLS = ['^IXIC', '^GSPC'];
 
 async function fetchMarketQuotes(symbols) {
+  const data = await fetchMarketQuoteData(symbols);
+  return data.quotes || [];
+}
+
+async function fetchMarketQuoteData(symbols) {
   const clean = [...new Set((symbols || [])
     .map(s => String(s || '').trim().toUpperCase())
     .filter(Boolean))];
-  if (!clean.length) return [];
+  if (!clean.length) return { requested: [], quotes: [] };
 
   const res = await fetch(`/api/market/quote?symbols=${encodeURIComponent(clean.join(','))}`, {
     credentials: 'same-origin',
@@ -17,7 +22,7 @@ async function fetchMarketQuotes(symbols) {
   });
   if (!res.ok) throw new Error(`market quote failed: ${res.status}`);
   const data = await res.json();
-  return data.quotes || [];
+  return { ...data, requested: data.requested || clean, quotes: data.quotes || [] };
 }
 
 async function refreshInvestmentMarketData() {
@@ -30,10 +35,16 @@ async function refreshInvestmentMarketData() {
   }
 
   try {
-    const quotes = await fetchMarketQuotes(symbols);
-    applyInvestmentQuotes(quotes);
+    const data = await fetchMarketQuoteData(symbols);
+    applyInvestmentQuotes(data.quotes);
     saveData();
-    showToast('현재가와 위험 신호를 갱신했어요.');
+    const found = new Set((data.quotes || []).map(q => String(q.symbol || '').toUpperCase()));
+    const missing = symbols.filter(sym => !found.has(String(sym).toUpperCase()));
+    if (missing.length) {
+      showToast(`현재가 일부만 갱신했어요: ${missing.join(', ')} 확인 필요`);
+    } else {
+      showToast('현재가와 위험 신호를 갱신했어요.');
+    }
     render();
   } catch (e) {
     logger.warn('시장 데이터 갱신 실패', e);

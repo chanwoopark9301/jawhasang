@@ -267,7 +267,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260504-10');
+            const res = await fetch('/js/data.js?v=20260504-11');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -622,6 +622,7 @@ class TestInvestmentPartner:
         logged_in_page.locator('#investment-menu-positions').click()
         logged_in_page.wait_for_selector('#investment-position-form', timeout=8_000)
         assert '종목 관리' in logged_in_page.locator('#modal-box').inner_text()
+        assert logged_in_page.locator('#ip-current').count() == 0
         logged_in_page.locator('.modal-close').click()
 
         logged_in_page.locator('#investment-menu-news').click()
@@ -657,14 +658,28 @@ class TestInvestmentPartner:
     def test_gate_saves_decision_and_calendar_event(self, logged_in_page):
         self._open_investment(logged_in_page)
         logged_in_page.locator('#investment-menu-positions').click()
+        logged_in_page.evaluate("""() => {
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = (url, opts) => {
+                if (String(url).includes('/api/market/quote')) {
+                    return Promise.resolve(new Response(JSON.stringify({
+                        quotes: [{ symbol: 'NVDA', price: 120, changePercent: 2.1, previousClose: 117.5, name: 'NVIDIA' }],
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                return originalFetch(url, opts);
+            };
+        }""")
 
         logged_in_page.locator('#ip-symbol').fill('NVDA')
         logged_in_page.locator('#ip-name').fill('NVIDIA')
         logged_in_page.locator('#ip-shares').fill('10')
         logged_in_page.locator('#ip-avg').fill('100')
-        logged_in_page.locator('#ip-current').fill('120')
         logged_in_page.locator('#ip-thesis').fill('AI 가속기 장기 성장')
         logged_in_page.locator('#investment-add-position').click()
+        logged_in_page.wait_for_function(
+            "() => state.investment.positions.at(-1)?.currentPrice === 120",
+            timeout=8_000,
+        )
 
         logged_in_page.locator('#investment-menu-rules').click()
         logged_in_page.locator('#ir-max-weight').fill('30')

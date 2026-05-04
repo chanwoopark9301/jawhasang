@@ -102,6 +102,58 @@ class TestDataAPI:
         assert data['quotes'][0]['changePercent'] == 4.2
         assert data['quotes'][1]['symbol'] == '^GSPC'
 
+    def test_market_quote_endpoint_falls_back_to_yahoo_chart(self, client, monkeypatch):
+        import server
+
+        class FakeQuoteResp:
+            ok = False
+            status_code = 401
+
+            def json(self):
+                return {}
+
+        class FakeChartResp:
+            ok = True
+            status_code = 200
+
+            def json(self):
+                return {
+                    'chart': {
+                        'result': [{
+                            'meta': {
+                                'symbol': 'NVDA',
+                                'longName': 'NVIDIA Corporation',
+                                'regularMarketPrice': 121.25,
+                                'previousClose': 118.0,
+                                'currency': 'USD',
+                                'regularMarketTime': 1770000001,
+                            },
+                        }]
+                    }
+                }
+
+        calls = []
+
+        def fake_get(url, params=None, headers=None, timeout=None):
+            calls.append(url)
+            if 'v7/finance/quote' in url:
+                return FakeQuoteResp()
+            if 'v8/finance/chart/NVDA' in url:
+                return FakeChartResp()
+            raise AssertionError(f'unexpected url: {url}')
+
+        monkeypatch.setattr(server.requests, 'get', fake_get)
+        r = client.get('/api/market/quote?symbols=NVDA')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['source'] == 'yahoo-chart'
+        assert data['quotes'][0]['symbol'] == 'NVDA'
+        assert data['quotes'][0]['price'] == 121.25
+        assert round(data['quotes'][0]['changePercent'], 2) == 2.75
+        assert any('v7/finance/quote' in url for url in calls)
+        assert any('v8/finance/chart/NVDA' in url for url in calls)
+
     def test_market_quote_endpoint_rejects_invalid_symbols(self, client):
         r = client.get('/api/market/quote?symbols=NVDA;DROP')
         assert r.status_code == 400

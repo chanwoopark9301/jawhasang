@@ -96,14 +96,15 @@ function renderInvestmentPositions(positions, totals) {
     ${positions.map(p => {
       const value = (Number(p.shares) || 0) * (Number(p.currentPrice) || 0);
       const weight = totals.totalValue ? (value / totals.totalValue) * 100 : 0;
+      const hasPrice = p.currentPrice != null && Number(p.currentPrice) > 0;
       return `<div class="investment-position">
         <div>
           <strong>${esc(p.symbol || '-')}</strong>
           <span>${esc(p.name || '')}</span>
         </div>
         <div class="investment-position-meta">
-          <span>${formatMoney(value)}</span>
-          <span>${weight.toFixed(1)}% · ${formatPercent(p.changePercent)}</span>
+          <span>${hasPrice ? formatMoney(value) : '현재가 미조회'}</span>
+          <span>${hasPrice ? `${weight.toFixed(1)}% · ${formatPercent(p.changePercent)}` : '현재가 갱신 필요'}</span>
         </div>
       </div>`;
     }).join('')}
@@ -119,7 +120,6 @@ function renderInvestmentPositionForm() {
     <div class="investment-form-row">
       <input class="form-input" id="ip-shares" type="number" min="0" step="0.0001" placeholder="수량">
       <input class="form-input" id="ip-avg" type="number" min="0" step="0.01" placeholder="평균 단가">
-      <input class="form-input" id="ip-current" type="number" min="0" step="0.01" placeholder="현재가">
     </div>
     <div class="investment-form-row">
       <input class="form-input" id="ip-target" type="number" min="0" step="0.01" placeholder="목표가">
@@ -250,10 +250,15 @@ function renderInvestmentDecisionList(decisions) {
   </div>`;
 }
 
-function addInvestmentPositionFromForm(event) {
+async function addInvestmentPositionFromForm(event) {
   event.preventDefault();
   const symbol = document.getElementById('ip-symbol')?.value.trim().toUpperCase();
   if (!symbol) return showToast('종목 코드를 입력해주세요.');
+  const button = document.getElementById('investment-add-position');
+  if (button) {
+    button.disabled = true;
+    button.textContent = '현재가 조회 중';
+  }
 
   const position = {
     id: 'ip' + (state.investment.positions.length + 1),
@@ -261,7 +266,7 @@ function addInvestmentPositionFromForm(event) {
     name: document.getElementById('ip-name')?.value.trim() || symbol,
     shares: Number(document.getElementById('ip-shares')?.value) || 0,
     avgPrice: Number(document.getElementById('ip-avg')?.value) || 0,
-    currentPrice: Number(document.getElementById('ip-current')?.value) || 0,
+    currentPrice: null,
     targetPrice: Number(document.getElementById('ip-target')?.value) || 0,
     stopPrice: Number(document.getElementById('ip-stop')?.value) || 0,
     longTerm: !!document.getElementById('ip-longterm')?.checked,
@@ -270,8 +275,16 @@ function addInvestmentPositionFromForm(event) {
   };
   state.investment.positions.push(position);
   state.selInvestmentPosition = position.id;
+  let hasQuote = false;
+  try {
+    const quotes = await fetchMarketQuotes([symbol]);
+    applyInvestmentQuotes(quotes);
+    hasQuote = quotes.some(q => String(q.symbol || '').toUpperCase() === symbol);
+  } catch (e) {
+    logger.warn('종목 등록 현재가 조회 실패', e);
+  }
   saveData();
-  showToast('보유 종목을 등록했어요.');
+  showToast(hasQuote ? '보유 종목을 등록하고 현재가를 가져왔어요.' : '종목은 등록했지만 현재가를 찾지 못했어요. 티커를 확인해주세요.');
   closeModal();
   render();
 }

@@ -445,6 +445,55 @@ def _normalize_yahoo_quote(item: dict):
         'marketTime': item.get('regularMarketTime'),
     }
 
+def _normalize_yahoo_chart(symbol: str, body: dict):
+    result = (body.get('chart', {}).get('result') or [None])[0]
+    if not result:
+        return None
+    meta = result.get('meta') or {}
+    price = meta.get('regularMarketPrice')
+    previous = meta.get('previousClose') or meta.get('chartPreviousClose')
+    change = None
+    change_percent = None
+    if price is not None and previous:
+        change = price - previous
+        change_percent = (change / previous) * 100
+    return {
+        'symbol': meta.get('symbol') or symbol,
+        'name': meta.get('longName') or meta.get('shortName') or meta.get('symbol') or symbol,
+        'price': price,
+        'change': change,
+        'changePercent': change_percent,
+        'previousClose': previous,
+        'currency': meta.get('currency', 'USD'),
+        'marketState': meta.get('marketState'),
+        'marketTime': meta.get('regularMarketTime'),
+    }
+
+def _fetch_yahoo_chart_quotes(symbols):
+    quotes = []
+    for symbol in symbols:
+        try:
+            resp = requests.get(
+                f'https://query1.finance.yahoo.com/v8/finance/chart/{symbol}',
+                params={'range': '1d', 'interval': '1d'},
+                headers={'User-Agent': 'Mozilla/5.0 jip-investment-partner'},
+                timeout=10,
+            )
+        except requests.RequestException as e:
+            log.warning('Yahoo chart 조회 실패(%s): %s', symbol, e)
+            continue
+        if not resp.ok:
+            log.warning('Yahoo chart 오류 응답(%s): HTTP %d', symbol, resp.status_code)
+            continue
+        try:
+            quote = _normalize_yahoo_chart(symbol, resp.json())
+        except ValueError:
+            log.warning('Yahoo chart 응답 파싱 실패(%s)', symbol)
+            continue
+        if quote and quote.get('symbol') and quote.get('price') is not None:
+            quotes.append(quote)
+    return quotes
+
 @app.route('/api/market/quote', methods=['GET'])
 @require_auth
 def market_quote():
@@ -453,6 +502,8 @@ def market_quote():
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
 
+    quotes = []
+    source = 'yahoo-finance'
     try:
         resp = requests.get(
             'https://query1.finance.yahoo.com/v7/finance/quote',
@@ -461,24 +512,35 @@ def market_quote():
             timeout=10,
         )
     except requests.Timeout:
-        return jsonify({'error': '시장 데이터 요청 타임아웃'}), 504
+        log.warning('Yahoo quote 요청 타임아웃, chart fallback 시도')
+        resp = None
     except requests.RequestException as e:
-        log.warning('시장 데이터 요청 실패: %s', e)
-        return jsonify({'error': '시장 데이터 요청 실패'}), 502
+        log.warning('Yahoo quote 요청 실패, chart fallback 시도: %s', e)
+        resp = None
 
-    if not resp.ok:
-        log.warning('시장 데이터 오류 응답: HTTP %d', resp.status_code)
-        return jsonify({'error': '시장 데이터 응답 오류'}), resp.status_code
+    if resp is not None and resp.ok:
+        try:
+            body = resp.json()
+            items = body.get('quoteResponse', {}).get('result', [])
+            quotes = [_normalize_yahoo_quote(item) for item in items if item.get('symbol')]
+        except ValueError:
+            log.warning('Yahoo quote 응답 파싱 실패, chart fallback 시도')
+    elif resp is not None:
+        log.warning('Yahoo quote 오류 응답, chart fallback 시도: HTTP %d', resp.status_code)
 
-    try:
-        body = resp.json()
-    except ValueError:
-        return jsonify({'error': '시장 데이터 응답 파싱 실패'}), 502
+    found = {str(q.get('symbol', '')).upper() for q in quotes}
+    missing = [sym for sym in symbols if sym not in found]
+    if missing:
+        fallback_quotes = _fetch_yahoo_chart_quotes(missing)
+        if fallback_quotes:
+            source = 'yahoo-chart' if not quotes else 'yahoo-finance+chart'
+            quotes.extend(fallback_quotes)
 
-    items = body.get('quoteResponse', {}).get('result', [])
-    quotes = [_normalize_yahoo_quote(item) for item in items if item.get('symbol')]
+    if not quotes:
+        return jsonify({'error': '시장 데이터 조회 실패', 'requested': symbols}), 502
+
     return jsonify({
-        'source': 'yahoo-finance',
+        'source': source,
         'requested': symbols,
         'fetchedAt': int(time.time()),
         'quotes': quotes,
