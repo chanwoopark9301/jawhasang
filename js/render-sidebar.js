@@ -8,6 +8,7 @@ function renderSidebar() {
   document.getElementById('nav-my')?.classList.toggle('active', state.view === 'myrecords');
   document.getElementById('nav-sv')?.classList.toggle('active', state.view === 'student');
   document.getElementById('nav-cal')?.classList.toggle('active', state.view === 'calendar');
+  document.getElementById('nav-invest')?.classList.toggle('active', state.view === 'investment');
 
   // ── 나의 기록 서브 항목 ─────────────────────────────────────────────────
   const subMy = document.getElementById('sub-my');

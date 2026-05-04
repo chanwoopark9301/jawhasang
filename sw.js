@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v36'; // Summary mode saves replies as records
+const CACHE_NAME = 'jip-v37'; // Investment partner MVP
 
 const STATIC_ASSETS = [
   '/style.css',
@@ -24,8 +24,10 @@ const STATIC_ASSETS = [
   '/js/modal.js',
   '/js/panels.js',
   '/js/chat.js',
+  '/js/investment-rules.js',
   '/js/render-sidebar.js',
   '/js/render-calendar.js',
+  '/js/render-investment.js',
   '/js/verbatim-editor.js',
   '/js/render-aipanel.js',
   '/js/render-main.js',

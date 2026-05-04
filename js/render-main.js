@@ -23,7 +23,11 @@ function _doRender() {
   if (typeof closePlusMenu === 'function') closePlusMenu();
 
   const aiHeaderEl = document.querySelector('.ai-header span:first-child');
-  if (aiHeaderEl) aiHeaderEl.textContent = state.view === 'myrecords' ? '주제 정보' : '학생 정보';
+  if (aiHeaderEl) {
+    aiHeaderEl.textContent = state.view === 'myrecords' ? '주제 정보'
+      : state.view === 'investment' ? '투자 정보'
+      : '학생 정보';
+  }
 
   renderSidebar();
   renderMain();
@@ -63,6 +67,13 @@ function updateContextChip() {
     chipLabel.textContent = '캘린더';
     if (chipDot) chipDot.style.background = '#EF9F27';
     if (roleLabel) roleLabel.textContent = '';
+  } else if (state.view === 'investment') {
+    chipLabel.textContent = '투자 파트너';
+    if (chipDot) chipDot.style.background = '#2563EB';
+    if (roleLabel) {
+      const cnt = state.investment?.positions?.length || 0;
+      roleLabel.textContent = cnt ? `${cnt}개 종목` : '원칙 기반 점검';
+    }
   } else {
     chipLabel.textContent = '自畵像';
     if (chipDot) chipDot.style.background = 'var(--color-text-tertiary)';
@@ -77,7 +88,7 @@ function updateContextChip() {
 function updateInputArea() {
   const inputArea = document.getElementById('input-area');
   if (!inputArea) return;
-  if (state.view === 'calendar') { inputArea.style.display = 'none'; return; }
+  if (state.view === 'calendar' || state.view === 'investment') { inputArea.style.display = 'none'; return; }
   const isHome = !state.selTopic && !state.selStudent;
   const hasContext = (state.view === 'myrecords' && state.selTopic)
                   || (state.view === 'student' && state.selStudent);
@@ -101,6 +112,15 @@ function renderMain() {
     subEl.textContent   = '';
     nsBtn.style.display = 'none';
     content.innerHTML   = renderCalendar();
+    return;
+  }
+
+  // ── 투자 파트너 뷰 ──────────────────────────────────────────────────────
+  if (state.view === 'investment') {
+    titleEl.textContent = '투자 파트너';
+    subEl.textContent   = '';
+    nsBtn.style.display = 'none';
+    content.innerHTML   = renderInvestmentView();
     return;
   }
 

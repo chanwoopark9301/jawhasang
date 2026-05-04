@@ -111,7 +111,56 @@ def _decrypt(raw: bytes) -> dict:
 # 저장소 — PostgreSQL 또는 로컬 파일 폴백
 # ---------------------------------------------------------------------------
 
-EMPTY = lambda: {'students': [], 'sessions': [], 'aiResults': {}, 'my_topics': [], 'my_records': []}
+def _empty_investment():
+    return {
+        'positions': [],
+        'rules': {
+            'dailyLossLimit': 3,
+            'maxPositionWeight': 30,
+            'cooldownMinutes': 30,
+            'chaseLimit': 5,
+            'strictMode': True,
+            'longTermBias': True,
+            'antiAveraging': True,
+            'coreRules': '',
+        },
+        'journal': [],
+        'events': [],
+        'decisions': [],
+    }
+
+EMPTY = lambda: {
+    'students': [],
+    'sessions': [],
+    'aiResults': {},
+    'my_topics': [],
+    'my_records': [],
+    'investment': _empty_investment(),
+}
+
+def _normalize_data(data: dict) -> dict:
+    if not isinstance(data, dict):
+        return EMPTY()
+    data.setdefault('students', [])
+    data.setdefault('sessions', [])
+    data.setdefault('aiResults', {})
+    data.setdefault('my_topics', [])
+    data.setdefault('my_records', [])
+    inv = data.get('investment')
+    if not isinstance(inv, dict):
+        inv = _empty_investment()
+    else:
+        base = _empty_investment()
+        rules = inv.get('rules') if isinstance(inv.get('rules'), dict) else {}
+        inv = {
+            'positions': inv.get('positions') if isinstance(inv.get('positions'), list) else [],
+            'rules': {**base['rules'], **rules},
+            'journal': inv.get('journal') if isinstance(inv.get('journal'), list) else [],
+            'events': inv.get('events') if isinstance(inv.get('events'), list) else [],
+            'decisions': inv.get('decisions') if isinstance(inv.get('decisions'), list) else [],
+        }
+    data['investment'] = inv
+    return data
 
 def _get_db_conn():
     import psycopg2
@@ -139,7 +188,7 @@ def read_data() -> dict:
             if not row:
                 log.info('DB: 데이터 없음 → 빈 구조 반환')
                 return EMPTY()
-            data = _decrypt(bytes(row[0]))
+            data = _normalize_data(_decrypt(bytes(row[0])))
             log.debug('DB: 데이터 로드 완료 (학생 %d명, 회기 %d건)',
                       len(data.get('students', [])), len(data.get('sessions', [])))
             return data
@@ -157,14 +206,13 @@ def read_data() -> dict:
         log.error('data.json 읽기 실패: %s', e, exc_info=True)
         return EMPTY()
     try:
-        data = _decrypt(raw)
+        data = _normalize_data(_decrypt(raw))
         log.debug('파일: 데이터 로드 완료 (학생 %d명)', len(data.get('students', [])))
         return data
     except InvalidToken:
         log.warning('복호화 실패 (InvalidToken) — JSON 평문 폴백 시도')
         try:
-            data = json.loads(raw.decode())
-            data.setdefault('aiResults', {})
+            data = _normalize_data(json.loads(raw.decode()))
             write_data(data)
             log.info('평문 데이터 → 암호화 마이그레이션 완료')
             return data
@@ -341,6 +389,7 @@ def save_data_route():
         log.warning('POST /api/data: 유효하지 않은 페이로드')
         return jsonify({'error': '유효하지 않은 데이터 형식'}), 400
     try:
+        payload = _normalize_data(payload)
         write_data(payload)
         return jsonify({'ok': True})
     except Exception as e:

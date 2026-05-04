@@ -11,6 +11,7 @@ function setView(view) {
   state.view       = view;
   state.selStudent = null;
   state.selSession = null;
+  state.selInvestmentPosition = null;
   state.mode       = 'welcome';
   state.filterTags = [];
   state.searchQuery = '';
@@ -21,6 +22,7 @@ function setView(view) {
 
 function handleAdd() {
   if (state.view === 'myrecords') state.myMode = 'new-topic';
+  else if (state.view === 'investment') state.view = 'investment';
   else                            state.mode   = 'new-student';
   closePanels();
   render();

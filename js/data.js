@@ -20,6 +20,7 @@ async function loadData() {
     state.sessions  = cached.sessions  || [];
     state.myTopics  = cached.my_topics  || [];
     state.myRecords = cached.my_records || [];
+    state.investment = normalizeInvestmentState(cached.investment);
     logger.info('로컬 캐시로 즉시 렌더 (학생 %d명)', state.students.length);
   } else {
     _useSampleData();
@@ -48,6 +49,7 @@ async function loadData() {
       state.sessions  = data.sessions  && data.sessions.length  ? data.sessions  : SAMPLE_SESSIONS;
       state.myTopics  = data.my_topics  && data.my_topics.length  ? data.my_topics  : SAMPLE_TOPICS;
       state.myRecords = data.my_records && data.my_records.length ? data.my_records : SAMPLE_RECORDS;
+      state.investment = normalizeInvestmentState(data.investment);
 
       logger.info('서버 데이터 수신 완료 (학생 %d명, 회기 %d건)', state.students.length, state.sessions.length);
       _saveToLocalCache();
@@ -84,6 +86,7 @@ function _saveToLocalCache() {
       sessions:   state.sessions,
       my_topics:  state.myTopics,
       my_records: state.myRecords,
+      investment: state.investment,
     }));
     return true;
   } catch (e) {
@@ -97,6 +100,7 @@ function _useSampleData() {
   state.sessions  = SAMPLE_SESSIONS;
   state.myTopics  = SAMPLE_TOPICS;
   state.myRecords = SAMPLE_RECORDS;
+  state.investment = defaultInvestmentState();
 }
 
 function saveData() {
@@ -105,6 +109,7 @@ function saveData() {
     sessions:   state.sessions,
     my_topics:  state.myTopics,
     my_records: state.myRecords,
+    investment: state.investment,
   };
   logger.debug('데이터 저장 요청 (학생 %d명, 회기 %d건)',
     payload.students.length, payload.sessions.length);
@@ -154,6 +159,7 @@ function exportData() {
     sessions:    state.sessions,
     my_topics:   state.myTopics,
     my_records:  state.myRecords,
+    investment:  state.investment,
   };
   let url;
   try {

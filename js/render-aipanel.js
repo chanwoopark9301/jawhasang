@@ -32,6 +32,9 @@ function _updateRpTopic() {
   } else if (state.view === 'student' && state.selStudent) {
     const s = state.students.find(s => s.id === state.selStudent);
     el.textContent = s ? s.alias : '내담자 없음';
+  } else if (state.view === 'investment') {
+    const inv = state.investment || defaultInvestmentState();
+    el.textContent = `${inv.positions.length}개 종목`;
   } else {
     el.textContent = '선택 없음';
   }
@@ -122,6 +125,24 @@ function _updateRpContent() {
         : `<div class="ctx-block"><div class="ctx-lbl">AI 역할</div><div class="ctx-txt" style="color:var(--color-text-tertiary);">기본 성찰 코치</div></div>`}
       ${record ? `<div class="ctx-done" style="background:#e0f5ec;color:#0F6E56;">${record.recordNum}번째 기록 · ${record.date}</div>` : ''}
       ${_myPatternSection(topic)}`;
+    return;
+  }
+
+  if (state.view === 'investment') {
+    const inv = state.investment || defaultInvestmentState();
+    const last = inv.decisions.at(-1);
+    content.innerHTML = `
+      <div class="ctx-alias" style="color:#2563EB;">투자 파트너</div>
+      <div class="ctx-meta">${inv.positions.length}개 종목 · ${inv.decisions.length}개 판단</div>
+      <div class="ctx-block">
+        <div class="ctx-lbl">역할</div>
+        <div class="ctx-txt">종목 추천이 아니라 사전에 정한 원칙 위반 여부를 점검합니다.</div>
+      </div>
+      <div class="ctx-block">
+        <div class="ctx-lbl">원칙</div>
+        <div class="ctx-txt">최대 비중 ${esc(inv.rules.maxPositionWeight)}% · 쿨다운 ${esc(inv.rules.cooldownMinutes)}분</div>
+      </div>
+      ${last ? `<div class="ctx-done" style="background:#EAF1FF;color:#1D4ED8;">마지막 판단 · ${esc(last.label)}</div>` : ''}`;
     return;
   }
 

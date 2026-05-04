@@ -20,6 +20,8 @@ function renderCalendar() {
   state.sessions.forEach(s => { sessionCnt[s.date] = (sessionCnt[s.date] || 0) + 1; });
   const recordCnt = {};
   state.myRecords.forEach(r => { recordCnt[r.date] = (recordCnt[r.date] || 0) + 1; });
+  const investCnt = {};
+  (state.investment?.events || []).forEach(e => { investCnt[e.date] = (investCnt[e.date] || 0) + 1; });
 
   const days = [];
   for (let i = firstDay - 1; i >= 0; i--) {
@@ -38,13 +40,16 @@ function renderCalendar() {
   const daysHTML = days.map(d => {
     const sc = sessionCnt[d.ds] || 0;
     const rc = recordCnt[d.ds]  || 0;
+    const ic = investCnt[d.ds]  || 0;
     let dotsHTML = '';
-    if (sc > 0 || rc > 0) {
+    if (sc > 0 || rc > 0 || ic > 0) {
       const rDots  = Array(Math.min(rc, 3)).fill('<div class="cal-dot cal-dot-record"></div>').join('');
       const rExtra = rc > 3 ? `<span class="cal-dot-extra">+${rc-3}</span>` : '';
       const sDots  = Array(Math.min(sc, 3)).fill('<div class="cal-dot cal-dot-session"></div>').join('');
       const sExtra = sc > 3 ? `<span class="cal-dot-extra">+${sc-3}</span>` : '';
-      dotsHTML = `<div class="cal-day-dots">${rDots}${rExtra}${sDots}${sExtra}</div>`;
+      const iDots  = Array(Math.min(ic, 3)).fill('<div class="cal-dot cal-dot-invest"></div>').join('');
+      const iExtra = ic > 3 ? `<span class="cal-dot-extra">+${ic-3}</span>` : '';
+      dotsHTML = `<div class="cal-day-dots">${rDots}${rExtra}${sDots}${sExtra}${iDots}${iExtra}</div>`;
     }
     return `<div class="cal-day${d.other?' other-month':''}${d.ds===today?' today':''}${d.ds===state.calDate?' selected':''}"
       onclick="openCalPopup('${d.ds}')">
@@ -112,11 +117,14 @@ function buildCalPopupHTML(date) {
   const label       = `${parseInt(m)}월 ${parseInt(d)}일`;
   const daySessions = state.sessions.filter(s => s.date === date);
   const dayRecords  = state.myRecords.filter(r => r.date === date);
+  const dayInvests  = (state.investment?.events || []).filter(e => e.date === date);
 
   const sDots  = Array(Math.min(daySessions.length, 3)).fill('<span class="popup-dot popup-dot-session"></span>').join('');
   const rDots  = Array(Math.min(dayRecords.length,  3)).fill('<span class="popup-dot popup-dot-record"></span>').join('');
   const sExtra = daySessions.length > 3 ? `<span class="popup-dot-extra">+${daySessions.length-3}</span>` : '';
   const rExtra = dayRecords.length  > 3 ? `<span class="popup-dot-extra">+${dayRecords.length-3}</span>`  : '';
+  const iDots  = Array(Math.min(dayInvests.length,  3)).fill('<span class="popup-dot popup-dot-invest"></span>').join('');
+  const iExtra = dayInvests.length  > 3 ? `<span class="popup-dot-extra">+${dayInvests.length-3}</span>`  : '';
 
   const sessionItems = daySessions.length
     ? daySessions.map(s => {
@@ -132,6 +140,10 @@ function buildCalPopupHTML(date) {
       }).join('')
     : '<div class="popup-item-empty">없음</div>';
 
+  const investItems = dayInvests.length
+    ? dayInvests.map(e => `<div class="popup-item popup-item-invest" onclick="calPopupGoInvestment('${e.id}')">· ${esc(e.symbol || '')} ${esc(e.title || '투자 이벤트')}</div>`).join('')
+    : '<div class="popup-item-empty">없음</div>';
+
   return `
     <div class="popup-header">
       <span class="popup-date-label">${label}</span>
@@ -140,6 +152,7 @@ function buildCalPopupHTML(date) {
     <div class="popup-legend">
       <div class="popup-legend-item popup-legend-record">나의 기록&nbsp;${rDots}${rExtra}</div>
       <div class="popup-legend-item popup-legend-session">상담 기록&nbsp;${sDots}${sExtra}</div>
+      <div class="popup-legend-item popup-legend-invest">투자&nbsp;${iDots}${iExtra}</div>
     </div>
     <div class="popup-body">
       <div class="popup-col">
@@ -150,10 +163,15 @@ function buildCalPopupHTML(date) {
         <div class="popup-col-label">상담 기록</div>
         ${sessionItems}
       </div>
+      <div class="popup-col">
+        <div class="popup-col-label">투자</div>
+        ${investItems}
+      </div>
     </div>
     <div class="popup-footer">
       <button class="popup-add-btn popup-add-record" onclick="calPopupAddRecord('${date}')">+ 나의 기록</button>
       <button class="popup-add-btn popup-add-session" onclick="calPopupAddSession('${date}')">+ 상담 기록</button>
+      <button class="popup-add-btn popup-add-invest" onclick="calPopupAddInvestment('${date}')">+ 투자 점검</button>
     </div>`;
 }
 
@@ -180,6 +198,15 @@ function calPopupGoRecord(id) {
   state.myMode    = 'detail';
   state.myTab     = 'content';
   _syncNavButtons('myrecords');
+  render();
+}
+
+function calPopupGoInvestment(id) {
+  closeCalPopup();
+  state.view = 'investment';
+  const event = (state.investment?.events || []).find(e => e.id === id);
+  state.selInvestmentPosition = event?.symbol || null;
+  _syncNavButtons('investment');
   render();
 }
 
@@ -210,15 +237,24 @@ function calPopupAddRecord(date) {
   }
 }
 
+function calPopupAddInvestment(date) {
+  closeCalPopup();
+  state.view = 'investment';
+  _syncNavButtons('investment');
+  render();
+}
+
 /** 3-버튼 nav 활성 상태 동기화 헬퍼 */
 function _syncNavButtons(view) {
   document.getElementById('btn-sv')?.classList.toggle('active', view === 'student');
   document.getElementById('btn-dv')?.classList.toggle('active', view === 'myrecords');
   document.getElementById('btn-cal')?.classList.toggle('active', view === 'calendar');
+  document.getElementById('nav-invest')?.classList.toggle('active', view === 'investment');
   const addBtn = document.getElementById('add-btn');
   if (addBtn) addBtn.textContent =
     view === 'student'   ? '+ 새 내담자' :
-    view === 'myrecords' ? '+ 새 주제'   : '';
+    view === 'myrecords' ? '+ 새 주제'   :
+    view === 'investment' ? '' : '';
   const ctx = document.getElementById('sidebar-context');
-  if (ctx) ctx.style.display = view === 'calendar' ? 'none' : '';
+  if (ctx) ctx.style.display = (view === 'calendar' || view === 'investment') ? 'none' : '';
 }

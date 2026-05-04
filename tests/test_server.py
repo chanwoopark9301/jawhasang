@@ -21,6 +21,11 @@ class TestDataAPI:
         assert 'sessions' in data
         assert 'my_topics' in data
         assert 'my_records' in data
+        assert 'investment' in data
+        assert 'positions' in data['investment']
+        assert 'rules' in data['investment']
+        assert 'events' in data['investment']
+        assert 'decisions' in data['investment']
 
     def test_save_and_load_data(self, client, sample_student, sample_session_short):
         payload = {
@@ -29,6 +34,13 @@ class TestDataAPI:
             'aiResults': {},
             'my_topics': [],
             'my_records': [],
+            'investment': {
+                'positions': [{'id': 'ip1', 'symbol': 'NVDA'}],
+                'rules': {'cooldownMinutes': 45},
+                'journal': [],
+                'events': [],
+                'decisions': [],
+            },
         }
         r = client.post('/api/data',
                         data=json.dumps(payload),
@@ -40,6 +52,8 @@ class TestDataAPI:
         loaded = r2.get_json()
         assert loaded['students'][0]['alias'] == '테스트-01'
         assert loaded['sessions'][0]['id'] == 'ss_test_short'
+        assert loaded['investment']['positions'][0]['symbol'] == 'NVDA'
+        assert loaded['investment']['rules']['cooldownMinutes'] == 45
 
     def test_unauthorized_api_returns_json_401(self, app):
         with app.test_client() as c:

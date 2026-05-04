@@ -68,8 +68,39 @@ const AI_ROLE_PRESETS = [
   },
 ];
 
+function defaultInvestmentState() {
+  return {
+    positions: [],
+    rules: {
+      dailyLossLimit: 3,
+      maxPositionWeight: 30,
+      cooldownMinutes: 30,
+      chaseLimit: 5,
+      strictMode: true,
+      longTermBias: true,
+      antiAveraging: true,
+      coreRules: '',
+    },
+    journal: [],
+    events: [],
+    decisions: [],
+  };
+}
+
+function normalizeInvestmentState(investment) {
+  const base = defaultInvestmentState();
+  const src = investment && typeof investment === 'object' ? investment : {};
+  return {
+    positions: Array.isArray(src.positions) ? src.positions : [],
+    rules: { ...base.rules, ...(src.rules && typeof src.rules === 'object' ? src.rules : {}) },
+    journal: Array.isArray(src.journal) ? src.journal : [],
+    events: Array.isArray(src.events) ? src.events : [],
+    decisions: Array.isArray(src.decisions) ? src.decisions : [],
+  };
+}
+
 const state = {
-  view:       'student',   // 'student' | 'myrecords' | 'calendar'
+  view:       'student',   // 'student' | 'myrecords' | 'calendar' | 'investment'
   students:   [],
   sessions:   [],
   selStudent: null,
@@ -112,6 +143,9 @@ const state = {
   attachedVerbatim:    null,       // 첨부된 축어록 텍스트
   currentRole:         'listener', // 현재 AI 역할 ID
   activeModal:         null,       // 현재 열린 모달 ID
+
+  investment:          defaultInvestmentState(),
+  selInvestmentPosition: null,
 };
 
 let mobilePanel = 'sidebar'; // 'sidebar'|'main'|'ai'

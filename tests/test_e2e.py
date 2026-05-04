@@ -267,7 +267,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260504-6');
+            const res = await fetch('/js/data.js?v=20260504-7');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -596,6 +596,86 @@ class TestChatRoleAndReplyMode:
         })""")
         assert keys['oldKey'] is None
         assert keys['newKey'] is not None
+
+
+class TestInvestmentPartner:
+    """투자 파트너 1차 MVP — 룰 기반 매매 전 판단 게이트."""
+
+    def _open_investment(self, page):
+        page.wait_for_selector('#nav-invest', timeout=8_000)
+        page.click('#nav-invest')
+        page.wait_for_selector('#investment-view', timeout=8_000)
+
+    def test_investment_nav_and_gate_render(self, logged_in_page):
+        self._open_investment(logged_in_page)
+
+        assert logged_in_page.locator('#investment-view').is_visible()
+        assert logged_in_page.locator('#investment-position-form').is_visible()
+        assert logged_in_page.locator('#investment-gate-form').is_visible()
+        assert '매매 전 점검' in logged_in_page.locator('#investment-view').inner_text()
+
+    def test_rule_engine_blocks_overweight_add(self, logged_in_page):
+        logged_in_page.wait_for_load_state('networkidle')
+        verdict = logged_in_page.evaluate("""() => evaluateInvestmentDecision({
+            position: {
+                symbol: 'NVDA',
+                shares: 10,
+                avgPrice: 100,
+                currentPrice: 120,
+                longTerm: false,
+            },
+            rules: {
+                maxPositionWeight: 30,
+                cooldownMinutes: 30,
+                chaseLimit: 5,
+                antiAveraging: true,
+                longTermBias: true,
+            },
+            totals: { totalValue: 1200 },
+            action: 'add',
+            context: 'rally',
+            reason: '오르는 것 같아서 더 사고 싶다',
+        })""")
+
+        assert verdict['status'] == 'block'
+        assert '비중' in '\n'.join(verdict['findings'])
+
+    def test_gate_saves_decision_and_calendar_event(self, logged_in_page):
+        self._open_investment(logged_in_page)
+
+        logged_in_page.locator('#ip-symbol').fill('NVDA')
+        logged_in_page.locator('#ip-name').fill('NVIDIA')
+        logged_in_page.locator('#ip-shares').fill('10')
+        logged_in_page.locator('#ip-avg').fill('100')
+        logged_in_page.locator('#ip-current').fill('120')
+        logged_in_page.locator('#ip-thesis').fill('AI 가속기 장기 성장')
+        logged_in_page.locator('#investment-add-position').click()
+
+        logged_in_page.locator('#ir-max-weight').fill('30')
+        logged_in_page.locator('#investment-save-rules').click()
+
+        position_id = logged_in_page.evaluate("() => state.investment.positions.at(-1).id")
+        logged_in_page.locator('#ig-position').select_option(position_id)
+        logged_in_page.locator('#ig-action').select_option('add')
+        logged_in_page.locator('#ig-context').select_option('rally')
+        logged_in_page.locator('#ig-reason').fill('급등을 놓칠까 봐 추가매수하고 싶다')
+        logged_in_page.locator('#investment-gate-run').click()
+
+        logged_in_page.wait_for_selector('.investment-verdict.block', timeout=8_000)
+        result = logged_in_page.evaluate("""() => ({
+            decisions: state.investment.decisions.length,
+            events: state.investment.events.length,
+            lastStatus: state.investment.decisions.at(-1).verdict,
+            eventType: state.investment.events.at(-1).type,
+        })""")
+
+        assert result['decisions'] == 1
+        assert result['events'] == 1
+        assert result['lastStatus'] == 'block'
+        assert result['eventType'] == 'alert'
+
+        logged_in_page.click('#nav-cal')
+        logged_in_page.wait_for_selector('.cal-dot-invest', timeout=8_000)
 
 
 # ---------------------------------------------------------------------------
