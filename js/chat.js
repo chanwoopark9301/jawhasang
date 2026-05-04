@@ -98,13 +98,41 @@ async function continueContextChat(text) {
     });
     const data = await res.json();
     const reply = data.content?.map(c => c.text || '').join('').trim();
-    if (reply) appendMessage('ai', reply);
-    else hideTypingIndicator();
+    if (reply) {
+      appendMessage('ai', reply);
+      saveSummaryReplyAsRecord(reply);
+    } else {
+      hideTypingIndicator();
+    }
   } catch (e) {
     appendMessage('ai', '죄송해요, 오류가 발생했어요. 다시 시도해주세요.');
   } finally {
     state._ctxChatLoading = false;
   }
+}
+
+function saveSummaryReplyAsRecord(text) {
+  if (state.replyMode !== 'summary') return;
+  if (state.view !== 'myrecords' || !state.selTopic) return;
+  const content = (text || '').trim();
+  if (!content) return;
+
+  const record = {
+    id: 'r' + Date.now(),
+    topicId:   state.selTopic,
+    date:      new Date().toISOString().split('T')[0],
+    recordNum: getNextRecordNum(state.selTopic),
+    content,
+    memo:      '대화 정리',
+    tags:      [],
+    analysis:  null,
+    aiChat:    [...(state.currentChatMessages || [])],
+  };
+  state.myRecords.push(record);
+  saveData();
+  showToast('정리해서 기록으로 저장했어요.');
+  renderRightPanel();
+  renderSidebar();
 }
 
 // AI 대화용 시스템 프롬프트 생성 (현재 역할 기준으로 매 메시지마다 최신 반영)
@@ -157,8 +185,8 @@ function _replyModePrompt(mode) {
     return `${shared}
 
 현재 응답 모드: 정리
-- 지금까지 사용자가 말한 내용을 기록으로 남길 수 있게 정리한다.
-- 제목 후보, 핵심 감정/생각, 남겨둘 문장을 간결하게 제안한다.
+- 지금까지 사용자가 말한 내용을 DB에 기록으로 저장될 본문처럼 정리한다.
+- 이 응답은 그대로 '나의 기록'에 저장되므로 제목 후보, 핵심 내용, 남겨둘 문장을 읽기 좋은 기록 형태로 쓴다.
 - 후속 질문을 하지 않는다.`;
   }
   if (mode === 'advice') {

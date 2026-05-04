@@ -267,7 +267,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260504-5');
+            const res = await fetch('/js/data.js?v=20260504-6');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -504,6 +504,43 @@ class TestChatRoleAndReplyMode:
         assert '조언' in menu_text
         assert '직접 쓰기' not in menu_text
         assert 'AI 응답 방식' not in menu_text
+
+    def test_summary_mode_saves_ai_reply_as_record(self, logged_in_page):
+        self._select_topic_with_role(logged_in_page, 'listener')
+        logged_in_page.evaluate("""() => {
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = (url, opts) => {
+                if (String(url).includes('/api/analyze')) {
+                    return Promise.resolve(new Response(JSON.stringify({
+                        content: [{ text: '헬스장 가기 규칙: 전날 밤 운동복과 출근복을 함께 싸서 현관에 둔다.' }],
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                return originalFetch(url, opts);
+            };
+            setReplyMode('summary');
+        }""")
+
+        logged_in_page.locator('#chat-input-bottom').fill('여기까지 정리해줘')
+        logged_in_page.locator('#chat-input-bottom').press('Enter')
+        logged_in_page.wait_for_function(
+            "() => state.myRecords.some(r => r.memo === '대화 정리')",
+            timeout=8_000,
+        )
+
+        record = logged_in_page.evaluate("""() => {
+            const r = state.myRecords.find(r => r.memo === '대화 정리');
+            return {
+                topicId: r.topicId,
+                content: r.content,
+                recordNum: r.recordNum,
+                aiChatLength: r.aiChat.length,
+            };
+        }""")
+
+        assert record['topicId'] == 't-role-e2e'
+        assert '헬스장 가기 규칙' in record['content']
+        assert record['recordNum'] == 1
+        assert record['aiChatLength'] >= 2
 
     def test_dictation_mode_records_without_ai_reply(self, logged_in_page):
         self._select_topic_with_role(logged_in_page, 'listener')

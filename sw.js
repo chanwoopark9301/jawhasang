@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v35'; // Quick reply mode switcher + direct answer mode
+const CACHE_NAME = 'jip-v36'; // Summary mode saves replies as records
 
 const STATIC_ASSETS = [
   '/style.css',
