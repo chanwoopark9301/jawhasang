@@ -77,8 +77,10 @@ async function continueContextChat(text) {
   const topic   = isMyRecords ? state.myTopics.find(t => t.id === state.selTopic) : null;
   const student = (!isMyRecords && !isInvestment) ? state.students.find(s => s.id === state.selStudent) : null;
 
+  const investmentNewsContext = isInvestment ? await fetchInvestmentNewsContext(text) : '';
+
   // AI 역할: state.currentRole → AI_ROLE_PRESETS에서 prompt 조회. 없으면 topic.aiPrompt 폴백
-  const sysPrompt = _buildChatSysPrompt(isMyRecords, topic, student);
+  const sysPrompt = _buildChatSysPrompt(isMyRecords, topic, student, investmentNewsContext);
 
   // 슬라이딩 윈도우: 최근 20개만 전송 (토큰 절약)
   // 장기 맥락은 topic.patternAnalysis(사용자가 저장한 분석)가 시스템 프롬프트로 대체
@@ -181,8 +183,51 @@ function inferInvestmentSymbol(text) {
   return m ? m[0] : '';
 }
 
+function shouldFetchInvestmentNews(text) {
+  const ask = (text || '').toLowerCase();
+  return /뉴스|최신|동향|news|headline/.test(ask);
+}
+
+function inferInvestmentNewsSymbols(text) {
+  const inv = state.investment || defaultInvestmentState();
+  const raw = (text || '').toUpperCase();
+  const known = (inv.positions || [])
+    .map(p => String(p.symbol || '').toUpperCase())
+    .filter(Boolean);
+  const mentioned = known.filter(sym => raw.includes(sym));
+  if (mentioned.length) return mentioned;
+  const explicit = [...raw.matchAll(/\b[A-Z][A-Z0-9.\-]{0,7}\b/g)]
+    .map(m => m[0])
+    .filter(sym => !['AI', 'API', 'ETF', 'USD', 'NEWS'].includes(sym));
+  if (explicit.length) return [...new Set(explicit)].slice(0, 5);
+  if (/보유|내\s*주식|포트폴리오/.test(text || '')) return known.slice(0, 8);
+  return known.slice(0, 5);
+}
+
+async function fetchInvestmentNewsContext(text) {
+  if (!shouldFetchInvestmentNews(text)) return '';
+  const symbols = inferInvestmentNewsSymbols(text);
+  if (!symbols.length) return '';
+  try {
+    const res = await fetch(`/api/investment/news?symbols=${encodeURIComponent(symbols.join(','))}&limit=3`, {
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json' },
+    });
+    if (!res.ok) throw new Error(`investment news failed: ${res.status}`);
+    const data = await res.json();
+    const items = Array.isArray(data.news) ? data.news : [];
+    if (!items.length) return `\n\n실시간 뉴스 검색 결과:\n- ${symbols.join(', ')} 관련 최신 뉴스가 조회되지 않았습니다.`;
+    return `\n\n실시간 뉴스 검색 결과 (${data.source || 'news'}):\n${items.map(item =>
+      `- [${item.symbol}] ${item.title}${item.published ? ` (${item.published})` : ''}${item.summary ? `: ${item.summary}` : ''}${item.link ? `\n  링크: ${item.link}` : ''}`
+    ).join('\n')}\n\n뉴스 답변 규칙:\n- 위 검색 결과를 바탕으로만 최신 뉴스라고 말한다.\n- "실시간 인터넷 검색 기능이 없다"거나 사용자가 직접 검색하라고 답하지 않는다.\n- 투자 판단은 추천이 아니라 원칙 위반 여부와 리스크 체크 중심으로 정리한다.`;
+  } catch (e) {
+    logger.warn('투자 뉴스 검색 실패', e);
+    return `\n\n실시간 뉴스 검색 결과:\n- 뉴스 조회에 실패했습니다. 실패 사실만 짧게 알리고, 기존 기록 기준으로 해석 가능한 범위만 답하세요.`;
+  }
+}
+
 // AI 대화용 시스템 프롬프트 생성 (현재 역할 기준으로 매 메시지마다 최신 반영)
-function _buildChatSysPrompt(isMyRecords, topic, student) {
+function _buildChatSysPrompt(isMyRecords, topic, student, extraContext = '') {
   const modePrompt = _replyModePrompt(state.replyMode || 'dictation');
   if (state.view === 'investment') {
     const inv = state.investment || defaultInvestmentState();
@@ -217,6 +262,8 @@ ${recentNews}
 
 최근 매매 판단:
 ${recentDecisions}
+
+${extraContext}
 
 ${modePrompt}`;
   }

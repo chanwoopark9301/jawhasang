@@ -267,7 +267,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260504-12');
+            const res = await fetch('/js/data.js?v=20260504-13');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -842,6 +842,56 @@ class TestInvestmentPartner:
             timeout=8_000,
         )
 
+        assert logged_in_page.locator('.chat-bubble-ai').count() == 1
+
+    def test_investment_news_request_injects_search_results(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        payloads = logged_in_page.evaluate_handle("""() => {
+            window.__analyzePayloads = [];
+            state.investment.positions = [{
+                id: 'ip-news-iren',
+                symbol: 'IREN',
+                name: 'Iris Energy',
+                shares: 1,
+                currentPrice: 46.06,
+            }];
+            state.currentChatMessages = [];
+            state.investment.chat = [];
+            render();
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = (url, opts) => {
+                if (String(url).includes('/api/investment/news')) {
+                    return Promise.resolve(new Response(JSON.stringify({
+                        source: 'yahoo-finance-rss',
+                        news: [{
+                            symbol: 'IREN',
+                            title: 'IREN expands AI cloud capacity',
+                            summary: 'Iris Energy announced a new AI infrastructure update.',
+                            published: 'Mon, 04 May 2026 10:00:00 GMT',
+                            link: 'https://finance.yahoo.com/news/iren-test',
+                        }],
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                if (String(url).includes('/api/analyze')) {
+                    window.__analyzePayloads.push(JSON.parse(opts.body));
+                    return Promise.resolve(new Response(JSON.stringify({
+                        content: [{ text: 'IREN 최신 뉴스는 AI 인프라 확장 내용입니다. 보유 원칙 기준으로 비중과 변동성을 먼저 점검하세요.' }],
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                return originalFetch(url, opts);
+            };
+            setReplyMode('question');
+            return window.__analyzePayloads;
+        }""")
+
+        logged_in_page.locator('#chat-input-bottom').fill('IREN 최신 뉴스 검색해줘')
+        logged_in_page.locator('#chat-input-bottom').press('Enter')
+        logged_in_page.wait_for_function("() => window.__analyzePayloads?.length === 1", timeout=8_000)
+
+        system_prompt = logged_in_page.evaluate("() => window.__analyzePayloads[0].system[0].text")
+        assert '실시간 뉴스 검색 결과' in system_prompt
+        assert 'IREN expands AI cloud capacity' in system_prompt
+        assert '실시간 인터넷 검색 기능이 없다' in system_prompt
         assert logged_in_page.locator('.chat-bubble-ai').count() == 1
 
     def test_investment_chat_is_stored_in_investment_data(self, logged_in_page):

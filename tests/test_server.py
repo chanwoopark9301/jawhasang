@@ -158,6 +158,89 @@ class TestDataAPI:
         r = client.get('/api/market/quote?symbols=NVDA;DROP')
         assert r.status_code == 400
 
+    def test_investment_news_endpoint_returns_aggregated_items(self, client, monkeypatch):
+        import server
+
+        class FakeSecTickerResp:
+            ok = True
+            status_code = 200
+
+            def json(self):
+                return {
+                    '0': {'cik_str': 1234567, 'ticker': 'IREN', 'title': 'Iris Energy Limited'}
+                }
+
+        class FakeSecSubmissionsResp:
+            ok = True
+            status_code = 200
+
+            def json(self):
+                return {
+                    'filings': {
+                        'recent': {
+                            'form': ['6-K'],
+                            'filingDate': ['2026-05-04'],
+                            'accessionNumber': ['0001234567-26-000001'],
+                            'primaryDocument': ['iren-6k.htm'],
+                        }
+                    }
+                }
+
+        class FakeYahooResp:
+            ok = True
+            status_code = 200
+            content = b'''<?xml version="1.0" encoding="UTF-8"?>
+            <rss version="2.0"><channel>
+              <item>
+                <title>IREN expands AI cloud capacity</title>
+                <link>https://finance.yahoo.com/news/iren-test</link>
+                <pubDate>Mon, 04 May 2026 10:00:00 GMT</pubDate>
+                <description><![CDATA[IREN announced an AI data center update.]]></description>
+              </item>
+            </channel></rss>'''
+
+        class FakeGoogleResp:
+            ok = True
+            status_code = 200
+            content = b'''<?xml version="1.0" encoding="UTF-8"?>
+            <rss version="2.0"><channel>
+              <item>
+                <title>IREN expands AI cloud capacity</title>
+                <link>https://finance.yahoo.com/news/iren-test?utm=dup</link>
+                <pubDate>Mon, 04 May 2026 10:00:00 GMT</pubDate>
+                <description>Duplicate headline from Google News.</description>
+              </item>
+            </channel></rss>'''
+
+        def fake_get(url, params=None, headers=None, timeout=None):
+            if 'sec.gov/files/company_tickers.json' in url:
+                return FakeSecTickerResp()
+            if 'data.sec.gov/submissions/CIK0001234567.json' in url:
+                return FakeSecSubmissionsResp()
+            if 'feeds.finance.yahoo.com' in url:
+                assert params['s'] == 'IREN'
+                return FakeYahooResp()
+            if 'news.google.com' in url:
+                assert 'IREN' in params['q']
+                return FakeGoogleResp()
+            raise AssertionError(f'unexpected url: {url}')
+
+        monkeypatch.setattr(server.requests, 'get', fake_get)
+        r = client.get('/api/investment/news?symbols=IREN')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['source'] == 'aggregated-investment-news'
+        assert data['providers']['sec_edgar'] is True
+        assert data['providers']['yahoo_finance_rss'] is True
+        assert data['news'][0]['symbol'] == 'IREN'
+        assert data['news'][0]['title'] == 'Iris Energy Limited SEC 6-K filing'
+        assert data['news'][0]['source'] == 'sec-edgar'
+        assert data['news'][1]['title'] == 'IREN expands AI cloud capacity'
+        assert data['news'][1]['summary'] == 'IREN announced an AI data center update.'
+        assert data['news'][1]['source'] == 'yahoo-finance-rss'
+        assert len(data['news']) == 2
+
     def test_unauthorized_api_returns_json_401(self, app):
         with app.test_client() as c:
             r = c.get('/api/data')

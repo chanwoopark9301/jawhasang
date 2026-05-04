@@ -15,6 +15,7 @@ import logging
 import logging.handlers
 import time
 import requests
+import xml.etree.ElementTree as ET
 from functools import wraps
 from flask import (
     Flask, request, jsonify, send_from_directory,
@@ -28,7 +29,12 @@ load_dotenv('ecrk.env')
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
 APP_PASSWORD      = os.getenv('APP_PASSWORD', '')
 DATABASE_URL      = os.getenv('DATABASE_URL', '')
+POLYGON_API_KEY   = os.getenv('POLYGON_API_KEY', '')
+ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY', '')
+FINNHUB_API_KEY   = os.getenv('FINNHUB_API_KEY', '')
+BENZINGA_API_KEY  = os.getenv('BENZINGA_API_KEY', '')
 DATA_FILE         = 'data.json'
+SEC_USER_AGENT    = os.getenv('SEC_USER_AGENT', 'jip-investment-partner contact@example.com')
 
 # ---------------------------------------------------------------------------
 # 로깅 설정
@@ -544,6 +550,282 @@ def market_quote():
         'requested': symbols,
         'fetchedAt': int(time.time()),
         'quotes': quotes,
+    })
+
+_NEWS_SOURCE_RANK = {
+    'sec-edgar': 100,
+    'company-ir': 95,
+    'benzinga': 88,
+    'polygon': 84,
+    'alpha-vantage': 80,
+    'finnhub': 76,
+    'yahoo-finance-rss': 58,
+    'google-news-rss': 52,
+}
+
+def _news_item(symbol, title, link='', published='', summary='', source='unknown', kind='news', sentiment=None):
+    title = (title or '').strip()
+    if not title:
+        return None
+    return {
+        'symbol': symbol,
+        'title': title,
+        'link': (link or '').strip(),
+        'published': (published or '').strip(),
+        'summary': re.sub(r'<[^>]+>', '', summary or '').strip(),
+        'source': source,
+        'kind': kind,
+        'sentiment': sentiment,
+        'rank': _NEWS_SOURCE_RANK.get(source, 40),
+    }
+
+def _dedupe_news(items):
+    seen = set()
+    out = []
+    for item in sorted([i for i in items if i], key=lambda x: x.get('rank', 0), reverse=True):
+        key = (item.get('link') or item.get('title') or '').strip().lower()
+        key = re.sub(r'\?.*$', '', key)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(item)
+    return out
+
+def _normalize_rss_item(item, symbol: str, source: str):
+    def text(tag):
+        found = item.find(tag)
+        return (found.text or '').strip() if found is not None else ''
+
+    return _news_item(
+        symbol=symbol,
+        title=text('title'),
+        link=text('link'),
+        published=text('pubDate'),
+        summary=text('description'),
+        source=source,
+        kind='news',
+    )
+
+def _fetch_yahoo_rss_news(symbol: str, limit: int):
+    resp = requests.get(
+        'https://feeds.finance.yahoo.com/rss/2.0/headline',
+        params={'s': symbol, 'region': 'US', 'lang': 'en-US'},
+        headers={'User-Agent': 'Mozilla/5.0 jip-investment-partner'},
+        timeout=10,
+    )
+    if not resp.ok:
+        log.warning('Yahoo 뉴스 오류 응답(%s): HTTP %d', symbol, resp.status_code)
+        return []
+    root = ET.fromstring(resp.content)
+    items = root.findall('./channel/item')
+    return [_normalize_rss_item(item, symbol, 'yahoo-finance-rss') for item in items][:limit]
+
+def _fetch_google_rss_news(symbol: str, limit: int):
+    resp = requests.get(
+        'https://news.google.com/rss/search',
+        params={'q': f'{symbol} stock OR earnings OR shares', 'hl': 'en-US', 'gl': 'US', 'ceid': 'US:en'},
+        headers={'User-Agent': 'Mozilla/5.0 jip-investment-partner'},
+        timeout=10,
+    )
+    if not resp.ok:
+        log.warning('Google 뉴스 오류 응답(%s): HTTP %d', symbol, resp.status_code)
+        return []
+    root = ET.fromstring(resp.content)
+    items = root.findall('./channel/item')
+    return [_normalize_rss_item(item, symbol, 'google-news-rss') for item in items][:limit]
+
+def _fetch_polygon_news(symbol: str, limit: int):
+    if not POLYGON_API_KEY:
+        return []
+    resp = requests.get(
+        'https://api.polygon.io/v2/reference/news',
+        params={'ticker': symbol, 'limit': limit, 'order': 'desc', 'apiKey': POLYGON_API_KEY},
+        headers={'User-Agent': 'Mozilla/5.0 jip-investment-partner'},
+        timeout=10,
+    )
+    if not resp.ok:
+        log.warning('Polygon 뉴스 오류 응답(%s): HTTP %d', symbol, resp.status_code)
+        return []
+    rows = resp.json().get('results', [])
+    return [_news_item(
+        symbol=symbol,
+        title=row.get('title'),
+        link=row.get('article_url') or row.get('amp_url'),
+        published=row.get('published_utc'),
+        summary=row.get('description') or '',
+        source='polygon',
+        kind='news',
+        sentiment=(row.get('insights') or [{}])[0].get('sentiment') if row.get('insights') else None,
+    ) for row in rows[:limit]]
+
+def _fetch_alpha_vantage_news(symbol: str, limit: int):
+    if not ALPHA_VANTAGE_API_KEY:
+        return []
+    resp = requests.get(
+        'https://www.alphavantage.co/query',
+        params={'function': 'NEWS_SENTIMENT', 'tickers': symbol, 'limit': limit, 'apikey': ALPHA_VANTAGE_API_KEY},
+        headers={'User-Agent': 'Mozilla/5.0 jip-investment-partner'},
+        timeout=10,
+    )
+    if not resp.ok:
+        log.warning('Alpha Vantage 뉴스 오류 응답(%s): HTTP %d', symbol, resp.status_code)
+        return []
+    rows = resp.json().get('feed', [])
+    return [_news_item(
+        symbol=symbol,
+        title=row.get('title'),
+        link=row.get('url'),
+        published=row.get('time_published'),
+        summary=row.get('summary') or '',
+        source='alpha-vantage',
+        kind='news',
+        sentiment=row.get('overall_sentiment_label'),
+    ) for row in rows[:limit]]
+
+def _fetch_finnhub_news(symbol: str, limit: int):
+    if not FINNHUB_API_KEY:
+        return []
+    today = time.strftime('%Y-%m-%d')
+    resp = requests.get(
+        'https://finnhub.io/api/v1/company-news',
+        params={'symbol': symbol, 'from': today, 'to': today, 'token': FINNHUB_API_KEY},
+        headers={'User-Agent': 'Mozilla/5.0 jip-investment-partner'},
+        timeout=10,
+    )
+    if not resp.ok:
+        log.warning('Finnhub 뉴스 오류 응답(%s): HTTP %d', symbol, resp.status_code)
+        return []
+    return [_news_item(
+        symbol=symbol,
+        title=row.get('headline'),
+        link=row.get('url'),
+        published=str(row.get('datetime') or ''),
+        summary=row.get('summary') or '',
+        source='finnhub',
+        kind='news',
+    ) for row in resp.json()[:limit]]
+
+def _fetch_benzinga_news(symbol: str, limit: int):
+    if not BENZINGA_API_KEY:
+        return []
+    resp = requests.get(
+        'https://api.benzinga.com/api/v2/news',
+        params={'token': BENZINGA_API_KEY, 'tickers': symbol, 'pagesize': limit, 'displayOutput': 'full'},
+        headers={'User-Agent': 'Mozilla/5.0 jip-investment-partner'},
+        timeout=10,
+    )
+    if not resp.ok:
+        log.warning('Benzinga 뉴스 오류 응답(%s): HTTP %d', symbol, resp.status_code)
+        return []
+    return [_news_item(
+        symbol=symbol,
+        title=row.get('title'),
+        link=row.get('url'),
+        published=row.get('created') or '',
+        summary=row.get('teaser') or row.get('body') or '',
+        source='benzinga',
+        kind='news',
+    ) for row in resp.json()[:limit]]
+
+def _fetch_sec_filings(symbol: str, limit: int):
+    headers = {'User-Agent': SEC_USER_AGENT, 'Accept-Encoding': 'gzip, deflate'}
+    tickers_resp = requests.get(
+        'https://www.sec.gov/files/company_tickers.json',
+        headers=headers,
+        timeout=10,
+    )
+    if not tickers_resp.ok:
+        log.warning('SEC ticker map 오류 응답(%s): HTTP %d', symbol, tickers_resp.status_code)
+        return []
+    symbol_upper = symbol.upper()
+    match = None
+    for row in tickers_resp.json().values():
+        if str(row.get('ticker', '')).upper() == symbol_upper:
+            match = row
+            break
+    if not match:
+        return []
+    cik = str(match.get('cik_str')).zfill(10)
+    sub_resp = requests.get(
+        f'https://data.sec.gov/submissions/CIK{cik}.json',
+        headers=headers,
+        timeout=10,
+    )
+    if not sub_resp.ok:
+        log.warning('SEC submissions 오류 응답(%s): HTTP %d', symbol, sub_resp.status_code)
+        return []
+    recent = sub_resp.json().get('filings', {}).get('recent', {})
+    forms = recent.get('form', [])
+    dates = recent.get('filingDate', [])
+    accession = recent.get('accessionNumber', [])
+    primary_docs = recent.get('primaryDocument', [])
+    company = match.get('title') or symbol
+    items = []
+    for idx, form in enumerate(forms[:limit]):
+        acc = accession[idx].replace('-', '') if idx < len(accession) else ''
+        doc = primary_docs[idx] if idx < len(primary_docs) else ''
+        link = f'https://www.sec.gov/Archives/edgar/data/{int(match.get("cik_str"))}/{acc}/{doc}' if acc and doc else ''
+        items.append(_news_item(
+            symbol=symbol,
+            title=f'{company} SEC {form} filing',
+            link=link,
+            published=dates[idx] if idx < len(dates) else '',
+            summary='SEC EDGAR official filing. Treat this as source material, not market commentary.',
+            source='sec-edgar',
+            kind='filing',
+        ))
+    return items
+
+def _fetch_news_for_symbol(symbol: str, limit: int):
+    providers = [
+        _fetch_sec_filings,
+        _fetch_benzinga_news,
+        _fetch_polygon_news,
+        _fetch_alpha_vantage_news,
+        _fetch_finnhub_news,
+        _fetch_yahoo_rss_news,
+        _fetch_google_rss_news,
+    ]
+    items = []
+    for provider in providers:
+        try:
+            items.extend(provider(symbol, limit))
+        except (requests.RequestException, ET.ParseError, ValueError, TypeError) as e:
+            log.warning('뉴스 provider 실패(%s, %s): %s', provider.__name__, symbol, e)
+    return _dedupe_news(items)[:limit]
+
+@app.route('/api/investment/news', methods=['GET'])
+@require_auth
+def investment_news():
+    try:
+        symbols = _parse_market_symbols(request.args.get('symbols', ''))
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+    limit = request.args.get('limit', '5')
+    try:
+        per_symbol_limit = max(1, min(10, int(limit)))
+    except ValueError:
+        per_symbol_limit = 5
+
+    news = []
+    for symbol in symbols:
+        news.extend(_fetch_news_for_symbol(symbol, per_symbol_limit))
+
+    return jsonify({
+        'source': 'aggregated-investment-news',
+        'requested': symbols,
+        'fetchedAt': int(time.time()),
+        'providers': {
+            'sec_edgar': True,
+            'benzinga': bool(BENZINGA_API_KEY),
+            'polygon': bool(POLYGON_API_KEY),
+            'alpha_vantage': bool(ALPHA_VANTAGE_API_KEY),
+            'finnhub': bool(FINNHUB_API_KEY),
+            'yahoo_finance_rss': True,
+            'google_news_rss': True,
+        },
+        'news': news,
     })
 
 # ---------------------------------------------------------------------------
