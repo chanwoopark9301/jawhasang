@@ -110,7 +110,7 @@ function normalizeInvestmentState(investment) {
 }
 
 const state = {
-  view:       'student',   // 'student' | 'myrecords' | 'calendar' | 'investment'
+  view:       'calendar',   // 'student' | 'myrecords' | 'calendar' | 'investment'
   students:   [],
   sessions:   [],
   selStudent: null,

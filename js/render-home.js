@@ -42,18 +42,18 @@ function renderHomeGreeting() {
       <div class="quick-cards">
         <div class="quick-card" onclick="handleHomeMyRecords()">
           <div class="quick-card-icon">✎</div>
-          <div class="quick-card-title">나의 기록</div>
+          <div class="quick-card-title">일상</div>
           <div>생각·감정 기록</div>
         </div>
         <div class="quick-card" onclick="handleHomeCounseling()">
           <div class="quick-card-icon">◎</div>
-          <div class="quick-card-title">상담 기록</div>
+          <div class="quick-card-title">상담</div>
           <div>회기 기록·슈퍼비전</div>
         </div>
-        <div class="quick-card" onclick="setView('calendar')">
+        <div class="quick-card" onclick="setView('investment')">
           <div class="quick-card-icon">☰</div>
-          <div class="quick-card-title">캘린더</div>
-          <div>기록 한눈에 보기</div>
+          <div class="quick-card-title">투자</div>
+          <div>원칙·뉴스·매매 점검</div>
         </div>
       </div>
       ${countNote}

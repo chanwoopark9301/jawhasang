@@ -205,7 +205,7 @@ function openNewChatModal() {
   modal.innerHTML = `
     <div style="font-size:15px;font-weight:500;margin-bottom:16px;">대화 시작</div>
 
-    <div style="font-size:11px;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">나의 기록</div>
+    <div style="font-size:11px;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">일상</div>
     ${state.myTopics.map(t => `
       <div class="sub-item" style="font-size:13px;padding:8px 10px;margin-bottom:2px;"
         onclick="selectTopic('${t.id}');closeNewChatModal();">
@@ -219,7 +219,7 @@ function openNewChatModal() {
 
     <div style="border-top:0.5px solid var(--color-border);margin:12px 0;"></div>
 
-    <div style="font-size:11px;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">상담 기록</div>
+    <div style="font-size:11px;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">상담</div>
     ${state.students.map(s => `
       <div class="sub-item" style="font-size:13px;padding:8px 10px;margin-bottom:2px;"
         onclick="selectStudent('${s.id}');closeNewChatModal();">

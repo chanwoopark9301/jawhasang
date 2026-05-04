@@ -49,7 +49,7 @@ function updateContextChip() {
 
   if (state.view === 'myrecords' && state.selTopic) {
     const t = state.myTopics.find(t => t.id === state.selTopic);
-    chipLabel.textContent = t ? t.title : '나의 기록';
+    chipLabel.textContent = t ? t.title : '일상';
     if (chipDot) chipDot.style.background = '#1D9E75';
     if (roleLabel) {
       const cnt = state.myRecords.filter(r => r.topicId === state.selTopic).length;
@@ -57,7 +57,7 @@ function updateContextChip() {
     }
   } else if (state.view === 'student' && state.selStudent) {
     const s = state.students.find(s => s.id === state.selStudent);
-    chipLabel.textContent = s ? s.alias : '상담 기록';
+    chipLabel.textContent = s ? s.alias : '상담';
     if (chipDot) chipDot.style.background = '#8B7EC8';
     if (roleLabel) {
       const cnt = state.sessions.filter(ss => ss.studentId === state.selStudent).length;
@@ -68,7 +68,7 @@ function updateContextChip() {
     if (chipDot) chipDot.style.background = '#EF9F27';
     if (roleLabel) roleLabel.textContent = '';
   } else if (state.view === 'investment') {
-    chipLabel.textContent = '투자 파트너';
+    chipLabel.textContent = '투자';
     if (chipDot) chipDot.style.background = '#2563EB';
     if (roleLabel) {
       const cnt = state.investment?.positions?.length || 0;
@@ -115,9 +115,9 @@ function renderMain() {
     return;
   }
 
-  // ── 투자 파트너 뷰 ──────────────────────────────────────────────────────
+  // ── 투자 뷰 ─────────────────────────────────────────────────────────────
   if (state.view === 'investment') {
-    titleEl.textContent = '투자 파트너';
+    titleEl.textContent = '투자';
     subEl.textContent   = '';
     nsBtn.style.display = 'none';
     renderChatView();
@@ -144,7 +144,7 @@ function renderMain() {
     openModal(modalId);
   }
 
-  // ── 나의 기록 뷰 ──────────────────────────────────────────────────────────
+  // ── 일상 뷰 ─────────────────────────────────────────────────────────────
 
   if (state.view === 'myrecords') {
     if (!state.selTopic) {
@@ -157,7 +157,7 @@ function renderMain() {
     return;
   }
 
-  // ── 상담 기록 뷰 ──────────────────────────────────────────────────────────
+  // ── 상담 뷰 ─────────────────────────────────────────────────────────────
 
   if (state.view === 'student') {
     if (!state.selStudent) {

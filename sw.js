@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v45'; // Dedicated investment position saves
+const CACHE_NAME = 'jip-v46'; // Modular investment API and calendar hub
 
 const STATIC_ASSETS = [
   '/style.css',
@@ -25,6 +25,7 @@ const STATIC_ASSETS = [
   '/js/panels.js',
   '/js/chat.js',
   '/js/investment-rules.js',
+  '/js/investment-api.js',
   '/js/market-data.js',
   '/js/render-sidebar.js',
   '/js/render-calendar.js',

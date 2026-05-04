@@ -17,6 +17,7 @@ import time
 import requests
 import xml.etree.ElementTree as ET
 from functools import wraps
+from investment_backend import upsert_position
 from flask import (
     Flask, request, jsonify, send_from_directory,
     session, redirect, render_template_string,
@@ -420,38 +421,13 @@ def save_investment_position_route():
     if not isinstance(payload, dict) or not isinstance(payload.get('position'), dict):
         return jsonify({'error': 'position 데이터가 필요합니다'}), 400
 
-    position = dict(payload['position'])
-    symbol = str(position.get('symbol', '')).strip().upper()
-    if not _MARKET_SYMBOL_RE.match(symbol):
-        return jsonify({'error': '유효하지 않은 종목 코드입니다'}), 400
-    position['symbol'] = symbol
-    position.setdefault('id', f'ip{int(time.time() * 1000)}')
-
-    numeric_fields = ['shares', 'avgPrice', 'currentPrice', 'targetPrice', 'stopPrice', 'previousClose', 'changePercent']
-    for field in numeric_fields:
-        if position.get(field) in (None, ''):
-            position[field] = None if field in ('currentPrice', 'previousClose', 'changePercent') else 0
-            continue
-        try:
-            position[field] = float(position[field])
-        except (TypeError, ValueError):
-            position[field] = None if field in ('currentPrice', 'previousClose', 'changePercent') else 0
-
     try:
         data = read_data()
-        inv = data['investment'] = _normalize_data(data)['investment']
-        positions = inv.get('positions', [])
-        replaced = False
-        for idx, item in enumerate(positions):
-            if str(item.get('id')) == str(position.get('id')) or str(item.get('symbol', '')).upper() == symbol:
-                positions[idx] = {**item, **position}
-                replaced = True
-                break
-        if not replaced:
-            positions.append(position)
-        inv['positions'] = positions
+        data, inv, position = upsert_position(data, payload['position'], _normalize_data, _MARKET_SYMBOL_RE)
         write_data(data)
         return jsonify({'ok': True, 'investment': inv, 'position': position})
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     except Exception as e:
         log.error('POST /api/investment/positions 저장 실패: %s', e, exc_info=True)
         return jsonify({'error': '투자 종목 저장 실패'}), 500

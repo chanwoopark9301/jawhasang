@@ -66,6 +66,14 @@ class TestHomePage:
         self._go_to_calendar(logged_in_page)
         assert logged_in_page.locator('.cal-grid').is_visible()
 
+    def test_calendar_is_default_hub_with_three_modes(self, logged_in_page):
+        """초기 메인 화면은 캘린더이고 일상/상담/투자 허브가 보여야 함."""
+        logged_in_page.wait_for_selector('.cal-grid', timeout=8_000)
+        hub_text = logged_in_page.locator('.calendar-hub').inner_text()
+        assert '일상' in hub_text
+        assert '상담' in hub_text
+        assert '투자' in hub_text
+
     def test_calendar_has_date_cells(self, logged_in_page):
         """캘린더에 날짜 셀이 존재해야 함."""
         self._go_to_calendar(logged_in_page)
@@ -101,12 +109,12 @@ class TestSidebar:
         assert logged_in_page.locator('#sidebar').is_visible()
 
     def test_sidebar_has_view_toggle(self, logged_in_page):
-        """상담 기록 / 나의 기록 전환 탭이 있어야 함."""
+        """일상 / 상담 / 투자 전환 메뉴가 있어야 함."""
         sidebar = logged_in_page.locator('#sidebar')
-        # 두 가지 보기 모드 버튼이 있어야 함
         buttons_text = sidebar.inner_text()
-        assert ('상담' in buttons_text or '기록' in buttons_text), \
-            "사이드바에 상담/나의 기록 전환 UI가 없음"
+        assert '일상' in buttons_text
+        assert '상담' in buttons_text
+        assert '투자' in buttons_text
 
 
 # ---------------------------------------------------------------------------
@@ -267,7 +275,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260504-15');
+            const res = await fetch('/js/data.js?v=20260504-16');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")

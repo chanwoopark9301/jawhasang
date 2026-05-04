@@ -58,6 +58,17 @@ function renderCalendar() {
   }).join('');
 
   return `<div class="calendar">
+    <div class="calendar-hub">
+      <button class="calendar-hub-card hub-daily" onclick="setView('myrecords')">
+        <span>일상</span><strong>${state.myRecords.length}</strong>
+      </button>
+      <button class="calendar-hub-card hub-counseling" onclick="setView('student')">
+        <span>상담</span><strong>${state.sessions.length}</strong>
+      </button>
+      <button class="calendar-hub-card hub-invest" onclick="setView('investment')">
+        <span>투자</span><strong>${(state.investment?.positions || []).length}</strong>
+      </button>
+    </div>
     <div class="cal-header">
       <button class="cal-nav" onclick="navCal(-1)">‹</button>
       <span class="cal-title">${year}년 ${MONTHS[month]}</span>
@@ -150,17 +161,17 @@ function buildCalPopupHTML(date) {
       <button class="popup-close-btn" onclick="closeCalPopup()">×</button>
     </div>
     <div class="popup-legend">
-      <div class="popup-legend-item popup-legend-record">나의 기록&nbsp;${rDots}${rExtra}</div>
-      <div class="popup-legend-item popup-legend-session">상담 기록&nbsp;${sDots}${sExtra}</div>
+      <div class="popup-legend-item popup-legend-record">일상&nbsp;${rDots}${rExtra}</div>
+      <div class="popup-legend-item popup-legend-session">상담&nbsp;${sDots}${sExtra}</div>
       <div class="popup-legend-item popup-legend-invest">투자&nbsp;${iDots}${iExtra}</div>
     </div>
     <div class="popup-body">
       <div class="popup-col">
-        <div class="popup-col-label">나의 기록</div>
+        <div class="popup-col-label">일상</div>
         ${recordItems}
       </div>
       <div class="popup-col">
-        <div class="popup-col-label">상담 기록</div>
+        <div class="popup-col-label">상담</div>
         ${sessionItems}
       </div>
       <div class="popup-col">
@@ -169,8 +180,8 @@ function buildCalPopupHTML(date) {
       </div>
     </div>
     <div class="popup-footer">
-      <button class="popup-add-btn popup-add-record" onclick="calPopupAddRecord('${date}')">+ 나의 기록</button>
-      <button class="popup-add-btn popup-add-session" onclick="calPopupAddSession('${date}')">+ 상담 기록</button>
+      <button class="popup-add-btn popup-add-record" onclick="calPopupAddRecord('${date}')">+ 일상</button>
+      <button class="popup-add-btn popup-add-session" onclick="calPopupAddSession('${date}')">+ 상담</button>
       <button class="popup-add-btn popup-add-invest" onclick="calPopupAddInvestment('${date}')">+ 투자 점검</button>
     </div>`;
 }

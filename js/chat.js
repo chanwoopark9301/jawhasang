@@ -210,12 +210,7 @@ async function fetchInvestmentNewsContext(text) {
   if (!symbols.length) return '';
   const today = new Date().toISOString().split('T')[0];
   try {
-    const res = await fetch(`/api/investment/news?symbols=${encodeURIComponent(symbols.join(','))}&limit=3`, {
-      credentials: 'same-origin',
-      headers: { 'Accept': 'application/json' },
-    });
-    if (!res.ok) throw new Error(`investment news failed: ${res.status}`);
-    const data = await res.json();
+    const data = await apiFetchInvestmentNews(symbols, 3);
     const items = Array.isArray(data.news) ? data.news : [];
     if (!items.length) return `\n\n실시간 뉴스 검색 결과:\n- 조회 기준일: ${today}\n- ${symbols.join(', ')} 관련 최신 뉴스가 조회되지 않았습니다.`;
     return `\n\n실시간 뉴스 검색 결과 (${data.source || 'news'}):\n조회 기준일: ${today}\n${items.map(item =>
@@ -440,7 +435,7 @@ function renderChatView() {
     return;
   }
   if (!state.currentChatMessages.length) {
-    content.innerHTML = '<div class="empty-state">대화를 시작해보세요</div>';
+    content.innerHTML = '<div class="chat-messages" id="chat-messages"><div class="empty-state">대화를 시작해보세요</div></div>';
     return;
   }
   content.innerHTML = `<div class="chat-messages" id="chat-messages">
