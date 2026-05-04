@@ -1888,7 +1888,6 @@ a,
 .cal-day,
 .mnav-btn,
 .role-pill,
-.reply-mode-chip,
 .reply-mode-option,
 .analyze-btn,
 .transform-btn,
@@ -3606,36 +3605,6 @@ body { height: var(--app-height, 100dvh); }
   /* iOS 키보드 대응: 앱 높이를 고정한 채 input-area만 키보드 위로 올림 */
   transform: translateY(calc(-1 * var(--kb-offset, 0px)));
   transition: transform 0.25s ease;
-}
-.input-mode-line {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 24px;
-  margin: 0 2px 7px 34px;
-}
-.reply-mode-chip {
-  flex: 0 0 auto;
-  height: 24px;
-  padding: 0 9px;
-  border: 0.5px solid rgba(29,158,117,0.24);
-  border-radius: 999px;
-  background: rgba(29,158,117,0.07);
-  color: #0F6E56;
-  font-family: var(--font);
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.reply-mode-hint {
-  min-width: 0;
-  color: var(--color-text-tertiary);
-  font-size: 11px;
-  font-weight: 400;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .input-wrap {
   display: flex;

@@ -29,14 +29,17 @@ async function loadData() {
 
   // 2단계: 서버에서 최신 데이터 백그라운드 수신 후 재렌더
   try {
-    const res = await fetch('/api/data');
+    const res = await fetch('/api/data', {
+      headers: { 'Accept': 'application/json' },
+      credentials: 'same-origin',
+    });
     if (res.ok) {
       let data;
       try {
+        if (!_isJSONResponse(res)) throw new Error('non-json response');
         data = await res.json();
       } catch (parseErr) {
-        logger.error('서버 응답 JSON 파싱 실패', parseErr);
-        if (!cached) saveData();
+        logger.warn('서버 데이터 응답이 JSON이 아님 — 로컬 캐시 유지', parseErr);
         return;
       }
 
@@ -55,8 +58,7 @@ async function loadData() {
       }
       render(); // 최신 데이터로 재렌더
     } else {
-      logger.warn('서버 응답 오류: HTTP %d', res.status);
-      if (!cached) { _useSampleData(); saveData(); }
+      logger.warn('서버 데이터 수신 생략: HTTP %d', res.status);
     }
   } catch (e) {
     logger.warn('서버 연결 실패 — 캐시 데이터 유지', e);
@@ -83,8 +85,10 @@ function _saveToLocalCache() {
       my_topics:  state.myTopics,
       my_records: state.myRecords,
     }));
+    return true;
   } catch (e) {
-    // localStorage 용량 초과 등 무시
+    logger.warn('로컬 캐시 저장 실패', e);
+    return false;
   }
 }
 
@@ -106,19 +110,29 @@ function saveData() {
     payload.students.length, payload.sessions.length);
 
   // localStorage 캐시도 즉시 업데이트 (새로고침 시 삭제 데이터 복원 방지)
-  _saveToLocalCache();
+  const localSaved = _saveToLocalCache();
 
   fetch('/api/data', {
     method:  'POST',
+    credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   }).then(res => {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!_isJSONResponse(res)) throw new Error('non-json response');
     logger.debug('데이터 저장 완료');
   }).catch(e => {
-    logger.error('데이터 저장 실패', e);
+    if (localSaved) {
+      logger.warn('서버 동기화 실패 — 로컬 저장 유지', e);
+      return;
+    }
+    logger.error('데이터 저장 실패 — 로컬 저장도 실패', e);
     _showSaveError();
   });
+}
+
+function _isJSONResponse(res) {
+  return (res.headers.get('content-type') || '').includes('application/json');
 }
 
 // FOUC 방지 스플래시 제거 — render() 호출 직후 실행

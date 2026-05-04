@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v31'; // UX: AI 보고서 백그라운드 생성 + 액션 토스트
+const CACHE_NAME = 'jip-v33'; // Data sync: JSON auth errors + quieter local-first saves
 
 const STATIC_ASSETS = [
   '/style.css',
@@ -33,6 +33,7 @@ const STATIC_ASSETS = [
   '/js/transform-text.js',
   '/app.js',
   '/icons/icon-192.png',
+  '/icons/icon-512.png',
   '/manifest.json',
 ];
 

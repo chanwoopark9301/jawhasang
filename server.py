@@ -268,6 +268,9 @@ def require_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if not session.get('auth'):
+            if request.path.startswith('/api/'):
+                log.debug('인증 없는 API 접근 → 401 JSON: %s', request.path)
+                return jsonify({'error': 'auth_required'}), 401
             log.debug('인증 없는 접근 → 로그인 리다이렉트: %s', request.path)
             return redirect('/login')
         return f(*args, **kwargs)

@@ -8,6 +8,8 @@ PWA + 아이패드 레이아웃
 import os
 import json
 import re
+import struct
+import zlib
 import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -22,6 +24,58 @@ def read_css():
 
 def read_html():
     return read_file('index.html')
+
+def png_unique_rgb_count(path):
+    """8-bit RGB/RGBA PNG의 유니크 색상 수를 간단히 센다."""
+    raw = open(os.path.join(ROOT, path), 'rb').read()
+    assert raw.startswith(b'\x89PNG\r\n\x1a\n'), f"{path} PNG 시그니처가 아님"
+    pos = 8
+    width = height = color_type = bit_depth = None
+    chunks = []
+    while pos < len(raw):
+        length = struct.unpack('>I', raw[pos:pos + 4])[0]
+        ctype = raw[pos + 4:pos + 8]
+        data = raw[pos + 8:pos + 8 + length]
+        pos += 12 + length
+        if ctype == b'IHDR':
+            width, height, bit_depth, color_type = struct.unpack('>IIBB', data[:10])
+        elif ctype == b'IDAT':
+            chunks.append(data)
+        elif ctype == b'IEND':
+            break
+
+    assert bit_depth == 8 and color_type in (2, 6), f"{path}는 RGB/RGBA 8-bit PNG가 아님"
+    channels = 3 if color_type == 2 else 4
+    stride = width * channels
+    decompressed = zlib.decompress(b''.join(chunks))
+    rows, prev, offset = [], bytearray(stride), 0
+    for _ in range(height):
+      filt = decompressed[offset]
+      offset += 1
+      row = bytearray(decompressed[offset:offset + stride])
+      offset += stride
+      for i in range(stride):
+          left = row[i - channels] if i >= channels else 0
+          up = prev[i]
+          up_left = prev[i - channels] if i >= channels else 0
+          if filt == 1:
+              row[i] = (row[i] + left) & 0xff
+          elif filt == 2:
+              row[i] = (row[i] + up) & 0xff
+          elif filt == 3:
+              row[i] = (row[i] + ((left + up) // 2)) & 0xff
+          elif filt == 4:
+              p = left + up - up_left
+              pa, pb, pc = abs(p - left), abs(p - up), abs(p - up_left)
+              pred = left if pa <= pb and pa <= pc else (up if pb <= pc else up_left)
+              row[i] = (row[i] + pred) & 0xff
+      rows.append(bytes(row))
+      prev = row
+    pixels = set()
+    for row in rows:
+        for i in range(0, len(row), channels):
+            pixels.add(tuple(row[i:i + 3]))
+    return len(pixels)
 
 
 # ---------------------------------------------------------------------------
@@ -103,6 +157,12 @@ class TestServiceWorker:
         sw = self._sw()
         assert 'caches' in sw, "caches API 없음"
         assert 'index.html' in sw or 'style.css' in sw, "정적 파일 캐시 목록 없음"
+        assert '/icons/icon-512.png' in sw, "512px 아이콘 캐시 누락"
+
+    def test_sw_cache_version_updated_for_reply_mode_ui(self):
+        """새 UI 배포 시 오래된 JS/CSS 캐시가 남지 않도록 캐시 버전을 올려야 함."""
+        sw = self._sw()
+        assert "CACHE_NAME = 'jip-v33'" in sw, "서비스워커 캐시 버전이 최신이 아님"
 
     def test_sw_bypasses_api_routes(self):
         """/api/ 경로는 캐시 없이 네트워크로 처리해야 함."""
@@ -193,6 +253,13 @@ class TestIPadCSS:
         assert os.path.exists(icons_dir), "icons/ 디렉토리 없음"
         files = os.listdir(icons_dir)
         assert len(files) > 0, "icons/ 디렉토리가 비어있음"
+        assert 'icon-192.png' in files, "Safari 홈 화면용 192px PNG 아이콘 없음"
+        assert 'icon-512.png' in files, "PWA 512px PNG 아이콘 없음"
+
+    def test_png_icons_include_visible_ja_glyph(self):
+        """PNG 아이콘이 단색 배경만이 아니라 自 글자를 포함해야 함."""
+        assert png_unique_rgb_count('icons/icon-192.png') > 10, "icon-192.png가 거의 단색임"
+        assert png_unique_rgb_count('icons/icon-512.png') > 10, "icon-512.png가 거의 단색임"
 
 
 # ---------------------------------------------------------------------------

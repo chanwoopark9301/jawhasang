@@ -55,18 +55,13 @@ function selectReplyModeFromModal(mode) {
 
 function updateReplyModeUI() {
   const modes = {
-    dictation: { label: '받아쓰기 중', hint: 'AI는 끼어들지 않아요', placeholder: '정리 안 된 말 그대로 적어도 돼요' },
-    question:  { label: '질문 하나',   hint: '보내면 질문 하나만 받을게요', placeholder: '질문 받고 싶은 지점을 적어주세요' },
-    summary:   { label: '정리',        hint: '보내면 여기까지 정리해요', placeholder: '여기까지 정리해달라고 말해도 좋아요' },
-    advice:    { label: '조언',        hint: '보내면 짧게 의견을 줄게요', placeholder: '의견이 필요한 상황을 적어주세요' },
+    dictation: '정리 안 된 말 그대로 적어도 돼요',
+    question:  '질문 받고 싶은 지점을 적어주세요',
+    summary:   '여기까지 정리해달라고 말해도 좋아요',
+    advice:    '의견이 필요한 상황을 적어주세요',
   };
-  const current = modes[state.replyMode] || modes.dictation;
-  const chip = document.getElementById('reply-mode-chip');
-  const hint = document.getElementById('reply-mode-hint');
   const input = document.getElementById('chat-input-bottom');
-  if (chip) chip.textContent = current.label;
-  if (hint) hint.textContent = current.hint;
-  if (input) input.placeholder = current.placeholder;
+  if (input) input.placeholder = modes[state.replyMode] || modes.dictation;
 }
 
 async function continueContextChat(text) {
@@ -207,11 +202,28 @@ function loadChatHistory() {
     if (!raw) return false;
     const msgs = JSON.parse(raw);
     if (Array.isArray(msgs) && msgs.length) {
-      state.currentChatMessages = msgs;
-      return true;
+      const sanitized = _sanitizeChatHistory(msgs);
+      if (sanitized.length) {
+        state.currentChatMessages = sanitized;
+        if (sanitized.length !== msgs.length) saveChatHistory();
+        return true;
+      }
+      localStorage.removeItem(key);
     }
   } catch (e) { /* 파싱 오류 무시 */ }
   return false;
+}
+
+function _sanitizeChatHistory(msgs) {
+  const starterTexts = [
+    '대화 준비가 되었어요!',
+    '받아쓰기 모드예요. 정리 안 된 말 그대로 남겨도 괜찮아요.',
+  ];
+  const cleaned = msgs
+    .filter(m => m && typeof m.text === 'string')
+    .filter(m => !(m.role === 'system' && starterTexts.includes(m.text.trim())));
+  while (cleaned.length && cleaned[0].role !== 'user') cleaned.shift();
+  return cleaned;
 }
 
 // ---------------------------------------------------------------------------

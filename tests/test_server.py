@@ -41,10 +41,18 @@ class TestDataAPI:
         assert loaded['students'][0]['alias'] == '테스트-01'
         assert loaded['sessions'][0]['id'] == 'ss_test_short'
 
-    def test_unauthorized_access_redirects(self, app):
+    def test_unauthorized_api_returns_json_401(self, app):
         with app.test_client() as c:
             r = c.get('/api/data')
-            assert r.status_code in (302, 401)
+            assert r.status_code == 401
+            assert r.is_json
+            assert r.get_json()['error'] == 'auth_required'
+
+    def test_unauthorized_page_redirects(self, app):
+        with app.test_client() as c:
+            r = c.get('/')
+            assert r.status_code == 302
+            assert '/login' in r.location
 
 
 # ---------------------------------------------------------------------------

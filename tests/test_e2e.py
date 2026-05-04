@@ -230,6 +230,40 @@ class TestDataPersistence:
         }""")
         assert after > before, "새로고침 후 학생 수가 줄어 있음 — 데이터가 저장되지 않았음"
 
+    def test_save_data_does_not_show_error_when_local_cache_succeeds(self, logged_in_page):
+        """서버 동기화가 실패해도 localStorage 저장이 성공하면 오류 토스트를 띄우지 않아야 함."""
+        result = logged_in_page.evaluate("""async () => {
+            const originalFetch = window.fetch;
+            window.fetch = (url, opts) => {
+                if (String(url).includes('/api/data') && opts?.method === 'POST') {
+                    return Promise.reject(new Error('offline test'));
+                }
+                return originalFetch(url, opts);
+            };
+            state.students.push({
+                id: 'local-cache-only',
+                alias: '로컬-저장',
+                grade: '중1',
+                gender: '',
+                family: '',
+                peers: '',
+                situation: '',
+                notes: '',
+                createdAt: '2026-05-04',
+            });
+            saveData();
+            await new Promise(r => setTimeout(r, 300));
+            window.fetch = originalFetch;
+            const cached = JSON.parse(localStorage.getItem('jip_data_cache') || '{}');
+            return {
+                hasToast: !!document.getElementById('save-error-toast'),
+                savedLocal: !!cached.students?.find(s => s.id === 'local-cache-only'),
+            };
+        }""")
+
+        assert result['savedLocal'] is True
+        assert result['hasToast'] is False
+
 
 # ---------------------------------------------------------------------------
 # 대화(채팅) 화면
@@ -436,7 +470,8 @@ class TestChatRoleAndReplyMode:
     def test_reply_mode_buttons_update_current_mode(self, logged_in_page):
         self._select_topic_with_role(logged_in_page, 'listener')
 
-        logged_in_page.locator('#reply-mode-chip').click()
+        logged_in_page.locator('.input-plus').click()
+        logged_in_page.get_by_text('AI 응답 방식').click()
         logged_in_page.locator('#reply-mode-question').click()
         mode = logged_in_page.evaluate("() => state.replyMode")
         prompt = logged_in_page.evaluate("""() => {
@@ -446,7 +481,7 @@ class TestChatRoleAndReplyMode:
 
         assert mode == 'question'
         assert '질문은 정확히 하나만 한다' in prompt
-        assert logged_in_page.locator('#reply-mode-chip').inner_text() == '질문 하나'
+        assert logged_in_page.locator('#chat-input-bottom').get_attribute('placeholder') == '질문 받고 싶은 지점을 적어주세요'
 
     def test_dictation_mode_records_without_ai_reply(self, logged_in_page):
         self._select_topic_with_role(logged_in_page, 'listener')
@@ -466,6 +501,27 @@ class TestChatRoleAndReplyMode:
         msg_count = logged_in_page.evaluate("() => state.currentChatMessages.length")
         assert msg_count == 0
         assert logged_in_page.locator('.chat-system-msg').count() == 0
+        assert logged_in_page.locator('.chat-bubble-ai').count() == 0
+
+    def test_old_starter_messages_are_not_restored(self, logged_in_page):
+        logged_in_page.wait_for_load_state('networkidle')
+        logged_in_page.evaluate("""() => {
+            state.myTopics = [{
+                id: 't-old-history',
+                title: 'old history',
+                aiPrompt: '',
+                selectedRole: 'listener',
+                createdAt: '2026-05-04',
+            }];
+            localStorage.setItem('jip_chat_t-old-history', JSON.stringify([
+                { role: 'system', text: '대화 준비가 되었어요!' },
+                { role: 'ai', text: '오늘 하루는 어땠어요?' },
+            ]));
+            state.view = 'myrecords';
+            selectTopic('t-old-history');
+        }""")
+
+        assert logged_in_page.evaluate("() => state.currentChatMessages.length") == 0
         assert logged_in_page.locator('.chat-bubble-ai').count() == 0
 
 
