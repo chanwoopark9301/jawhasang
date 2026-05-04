@@ -103,7 +103,8 @@ function _useSampleData() {
   state.investment = defaultInvestmentState();
 }
 
-async function saveData() {
+async function saveData(options = {}) {
+  const retries = Number.isFinite(options.retries) ? options.retries : 2;
   const payload = {
     students:   state.students,
     sessions:   state.sessions,
@@ -116,26 +117,39 @@ async function saveData() {
 
   // localStorage 캐시도 즉시 업데이트 (새로고침 시 삭제 데이터 복원 방지)
   const localSaved = _saveToLocalCache();
+  let lastError = null;
 
-  try {
-    const res = await fetch('/api/data', {
-      method:  'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    if (!_isJSONResponse(res)) throw new Error('non-json response');
-    logger.debug('데이터 저장 완료');
-    return true;
-  } catch (e) {
-    if (localSaved) {
-      logger.warn('서버 동기화 실패 — 로컬 저장 유지', e);
-      return false;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      const res = await fetch('/api/data', {
+        method:  'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!_isJSONResponse(res)) throw new Error('non-json response');
+      logger.debug('데이터 저장 완료');
+      return true;
+    } catch (e) {
+      lastError = e;
+      if (attempt < retries) {
+        logger.warn('서버 동기화 재시도 %d/%d', attempt + 1, retries, e);
+        await _delay(350 * (attempt + 1));
+      }
     }
-    logger.error('데이터 저장 실패 — 로컬 저장도 실패', e);
+  }
+
+  if (localSaved) {
+    logger.warn('서버 동기화 실패 — 로컬 저장 유지', lastError);
     return false;
   }
+  logger.error('데이터 저장 실패 — 로컬 저장도 실패', lastError);
+  return false;
+}
+
+function _delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function _isJSONResponse(res) {
