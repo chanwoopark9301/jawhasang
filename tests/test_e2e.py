@@ -267,7 +267,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260504-8');
+            const res = await fetch('/js/data.js?v=20260504-10');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -697,6 +697,9 @@ class TestInvestmentPartner:
     def test_investment_chat_records_news_when_requested(self, logged_in_page):
         self._open_investment(logged_in_page)
         logged_in_page.evaluate("""() => {
+            state.currentChatMessages = [];
+            state.investment.chat = [];
+            render();
             const originalFetch = window.fetch.bind(window);
             window.fetch = (url, opts) => {
                 if (String(url).includes('/api/analyze')) {
@@ -717,6 +720,84 @@ class TestInvestmentPartner:
         )
 
         assert logged_in_page.locator('.chat-bubble-ai').count() == 1
+
+    def test_investment_chat_is_stored_in_investment_data(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.currentChatMessages = [];
+            state.investment.chat = [];
+            render();
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = (url, opts) => {
+                if (String(url).includes('/api/analyze')) {
+                    return Promise.resolve(new Response(JSON.stringify({
+                        content: [{ text: '투자 원칙 초안: 손실 직후에는 30분 쿨다운을 둡니다.' }],
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                return originalFetch(url, opts);
+            };
+            setReplyMode('question');
+        }""")
+
+        logged_in_page.locator('#chat-input-bottom').fill('손실 직후 투자 원칙을 같이 세워줘')
+        logged_in_page.locator('#chat-input-bottom').press('Enter')
+        logged_in_page.wait_for_function(
+            "() => state.investment.chat && state.investment.chat.length >= 2",
+            timeout=8_000,
+        )
+
+        saved = logged_in_page.evaluate("""() => ({
+            count: state.investment.chat.length,
+            first: state.investment.chat[0].text,
+            last: state.investment.chat.at(-1).text,
+        })""")
+
+        assert saved['count'] >= 2
+        assert '손실 직후' in saved['first']
+        assert '투자 원칙 초안' in saved['last']
+
+    def test_market_refresh_updates_prices_and_risk_alerts(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.investment.positions = [{
+                id: 'ip-market',
+                symbol: 'NVDA',
+                name: 'NVIDIA',
+                shares: 10,
+                avgPrice: 100,
+                currentPrice: 100,
+                targetPrice: 120,
+                stopPrice: 95,
+                longTerm: true,
+                thesis: 'AI demand',
+                addRule: '',
+            }];
+            state.investment.rules.maxPositionWeight = 80;
+            state.investment.rules.dailyLossLimit = 3;
+            window.fetch = (url, opts) => {
+                if (String(url).includes('/api/market/quote')) {
+                    return Promise.resolve(new Response(JSON.stringify({
+                        quotes: [
+                            { symbol: 'NVDA', price: 119, changePercent: 6.4, previousClose: 111.8, name: 'NVIDIA' },
+                            { symbol: '^IXIC', price: 17000, changePercent: 1.2, name: 'NASDAQ Composite' },
+                            { symbol: '^GSPC', price: 5200, changePercent: 0.8, name: 'S&P 500' },
+                        ],
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                return Promise.reject(new Error('unexpected fetch'));
+            };
+            render();
+        }""")
+
+        logged_in_page.locator('#investment-refresh-market').click()
+        logged_in_page.wait_for_function(
+            "() => state.investment.positions[0].currentPrice === 119",
+            timeout=8_000,
+        )
+
+        logged_in_page.wait_for_selector('.investment-alert', timeout=8_000)
+        assert logged_in_page.locator('.investment-alert').count() >= 1
+        assert '목표가' in logged_in_page.locator('#investment-view').inner_text()
 
 
 # ---------------------------------------------------------------------------

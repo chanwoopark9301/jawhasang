@@ -3332,6 +3332,49 @@ body { height: var(--app-height, 100dvh); }
   font-size: 20px;
 }
 
+.investment-refresh-btn {
+  display: inline-flex;
+  margin-top: 6px;
+  padding: 6px 9px;
+  border: 0.5px solid rgba(37, 99, 235, .28);
+  border-radius: var(--radius-md);
+  background: rgba(37, 99, 235, .08);
+  color: #1D4ED8;
+  font-family: var(--font);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.investment-index-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.investment-index {
+  display: grid;
+  gap: 3px;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 9px 10px;
+  background: var(--color-bg);
+}
+
+.investment-index span,
+.investment-index em {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  font-style: normal;
+}
+
+.investment-index strong {
+  font-size: 15px;
+}
+
+.investment-index .up { color: #0F6E56; }
+.investment-index .down { color: #B91C1C; }
+
 .investment-grid {
   display: grid;
   grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
@@ -3343,6 +3386,37 @@ body { height: var(--app-height, 100dvh); }
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   margin-bottom: 12px;
+}
+
+.investment-alerts {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.investment-alert {
+  border: 0.5px solid rgba(217, 119, 6, .28);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  background: rgba(217, 119, 6, .06);
+}
+
+.investment-alert.block {
+  border-color: rgba(220, 38, 38, .32);
+  background: rgba(220, 38, 38, .06);
+}
+
+.investment-alert strong {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 3px;
+}
+
+.investment-alert p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
 }
 
 .investment-summary-card {
@@ -3585,7 +3659,8 @@ body { height: var(--app-height, 100dvh); }
 
   .investment-grid,
   .investment-form-row,
-  .investment-summary-grid {
+  .investment-summary-grid,
+  .investment-index-strip {
     grid-template-columns: 1fr;
   }
 }

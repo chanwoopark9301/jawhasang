@@ -9,6 +9,7 @@ function renderInvestmentView() {
   const totals = investmentTotals(inv.positions);
   const last = inv.decisions.at(-1);
   const messages = state.currentChatMessages || [];
+  const alerts = inv.alerts || buildInvestmentRiskAlerts(inv.positions, inv.rules);
 
   return `<div class="investment-view" id="investment-view">
     <section class="investment-hero" id="investment-portfolio-summary">
@@ -19,8 +20,11 @@ function renderInvestmentView() {
       <div class="investment-total">
         <span>포트폴리오</span>
         <strong>${formatMoney(totals.totalValue)}</strong>
+        <button class="investment-refresh-btn" id="investment-refresh-market" onclick="refreshInvestmentMarketData()">현재가 갱신</button>
       </div>
     </section>
+
+    ${renderInvestmentIndexes(inv.market?.indexes || [])}
 
     <section class="investment-summary-grid">
       <div class="investment-summary-card">
@@ -39,8 +43,13 @@ function renderInvestmentView() {
         <span>뉴스 동향</span>
         <strong>${inv.events.filter(e => e.type === 'news').length}</strong>
       </div>
+      <div class="investment-summary-card">
+        <span>위험 신호</span>
+        <strong>${alerts.length}</strong>
+      </div>
     </section>
 
+    ${renderInvestmentAlerts(alerts)}
     ${renderInvestmentPositions(inv.positions, totals)}
     ${last ? renderInvestmentVerdict(last) : ''}
 
@@ -50,6 +59,33 @@ function renderInvestmentView() {
         : '<div class="empty-state">대화를 시작해보세요</div>'}
     </section>
   </div>`;
+}
+
+function renderInvestmentIndexes(indexes) {
+  const list = Array.isArray(indexes) ? indexes : [];
+  if (!list.length) return '';
+  return `<section class="investment-index-strip">
+    ${list.map(q => `<div class="investment-index">
+      <span>${esc(q.symbol === '^IXIC' ? 'NASDAQ' : q.symbol === '^GSPC' ? 'S&P 500' : q.symbol)}</span>
+      <strong>${formatMoney(q.price)}</strong>
+      <em class="${Number(q.changePercent) >= 0 ? 'up' : 'down'}">${formatPercent(q.changePercent)}</em>
+    </div>`).join('')}
+  </section>`;
+}
+
+function renderInvestmentAlerts(alerts) {
+  const list = Array.isArray(alerts) ? alerts : [];
+  if (!list.length) return '';
+  return `<section class="investment-alerts">
+    <div class="investment-section-head">
+      <h3>오늘의 위험 신호</h3>
+      <span>${list.length}건</span>
+    </div>
+    ${list.map(a => `<div class="investment-alert ${esc(a.severity || 'watch')}">
+      <strong>${esc(a.title)}</strong>
+      <p>${esc(a.body)}</p>
+    </div>`).join('')}
+  </section>`;
 }
 
 function renderInvestmentPositions(positions, totals) {
@@ -67,7 +103,7 @@ function renderInvestmentPositions(positions, totals) {
         </div>
         <div class="investment-position-meta">
           <span>${formatMoney(value)}</span>
-          <span>${weight.toFixed(1)}%</span>
+          <span>${weight.toFixed(1)}% · ${formatPercent(p.changePercent)}</span>
         </div>
       </div>`;
     }).join('')}
@@ -334,6 +370,12 @@ function addInvestmentNewsFromForm(event) {
 function formatMoney(value) {
   const n = Number(value) || 0;
   return '$' + n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+function formatPercent(value) {
+  if (value == null || Number.isNaN(Number(value))) return '-';
+  const n = Number(value);
+  return `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
 }
 
 function investmentActionLabel(action) {

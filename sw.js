@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v38'; // Chat-first investment partner
+const CACHE_NAME = 'jip-v40'; // Persist investment chat
 
 const STATIC_ASSETS = [
   '/style.css',
@@ -25,6 +25,7 @@ const STATIC_ASSETS = [
   '/js/panels.js',
   '/js/chat.js',
   '/js/investment-rules.js',
+  '/js/market-data.js',
   '/js/render-sidebar.js',
   '/js/render-calendar.js',
   '/js/render-investment.js',

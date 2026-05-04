@@ -136,6 +136,7 @@ function _updateRpContent() {
       <div class="ctx-meta">${inv.positions.length}개 종목 · ${inv.decisions.length}개 판단</div>
       <div class="investment-side-menu">
         <button id="investment-menu-portfolio" onclick="renderChatView()">포트폴리오</button>
+        <button id="investment-menu-refresh" onclick="refreshInvestmentMarketData()">현재가 갱신</button>
         <button id="investment-menu-positions" onclick="openModal('investment-positions')">종목 관리</button>
         <button id="investment-menu-rules" onclick="openModal('investment-rules')">투자 원칙</button>
         <button id="investment-menu-decisions" onclick="openModal('investment-decisions')">매매 기록</button>
@@ -149,6 +150,10 @@ function _updateRpContent() {
         <div class="ctx-lbl">원칙</div>
         <div class="ctx-txt">최대 비중 ${esc(inv.rules.maxPositionWeight)}% · 쿨다운 ${esc(inv.rules.cooldownMinutes)}분</div>
       </div>
+      ${inv.alerts?.length ? `<div class="ctx-block">
+        <div class="ctx-lbl">위험 신호</div>
+        <div class="ctx-txt">${esc(inv.alerts[0].title)}${inv.alerts.length > 1 ? ` 외 ${inv.alerts.length - 1}건` : ''}</div>
+      </div>` : ''}
       ${last ? `<div class="ctx-done" style="background:#EAF1FF;color:#1D4ED8;">마지막 판단 · ${esc(last.label)}</div>` : ''}`;
     return;
   }

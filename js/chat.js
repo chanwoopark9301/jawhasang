@@ -304,12 +304,24 @@ function saveChatHistory() {
   if (!key) return;
   try {
     localStorage.setItem(key, JSON.stringify(state.currentChatMessages));
+    if (state.view === 'investment') {
+      state.investment = normalizeInvestmentState(state.investment);
+      state.investment.chat = [...state.currentChatMessages];
+      saveData();
+    }
   } catch (e) { /* 용량 초과 무시 */ }
 }
 
 function loadChatHistory() {
   const key = _chatStorageKey();
   if (!key) return false;
+  if (state.view === 'investment') {
+    state.investment = normalizeInvestmentState(state.investment);
+    if (state.investment.chat.length) {
+      state.currentChatMessages = _sanitizeChatHistory(state.investment.chat);
+      return state.currentChatMessages.length > 0;
+    }
+  }
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return false;

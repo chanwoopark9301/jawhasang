@@ -26,6 +26,7 @@ class TestDataAPI:
         assert 'rules' in data['investment']
         assert 'events' in data['investment']
         assert 'decisions' in data['investment']
+        assert 'chat' in data['investment']
 
     def test_save_and_load_data(self, client, sample_student, sample_session_short):
         payload = {
@@ -40,6 +41,7 @@ class TestDataAPI:
                 'journal': [],
                 'events': [],
                 'decisions': [],
+                'chat': [{'role': 'user', 'text': 'NVDA 뉴스 확인'}],
             },
         }
         r = client.post('/api/data',
@@ -54,6 +56,55 @@ class TestDataAPI:
         assert loaded['sessions'][0]['id'] == 'ss_test_short'
         assert loaded['investment']['positions'][0]['symbol'] == 'NVDA'
         assert loaded['investment']['rules']['cooldownMinutes'] == 45
+        assert loaded['investment']['chat'][0]['text'] == 'NVDA 뉴스 확인'
+
+    def test_market_quote_endpoint_returns_normalized_quotes(self, client, monkeypatch):
+        import server
+
+        class FakeResp:
+            ok = True
+            status_code = 200
+
+            def json(self):
+                return {
+                    'quoteResponse': {
+                        'result': [
+                            {
+                                'symbol': 'NVDA',
+                                'shortName': 'NVIDIA Corporation',
+                                'regularMarketPrice': 120.5,
+                                'regularMarketChangePercent': 4.2,
+                                'regularMarketPreviousClose': 115.6,
+                                'regularMarketTime': 1770000000,
+                            },
+                            {
+                                'symbol': '^GSPC',
+                                'shortName': 'S&P 500',
+                                'regularMarketPrice': 5200.0,
+                                'regularMarketChangePercent': -1.1,
+                            },
+                        ]
+                    }
+                }
+
+        def fake_get(url, params=None, headers=None, timeout=None):
+            assert 'query1.finance.yahoo.com' in url
+            assert params['symbols'] == 'NVDA,^GSPC'
+            return FakeResp()
+
+        monkeypatch.setattr(server.requests, 'get', fake_get)
+        r = client.get('/api/market/quote?symbols=NVDA,^GSPC')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['quotes'][0]['symbol'] == 'NVDA'
+        assert data['quotes'][0]['price'] == 120.5
+        assert data['quotes'][0]['changePercent'] == 4.2
+        assert data['quotes'][1]['symbol'] == '^GSPC'
+
+    def test_market_quote_endpoint_rejects_invalid_symbols(self, client):
+        r = client.get('/api/market/quote?symbols=NVDA;DROP')
+        assert r.status_code == 400
 
     def test_unauthorized_api_returns_json_401(self, app):
         with app.test_client() as c:

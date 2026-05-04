@@ -13,6 +13,7 @@ import hashlib
 import base64
 import logging
 import logging.handlers
+import time
 import requests
 from functools import wraps
 from flask import (
@@ -127,6 +128,13 @@ def _empty_investment():
         'journal': [],
         'events': [],
         'decisions': [],
+        'chat': [],
+        'market': {
+            'indexes': [],
+            'fetchedAt': None,
+            'source': '',
+        },
+        'alerts': [],
     }
 
 EMPTY = lambda: {
@@ -158,6 +166,9 @@ def _normalize_data(data: dict) -> dict:
             'journal': inv.get('journal') if isinstance(inv.get('journal'), list) else [],
             'events': inv.get('events') if isinstance(inv.get('events'), list) else [],
             'decisions': inv.get('decisions') if isinstance(inv.get('decisions'), list) else [],
+            'chat': inv.get('chat') if isinstance(inv.get('chat'), list) else [],
+            'market': inv.get('market') if isinstance(inv.get('market'), dict) else base['market'],
+            'alerts': inv.get('alerts') if isinstance(inv.get('alerts'), list) else [],
         }
     data['investment'] = inv
     return data
@@ -395,6 +406,83 @@ def save_data_route():
     except Exception as e:
         log.error('POST /api/data 저장 실패: %s', e, exc_info=True)
         return jsonify({'error': '데이터 저장 실패'}), 500
+
+# ---------------------------------------------------------------------------
+# 시장 데이터 API — 현재가/지수 조회 프록시
+# ---------------------------------------------------------------------------
+
+_MARKET_SYMBOL_RE = re.compile(r'^[A-Za-z0-9.\-^=]{1,16}$')
+
+def _parse_market_symbols(raw: str):
+    symbols = []
+    for part in (raw or '').split(','):
+        sym = part.strip().upper()
+        if not sym:
+            continue
+        if not _MARKET_SYMBOL_RE.match(sym):
+            raise ValueError(f'유효하지 않은 심볼: {sym}')
+        if sym not in symbols:
+            symbols.append(sym)
+    if not symbols:
+        raise ValueError('symbols 파라미터가 필요합니다')
+    if len(symbols) > 30:
+        raise ValueError('한 번에 최대 30개까지만 조회할 수 있습니다')
+    return symbols
+
+def _normalize_yahoo_quote(item: dict):
+    price = item.get('regularMarketPrice')
+    if price is None:
+        price = item.get('postMarketPrice') or item.get('preMarketPrice')
+    return {
+        'symbol': item.get('symbol', ''),
+        'name': item.get('shortName') or item.get('longName') or item.get('symbol', ''),
+        'price': price,
+        'change': item.get('regularMarketChange'),
+        'changePercent': item.get('regularMarketChangePercent'),
+        'previousClose': item.get('regularMarketPreviousClose'),
+        'currency': item.get('currency', 'USD'),
+        'marketState': item.get('marketState'),
+        'marketTime': item.get('regularMarketTime'),
+    }
+
+@app.route('/api/market/quote', methods=['GET'])
+@require_auth
+def market_quote():
+    try:
+        symbols = _parse_market_symbols(request.args.get('symbols', ''))
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+    try:
+        resp = requests.get(
+            'https://query1.finance.yahoo.com/v7/finance/quote',
+            params={'symbols': ','.join(symbols)},
+            headers={'User-Agent': 'Mozilla/5.0 jip-investment-partner'},
+            timeout=10,
+        )
+    except requests.Timeout:
+        return jsonify({'error': '시장 데이터 요청 타임아웃'}), 504
+    except requests.RequestException as e:
+        log.warning('시장 데이터 요청 실패: %s', e)
+        return jsonify({'error': '시장 데이터 요청 실패'}), 502
+
+    if not resp.ok:
+        log.warning('시장 데이터 오류 응답: HTTP %d', resp.status_code)
+        return jsonify({'error': '시장 데이터 응답 오류'}), resp.status_code
+
+    try:
+        body = resp.json()
+    except ValueError:
+        return jsonify({'error': '시장 데이터 응답 파싱 실패'}), 502
+
+    items = body.get('quoteResponse', {}).get('result', [])
+    quotes = [_normalize_yahoo_quote(item) for item in items if item.get('symbol')]
+    return jsonify({
+        'source': 'yahoo-finance',
+        'requested': symbols,
+        'fetchedAt': int(time.time()),
+        'quotes': quotes,
+    })
 
 # ---------------------------------------------------------------------------
 # PII 스크러빙 — AI 호출 전 개인식별정보 마스킹

@@ -84,6 +84,13 @@ function defaultInvestmentState() {
     journal: [],
     events: [],
     decisions: [],
+    chat: [],
+    market: {
+      indexes: [],
+      fetchedAt: null,
+      source: '',
+    },
+    alerts: [],
   };
 }
 
@@ -96,6 +103,9 @@ function normalizeInvestmentState(investment) {
     journal: Array.isArray(src.journal) ? src.journal : [],
     events: Array.isArray(src.events) ? src.events : [],
     decisions: Array.isArray(src.decisions) ? src.decisions : [],
+    chat: Array.isArray(src.chat) ? src.chat : [],
+    market: src.market && typeof src.market === 'object' ? src.market : base.market,
+    alerts: Array.isArray(src.alerts) ? src.alerts : [],
   };
 }
 

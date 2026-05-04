@@ -11,6 +11,86 @@ function investmentTotals(positions) {
   return { totalValue };
 }
 
+function buildInvestmentRiskAlerts(positions, rules) {
+  const list = Array.isArray(positions) ? positions : [];
+  const r = { ...defaultInvestmentState().rules, ...(rules || {}) };
+  const totals = investmentTotals(list);
+  const alerts = [];
+
+  list.forEach(p => {
+    const symbol = p.symbol || '종목';
+    const price = Number(p.currentPrice) || 0;
+    const target = Number(p.targetPrice) || 0;
+    const stop = Number(p.stopPrice) || 0;
+    const change = Number(p.changePercent) || 0;
+    const value = (Number(p.shares) || 0) * price;
+    const weight = totals.totalValue ? (value / totals.totalValue) * 100 : 0;
+
+    if (target > 0 && price >= target * 0.97) {
+      alerts.push({
+        id: `target-${symbol}`,
+        type: 'target',
+        severity: price >= target ? 'block' : 'watch',
+        symbol,
+        title: `${symbol} 목표가 근접`,
+        body: `현재가 ${formatPriceForRule(price)}가 목표가 ${formatPriceForRule(target)}의 3% 이내입니다. 익절 미루기인지 점검하세요.`,
+      });
+    }
+
+    if (stop > 0 && price <= stop * 1.05) {
+      alerts.push({
+        id: `stop-${symbol}`,
+        type: 'stop',
+        severity: price <= stop ? 'block' : 'watch',
+        symbol,
+        title: `${symbol} 손절가 근접`,
+        body: `현재가 ${formatPriceForRule(price)}가 손절가 ${formatPriceForRule(stop)}의 5% 이내입니다. 투자 논리 훼손 여부를 먼저 확인하세요.`,
+      });
+    }
+
+    if (change <= -Math.abs(Number(r.dailyLossLimit) || 3)) {
+      alerts.push({
+        id: `drop-${symbol}`,
+        type: 'drop',
+        severity: 'watch',
+        symbol,
+        title: `${symbol} 급락 주의`,
+        body: `오늘 ${change.toFixed(2)}% 하락했습니다. 공포 매도나 감정적 물타기를 분리해서 보세요.`,
+      });
+    }
+
+    if (change >= Math.abs(Number(r.chaseLimit) || 5)) {
+      alerts.push({
+        id: `rally-${symbol}`,
+        type: 'rally',
+        severity: 'watch',
+        symbol,
+        title: `${symbol} 추격매수 주의`,
+        body: `오늘 ${change.toFixed(2)}% 상승했습니다. 추가매수는 추격매수 제한 기준과 비교하세요.`,
+      });
+    }
+
+    const maxWeight = Number(r.maxPositionWeight) || 30;
+    if (weight > maxWeight) {
+      alerts.push({
+        id: `weight-${symbol}`,
+        type: 'weight',
+        severity: 'block',
+        symbol,
+        title: `${symbol} 비중 초과`,
+        body: `현재 비중 ${weight.toFixed(1)}%가 한도 ${maxWeight}%를 넘었습니다.`,
+      });
+    }
+  });
+
+  return alerts;
+}
+
+function formatPriceForRule(value) {
+  const n = Number(value) || 0;
+  return '$' + n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
 function evaluateInvestmentDecision({ position, rules, totals, action, context, reason }) {
   const p = position || {};
   const r = { ...defaultInvestmentState().rules, ...(rules || {}) };
