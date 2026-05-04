@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v33'; // Data sync: JSON auth errors + quieter local-first saves
+const CACHE_NAME = 'jip-v35'; // Quick reply mode switcher + direct answer mode
 
 const STATIC_ASSETS = [
   '/style.css',

@@ -56,7 +56,7 @@ function selectReplyModeFromModal(mode) {
 function updateReplyModeUI() {
   const modes = {
     dictation: '정리 안 된 말 그대로 적어도 돼요',
-    question:  '질문 받고 싶은 지점을 적어주세요',
+    question:  '묻고 싶은 걸 그대로 적어주세요',
     summary:   '여기까지 정리해달라고 말해도 좋아요',
     advice:    '의견이 필요한 상황을 적어주세요',
   };
@@ -146,10 +146,12 @@ function _replyModePrompt(mode) {
   if (mode === 'question') {
     return `${shared}
 
-현재 응답 모드: 질문 하나
-- 사용자가 생각을 이어갈 수 있도록 질문은 정확히 하나만 한다.
-- 질문 전에 사용자의 핵심을 한 문장으로 짚는다.
-- 질문 뒤에 추가 설명이나 두 번째 질문을 붙이지 않는다.`;
+현재 응답 모드: 답변
+- 사용자의 질문에 바로 답한다.
+- 되묻거나 대화를 이어가기 위한 질문을 하지 않는다.
+- 사용자가 "딱 하나", "바로", "구체적으로"라고 요청하면 후보를 늘어놓지 말고 가장 효과적인 방법 하나만 제시한다.
+- 답변은 짧게 시작하고, 바로 실행 가능한 첫 행동을 포함한다.
+- 공감 문장으로 시간을 쓰지 말고 결론부터 말한다.`;
   }
   if (mode === 'summary') {
     return `${shared}
@@ -183,7 +185,7 @@ function _replyModePrompt(mode) {
 
 function _chatStorageKey() {
   const id = state.selTopic || state.selStudent;
-  return id ? `jip_chat_${id}` : null;
+  return id ? `jip_chat_v2_${id}` : null;
 }
 
 function saveChatHistory() {

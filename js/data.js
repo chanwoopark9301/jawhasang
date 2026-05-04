@@ -127,7 +127,6 @@ function saveData() {
       return;
     }
     logger.error('데이터 저장 실패 — 로컬 저장도 실패', e);
-    _showSaveError();
   });
 }
 
@@ -141,22 +140,6 @@ function _hideSplash() {
   if (!el) return;
   el.classList.add('hiding');
   setTimeout(() => el.remove(), 260); // transition(0.25s) 후 DOM 제거
-}
-
-function _showSaveError() {
-  const existing = document.getElementById('save-error-toast');
-  if (existing) return; // 이미 표시 중이면 중복 방지
-  const toast = document.createElement('div');
-  toast.id = 'save-error-toast';
-  toast.textContent = '저장 실패 — 서버 연결을 확인해주세요';
-  toast.style.cssText = [
-    'position:fixed', 'top:12px', 'left:50%', 'transform:translateX(-50%)',
-    'background:#b91c1c', 'color:#fff', 'padding:8px 16px',
-    'border-radius:8px', 'font-size:12px', 'z-index:9999',
-    'box-shadow:0 2px 8px rgba(0,0,0,.2)',
-  ].join(';');
-  document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 4000);
 }
 
 // ---------------------------------------------------------------------------

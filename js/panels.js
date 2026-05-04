@@ -15,26 +15,23 @@ function openPlusMenu() {
     return;
   }
 
-  const isMyRecords = state.view === 'myrecords';
-  const items = [
-    { icon: '📎', label: '축어록 첨부',   action: `closePlusMenu();openModal('verbatim')`,       show: !isMyRecords },
-    { icon: '✎',  label: '직접 쓰기',     action: `closePlusMenu();openModal('write')`,          show: isMyRecords },
-    { icon: '◑',  label: 'AI 응답 방식',  action: `closePlusMenu();openModal('reply-mode')` },
-    { icon: '＋', label: isMyRecords ? '새 주제 만들기' : '새 내담자 추가',
-      action: isMyRecords
-        ? `closePlusMenu();openModal('new-topic')`
-        : `closePlusMenu();openModal('new-student')` },
-  ].filter(i => i.show !== false);
+  const modes = [
+    { id: 'dictation', label: '받아쓰기', desc: 'AI 응답 없이 쌓기' },
+    { id: 'question',  label: '답변',     desc: '내 질문에 바로 답하기' },
+    { id: 'summary',   label: '정리',     desc: '여기까지 기록 초안으로' },
+    { id: 'advice',    label: '조언',     desc: '딱 하나만 제안받기' },
+  ];
 
   const menu = document.createElement('div');
   menu.id        = 'plus-menu';
-  menu.className = 'plus-menu open';
-  menu.innerHTML = items.map((item, idx) => `
-    <div class="pm-item" onclick="${item.action}">
-      <span style="font-size:14px;">${item.icon}</span>
-      <span>${esc(item.label)}</span>
-    </div>
-    ${idx === 1 ? '<div class="pm-separator"></div>' : ''}`).join('');
+  menu.className = 'plus-menu reply-mode-menu open';
+  menu.innerHTML = modes.map(mode => `
+    <button class="pm-mode-item${state.replyMode === mode.id ? ' active' : ''}"
+      id="reply-mode-${mode.id}" type="button"
+      onclick="setReplyMode('${mode.id}');closePlusMenu();">
+      <span class="pm-mode-label">${esc(mode.label)}</span>
+      <span class="pm-mode-desc">${esc(mode.desc)}</span>
+    </button>`).join('');
 
   const inputArea = document.getElementById('input-area');
   if (inputArea) inputArea.appendChild(menu);

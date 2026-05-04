@@ -264,6 +264,15 @@ class TestDataPersistence:
         assert result['savedLocal'] is True
         assert result['hasToast'] is False
 
+    def test_save_error_toast_code_removed(self, logged_in_page):
+        """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
+        has_old_toast = logged_in_page.evaluate("""async () => {
+            const res = await fetch('/js/data.js?v=20260504-5');
+            const text = await res.text();
+            return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
+        }""")
+        assert has_old_toast is False
+
 
 # ---------------------------------------------------------------------------
 # 대화(채팅) 화면
@@ -471,7 +480,6 @@ class TestChatRoleAndReplyMode:
         self._select_topic_with_role(logged_in_page, 'listener')
 
         logged_in_page.locator('.input-plus').click()
-        logged_in_page.get_by_text('AI 응답 방식').click()
         logged_in_page.locator('#reply-mode-question').click()
         mode = logged_in_page.evaluate("() => state.replyMode")
         prompt = logged_in_page.evaluate("""() => {
@@ -480,8 +488,22 @@ class TestChatRoleAndReplyMode:
         }""")
 
         assert mode == 'question'
-        assert '질문은 정확히 하나만 한다' in prompt
-        assert logged_in_page.locator('#chat-input-bottom').get_attribute('placeholder') == '질문 받고 싶은 지점을 적어주세요'
+        assert '사용자의 질문에 바로 답한다' in prompt
+        assert '되묻거나 대화를 이어가기 위한 질문을 하지 않는다' in prompt
+        assert logged_in_page.locator('#chat-input-bottom').get_attribute('placeholder') == '묻고 싶은 걸 그대로 적어주세요'
+
+    def test_plus_menu_only_shows_reply_modes(self, logged_in_page):
+        self._select_topic_with_role(logged_in_page, 'listener')
+
+        logged_in_page.locator('.input-plus').click()
+        menu_text = logged_in_page.locator('#plus-menu').inner_text()
+
+        assert '받아쓰기' in menu_text
+        assert '답변' in menu_text
+        assert '정리' in menu_text
+        assert '조언' in menu_text
+        assert '직접 쓰기' not in menu_text
+        assert 'AI 응답 방식' not in menu_text
 
     def test_dictation_mode_records_without_ai_reply(self, logged_in_page):
         self._select_topic_with_role(logged_in_page, 'listener')
@@ -523,6 +545,20 @@ class TestChatRoleAndReplyMode:
 
         assert logged_in_page.evaluate("() => state.currentChatMessages.length") == 0
         assert logged_in_page.locator('.chat-bubble-ai').count() == 0
+
+    def test_new_chat_history_uses_v2_storage_key(self, logged_in_page):
+        self._select_topic_with_role(logged_in_page, 'listener')
+
+        logged_in_page.locator('#chat-input-bottom').fill('새 키에만 저장')
+        logged_in_page.locator('#chat-input-bottom').press('Enter')
+        logged_in_page.wait_for_selector('.chat-bubble-user', timeout=6_000)
+
+        keys = logged_in_page.evaluate("""() => ({
+            oldKey: localStorage.getItem('jip_chat_t-role-e2e'),
+            newKey: localStorage.getItem('jip_chat_v2_t-role-e2e'),
+        })""")
+        assert keys['oldKey'] is None
+        assert keys['newKey'] is not None
 
 
 # ---------------------------------------------------------------------------

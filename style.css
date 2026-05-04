@@ -3810,21 +3810,53 @@ body { height: var(--app-height, 100dvh); }
 
 /* ── + 메뉴 ── */
 .plus-menu {
-  position: absolute; bottom: 62px; left: 50%; transform: translateX(-50%);
-  width: 220px; background: var(--color-bg);
+  position: absolute; bottom: 62px; left: 42px;
+  width: min(280px, calc(100% - 58px)); background: var(--color-bg);
   border: 0.5px solid var(--color-border-strong);
-  border-radius: 10px; z-index: 100; overflow: hidden;
+  border-radius: 14px; z-index: 100; overflow: hidden;
   display: none;
+  box-shadow: 0 10px 28px rgba(72, 50, 32, 0.16);
 }
 .plus-menu.open { display: block; }
-.pm-item {
-  display: flex; align-items: center; gap: 9px;
-  padding: 10px 14px; font-size: 12px; cursor: pointer;
-  border-bottom: 0.5px solid var(--color-border-tertiary);
+.reply-mode-menu {
+  padding: 6px;
 }
-.pm-item:last-child { border-bottom: none; }
-.pm-item:hover { background: var(--color-bg-secondary); }
-.pm-separator { height: 0.5px; background: var(--color-border); }
+.pm-mode-item {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+  font-family: var(--font);
+  text-align: left;
+}
+.pm-mode-item:hover,
+.pm-mode-item.active {
+  background: var(--color-bg-secondary);
+}
+.pm-mode-item.active .pm-mode-label {
+  color: #0F6E56;
+}
+.pm-mode-label {
+  width: 58px;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+}
+.pm-mode-desc {
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* ── 시스템 메시지 ── */
 .chat-system-msg {

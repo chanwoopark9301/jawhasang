@@ -419,8 +419,8 @@ function renderModalReplyMode() {
     },
     {
       id: 'question',
-      label: '질문 하나',
-      desc: '지금 흐름에서 생각을 이어갈 질문 하나만 받습니다.',
+      label: '답변',
+      desc: '내 질문에 바로 답합니다. 되묻지 않습니다.',
     },
     {
       id: 'summary',
