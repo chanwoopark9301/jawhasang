@@ -267,7 +267,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260504-7');
+            const res = await fetch('/js/data.js?v=20260504-8');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -606,13 +606,27 @@ class TestInvestmentPartner:
         page.click('#nav-invest')
         page.wait_for_selector('#investment-view', timeout=8_000)
 
-    def test_investment_nav_and_gate_render(self, logged_in_page):
+    def test_investment_nav_renders_chat_first_layout(self, logged_in_page):
         self._open_investment(logged_in_page)
 
         assert logged_in_page.locator('#investment-view').is_visible()
-        assert logged_in_page.locator('#investment-position-form').is_visible()
-        assert logged_in_page.locator('#investment-gate-form').is_visible()
-        assert '매매 전 점검' in logged_in_page.locator('#investment-view').inner_text()
+        assert logged_in_page.locator('#investment-portfolio-summary').is_visible()
+        assert logged_in_page.locator('#chat-input-bottom').is_visible()
+        assert '대화를 시작해보세요' in logged_in_page.locator('#main-content').inner_text()
+        assert logged_in_page.locator('#investment-position-form').count() == 0
+        assert logged_in_page.locator('#investment-gate-form').count() == 0
+
+    def test_investment_side_menu_opens_management_modals(self, logged_in_page):
+        self._open_investment(logged_in_page)
+
+        logged_in_page.locator('#investment-menu-positions').click()
+        logged_in_page.wait_for_selector('#investment-position-form', timeout=8_000)
+        assert '종목 관리' in logged_in_page.locator('#modal-box').inner_text()
+        logged_in_page.locator('.modal-close').click()
+
+        logged_in_page.locator('#investment-menu-news').click()
+        logged_in_page.wait_for_selector('#investment-news-form', timeout=8_000)
+        assert '뉴스 동향' in logged_in_page.locator('#modal-box').inner_text()
 
     def test_rule_engine_blocks_overweight_add(self, logged_in_page):
         logged_in_page.wait_for_load_state('networkidle')
@@ -642,6 +656,7 @@ class TestInvestmentPartner:
 
     def test_gate_saves_decision_and_calendar_event(self, logged_in_page):
         self._open_investment(logged_in_page)
+        logged_in_page.locator('#investment-menu-positions').click()
 
         logged_in_page.locator('#ip-symbol').fill('NVDA')
         logged_in_page.locator('#ip-name').fill('NVIDIA')
@@ -651,9 +666,11 @@ class TestInvestmentPartner:
         logged_in_page.locator('#ip-thesis').fill('AI 가속기 장기 성장')
         logged_in_page.locator('#investment-add-position').click()
 
+        logged_in_page.locator('#investment-menu-rules').click()
         logged_in_page.locator('#ir-max-weight').fill('30')
         logged_in_page.locator('#investment-save-rules').click()
 
+        logged_in_page.locator('#investment-menu-decisions').click()
         position_id = logged_in_page.evaluate("() => state.investment.positions.at(-1).id")
         logged_in_page.locator('#ig-position').select_option(position_id)
         logged_in_page.locator('#ig-action').select_option('add')
@@ -676,6 +693,30 @@ class TestInvestmentPartner:
 
         logged_in_page.click('#nav-cal')
         logged_in_page.wait_for_selector('.cal-dot-invest', timeout=8_000)
+
+    def test_investment_chat_records_news_when_requested(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = (url, opts) => {
+                if (String(url).includes('/api/analyze')) {
+                    return Promise.resolve(new Response(JSON.stringify({
+                        content: [{ text: 'NVDA 뉴스 동향: AI 수요 기대가 이어지지만 밸류에이션 부담도 함께 확인해야 합니다.' }],
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                return originalFetch(url, opts);
+            };
+            setReplyMode('question');
+        }""")
+
+        logged_in_page.locator('#chat-input-bottom').fill('오늘 NVDA 관련 뉴스 정리하고 뉴스 동향에 기록해줘')
+        logged_in_page.locator('#chat-input-bottom').press('Enter')
+        logged_in_page.wait_for_function(
+            "() => state.investment.events.some(e => e.type === 'news' && e.title.includes('뉴스 동향'))",
+            timeout=8_000,
+        )
+
+        assert logged_in_page.locator('.chat-bubble-ai').count() == 1
 
 
 # ---------------------------------------------------------------------------

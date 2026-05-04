@@ -33,7 +33,8 @@ function sendCurrentChat() {
   }
 
   // 받아쓰기 모드: 사용자가 쭉 말할 수 있도록 AI가 매 턴 끼어들지 않는다.
-  if ((state.replyMode || 'dictation') === 'dictation') {
+  // 투자 파트너는 대화가 메인 기능이므로 기본적으로 AI가 응답한다.
+  if ((state.replyMode || 'dictation') === 'dictation' && state.view !== 'investment') {
     appendMessage('user', text);
     return;
   }
@@ -72,8 +73,9 @@ async function continueContextChat(text) {
   showTypingIndicator();
 
   const isMyRecords = state.view === 'myrecords';
+  const isInvestment = state.view === 'investment';
   const topic   = isMyRecords ? state.myTopics.find(t => t.id === state.selTopic) : null;
-  const student = !isMyRecords ? state.students.find(s => s.id === state.selStudent) : null;
+  const student = (!isMyRecords && !isInvestment) ? state.students.find(s => s.id === state.selStudent) : null;
 
   // AI 역할: state.currentRole → AI_ROLE_PRESETS에서 prompt 조회. 없으면 topic.aiPrompt 폴백
   const sysPrompt = _buildChatSysPrompt(isMyRecords, topic, student);
@@ -101,6 +103,7 @@ async function continueContextChat(text) {
     if (reply) {
       appendMessage('ai', reply);
       saveSummaryReplyAsRecord(reply);
+      saveInvestmentChatArtifacts(text, reply);
     } else {
       hideTypingIndicator();
     }
@@ -135,9 +138,88 @@ function saveSummaryReplyAsRecord(text) {
   renderSidebar();
 }
 
+function saveInvestmentChatArtifacts(userText, aiText) {
+  if (state.view !== 'investment') return;
+  const ask = (userText || '').trim();
+  const content = (aiText || '').trim();
+  if (!ask || !content) return;
+  const today = new Date().toISOString().split('T')[0];
+
+  if (ask.includes('뉴스 동향') && (ask.includes('기록') || ask.includes('저장'))) {
+    state.investment.events.push({
+      id: 'ie' + Date.now(),
+      date: today,
+      type: 'news',
+      symbol: inferInvestmentSymbol(ask),
+      title: `${inferInvestmentSymbol(ask) || '투자'} 뉴스 동향`,
+      body: content,
+      severity: 'info',
+      linkedDecisionId: null,
+      linkedRecordId: null,
+    });
+    saveData();
+    showToast('뉴스 동향에 기록했어요.');
+    renderRightPanel();
+    return;
+  }
+
+  if (ask.includes('투자 원칙') && (ask.includes('설정') || ask.includes('세워') || ask.includes('저장') || ask.includes('정해'))) {
+    const prev = state.investment.rules.coreRules || '';
+    state.investment.rules.coreRules = [prev, content].filter(Boolean).join('\n\n');
+    saveData();
+    showToast('투자 원칙에 반영했어요.');
+    renderRightPanel();
+  }
+}
+
+function inferInvestmentSymbol(text) {
+  const known = (state.investment?.positions || []).find(p =>
+    p.symbol && text.toUpperCase().includes(String(p.symbol).toUpperCase())
+  );
+  if (known) return known.symbol;
+  const m = (text || '').match(/\b[A-Z]{1,5}\b/);
+  return m ? m[0] : '';
+}
+
 // AI 대화용 시스템 프롬프트 생성 (현재 역할 기준으로 매 메시지마다 최신 반영)
 function _buildChatSysPrompt(isMyRecords, topic, student) {
   const modePrompt = _replyModePrompt(state.replyMode || 'dictation');
+  if (state.view === 'investment') {
+    const inv = state.investment || defaultInvestmentState();
+    const positions = inv.positions.map(p =>
+      `- ${p.symbol || '?'}: 수량 ${p.shares || 0}, 평균 ${p.avgPrice || 0}, 현재 ${p.currentPrice || 0}, 목표 ${p.targetPrice || '-'}, 손절 ${p.stopPrice || '-'}, 논리 ${p.thesis || '없음'}`
+    ).join('\n') || '- 등록된 보유 종목 없음';
+    const recentNews = inv.events
+      .filter(e => e.type === 'news')
+      .slice(-5)
+      .map(e => `- ${e.date} ${e.symbol || ''} ${e.title}: ${e.body}`)
+      .join('\n') || '- 기록된 뉴스 없음';
+    const recentDecisions = inv.decisions.slice(-5).map(d =>
+      `- ${d.createdAt?.slice(0, 10) || ''} ${d.symbol} ${d.action}: ${d.label} — ${d.summary}`
+    ).join('\n') || '- 기록된 매매 판단 없음';
+    return `당신은 개인 투자자의 이성적 매매 통제 파트너입니다.
+목표는 수익률 예측이나 종목 추천이 아니라, 사용자가 사전에 정한 원칙을 기억하고 감정적 매매를 줄이는 것입니다.
+감정 상태를 묻지 말고, 원칙·숫자·기록·뉴스 해석을 기준으로 짧고 분명하게 돕습니다.
+사용자가 "뉴스 동향에 기록", "투자 원칙으로 저장", "매매 기록으로 남겨"처럼 말하면 저장될 수 있게 제목과 본문을 정돈해서 답합니다.
+
+투자 원칙:
+- 하루 손실 한도: ${inv.rules.dailyLossLimit}%
+- 종목별 최대 비중: ${inv.rules.maxPositionWeight}%
+- 쿨다운: ${inv.rules.cooldownMinutes}분
+- 추격매수 제한 기준: ${inv.rules.chaseLimit}%
+- 핵심 원칙: ${inv.rules.coreRules || '아직 없음'}
+
+보유 종목:
+${positions}
+
+최근 뉴스 동향:
+${recentNews}
+
+최근 매매 판단:
+${recentDecisions}
+
+${modePrompt}`;
+  }
   if (isMyRecords) {
     // currentRole → preset 조회, 없으면 topic.aiPrompt, 없으면 기본값
     let rolePrompt = '따뜻하게 경청하고 공감하는 친구처럼';
@@ -213,6 +295,7 @@ function _replyModePrompt(mode) {
 
 function _chatStorageKey() {
   const id = state.selTopic || state.selStudent;
+  if (state.view === 'investment') return 'jip_chat_v2_investment';
   return id ? `jip_chat_v2_${id}` : null;
 }
 
@@ -291,6 +374,11 @@ function renderChatView() {
   if (state.selRecord || state.selSession) return;
   const content = document.getElementById('main-content');
   if (!content) return;
+  if (state.view === 'investment') {
+    content.innerHTML = renderInvestmentView();
+    scrollChatToBottom();
+    return;
+  }
   if (!state.currentChatMessages.length) {
     content.innerHTML = '<div class="empty-state">대화를 시작해보세요</div>';
     return;

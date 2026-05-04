@@ -8,12 +8,13 @@ function renderInvestmentView() {
   state.investment = inv;
   const totals = investmentTotals(inv.positions);
   const last = inv.decisions.at(-1);
+  const messages = state.currentChatMessages || [];
 
   return `<div class="investment-view" id="investment-view">
-    <section class="investment-hero">
+    <section class="investment-hero" id="investment-portfolio-summary">
       <div>
         <div class="investment-kicker">투자 기록 기반 행동 통제</div>
-        <h2>매매 전, 한 번 느리게 보기</h2>
+        <h2>포트폴리오 요약</h2>
       </div>
       <div class="investment-total">
         <span>포트폴리오</span>
@@ -21,40 +22,32 @@ function renderInvestmentView() {
       </div>
     </section>
 
-    <section class="investment-section">
-      <div class="investment-section-head">
-        <h3>보유 종목</h3>
-        <span>${inv.positions.length}개</span>
+    <section class="investment-summary-grid">
+      <div class="investment-summary-card">
+        <span>보유 종목</span>
+        <strong>${inv.positions.length}</strong>
       </div>
-      ${renderInvestmentPositions(inv.positions, totals)}
-      ${renderInvestmentPositionForm()}
-    </section>
-
-    <section class="investment-grid">
-      <div class="investment-section">
-        <div class="investment-section-head">
-          <h3>투자 원칙</h3>
-          <span>룰 엔진 기준</span>
-        </div>
-        ${renderInvestmentRulesForm(inv.rules)}
+      <div class="investment-summary-card">
+        <span>투자 원칙</span>
+        <strong>${inv.rules.coreRules ? '설정됨' : '초안 필요'}</strong>
       </div>
-
-      <div class="investment-section">
-        <div class="investment-section-head">
-          <h3>매매 전 점검</h3>
-          <span>추천이 아니라 제동</span>
-        </div>
-        ${renderInvestmentGateForm(inv.positions)}
-        <div id="investment-result">${last ? renderInvestmentVerdict(last) : ''}</div>
+      <div class="investment-summary-card">
+        <span>매매 기록</span>
+        <strong>${inv.decisions.length}</strong>
+      </div>
+      <div class="investment-summary-card">
+        <span>뉴스 동향</span>
+        <strong>${inv.events.filter(e => e.type === 'news').length}</strong>
       </div>
     </section>
 
-    <section class="investment-section">
-      <div class="investment-section-head">
-        <h3>판단 기록</h3>
-        <span>${inv.decisions.length}건</span>
-      </div>
-      ${renderInvestmentDecisionList(inv.decisions)}
+    ${renderInvestmentPositions(inv.positions, totals)}
+    ${last ? renderInvestmentVerdict(last) : ''}
+
+    <section class="investment-chat-surface">
+      ${messages.length
+        ? `<div class="chat-messages" id="chat-messages">${messages.map(m => renderChatBubble(m)).join('')}</div>`
+        : '<div class="empty-state">대화를 시작해보세요</div>'}
     </section>
   </div>`;
 }
@@ -103,6 +96,15 @@ function renderInvestmentPositionForm() {
   </form>`;
 }
 
+function renderModalInvestmentPositions() {
+  const inv = state.investment;
+  return `
+    <button class="modal-close" onclick="closeModal()">×</button>
+    <div class="modal-title">종목 관리</div>
+    ${renderInvestmentPositions(inv.positions, investmentTotals(inv.positions))}
+    ${renderInvestmentPositionForm()}`;
+}
+
 function renderInvestmentRulesForm(rules) {
   return `<form class="investment-form" onsubmit="saveInvestmentRulesFromForm(event)">
     <label>하루 손실 한도<input class="form-input" id="ir-daily-loss" type="number" step="0.1" value="${esc(rules.dailyLossLimit)}"></label>
@@ -115,6 +117,14 @@ function renderInvestmentRulesForm(rules) {
     <textarea class="form-input investment-textarea" id="ir-core" placeholder="내 핵심 투자 원칙">${esc(rules.coreRules || '')}</textarea>
     <button class="btn-primary investment-primary" id="investment-save-rules" type="submit">원칙 저장</button>
   </form>`;
+}
+
+function renderModalInvestmentRules() {
+  return `
+    <button class="modal-close" onclick="closeModal()">×</button>
+    <div class="modal-title">투자 원칙</div>
+    <div class="investment-modal-note">대화창에서 AI와 논의한 뒤 "이걸 투자 원칙으로 저장해줘"라고 말해도 반영됩니다.</div>
+    ${renderInvestmentRulesForm(state.investment.rules)}`;
 }
 
 function renderInvestmentGateForm(positions) {
@@ -142,6 +152,41 @@ function renderInvestmentGateForm(positions) {
     <textarea class="form-input investment-textarea" id="ig-reason" placeholder="지금 이 행동을 하려는 이유"></textarea>
     <button class="btn-primary investment-primary" id="investment-gate-run" type="submit" ${positions.length ? '' : 'disabled'}>점검하기</button>
   </form>`;
+}
+
+function renderModalInvestmentDecisions() {
+  return `
+    <button class="modal-close" onclick="closeModal()">×</button>
+    <div class="modal-title">매매 기록</div>
+    <div class="investment-modal-note">매매 전 점검은 여기서 직접 실행하거나, 대화창에서 먼저 논의한 뒤 기록으로 남길 수 있어요.</div>
+    ${renderInvestmentGateForm(state.investment.positions)}
+    <div id="investment-result">${state.investment.decisions.length ? renderInvestmentVerdict(state.investment.decisions.at(-1)) : ''}</div>
+    ${renderInvestmentDecisionList(state.investment.decisions)}`;
+}
+
+function renderModalInvestmentNews() {
+  const news = state.investment.events.filter(e => e.type === 'news').slice().reverse();
+  return `
+    <button class="modal-close" onclick="closeModal()">×</button>
+    <div class="modal-title">뉴스 동향</div>
+    <div class="investment-modal-note">대화창에서 "내 보유 주식 관련 최신 뉴스 있니?"라고 묻고, "뉴스 동향에 기록해줘"라고 말하면 여기에 저장됩니다.</div>
+    <form class="investment-form" id="investment-news-form" onsubmit="addInvestmentNewsFromForm(event)">
+      <div class="investment-form-row">
+        <input class="form-input" id="in-symbol" placeholder="종목 코드" autocomplete="off">
+        <input class="form-input" id="in-title" placeholder="뉴스 제목" autocomplete="off">
+        <input class="form-input" id="in-date" type="date" value="${new Date().toISOString().split('T')[0]}">
+      </div>
+      <textarea class="form-input investment-textarea" id="in-body" placeholder="뉴스 내용과 나의 해석"></textarea>
+      <button class="btn-primary investment-primary" type="submit">뉴스 저장</button>
+    </form>
+    <div class="investment-decision-list">
+      ${news.length ? news.map(e => `<div class="investment-decision">
+        <span class="investment-badge allow">뉴스</span>
+        <strong>${esc(e.symbol || '투자')} · ${esc(e.title || '뉴스 동향')}</strong>
+        <p>${esc(e.body || '')}</p>
+        <small>${esc(e.date || '')}</small>
+      </div>`).join('') : '<div class="investment-empty">저장된 뉴스 동향이 없습니다.</div>'}
+    </div>`;
 }
 
 function renderInvestmentVerdict(decision) {
@@ -191,6 +236,7 @@ function addInvestmentPositionFromForm(event) {
   state.selInvestmentPosition = position.id;
   saveData();
   showToast('보유 종목을 등록했어요.');
+  closeModal();
   render();
 }
 
@@ -208,6 +254,7 @@ function saveInvestmentRulesFromForm(event) {
   };
   saveData();
   showToast('투자 원칙을 저장했어요.');
+  closeModal();
   render();
 }
 
@@ -256,6 +303,31 @@ function runInvestmentGateFromForm(event) {
   });
   saveData();
   showToast('판단 기록을 저장했어요.');
+  closeModal();
+  render();
+}
+
+function addInvestmentNewsFromForm(event) {
+  event.preventDefault();
+  const symbol = document.getElementById('in-symbol')?.value.trim().toUpperCase() || '';
+  const title = document.getElementById('in-title')?.value.trim() || '뉴스 동향';
+  const body = document.getElementById('in-body')?.value.trim() || '';
+  const date = document.getElementById('in-date')?.value || new Date().toISOString().split('T')[0];
+  if (!body) return showToast('뉴스 내용을 입력해주세요.');
+  state.investment.events.push({
+    id: 'ie' + Date.now(),
+    date,
+    type: 'news',
+    symbol,
+    title,
+    body,
+    severity: 'info',
+    linkedDecisionId: null,
+    linkedRecordId: null,
+  });
+  saveData();
+  showToast('뉴스 동향에 저장했어요.');
+  closeModal();
   render();
 }
 

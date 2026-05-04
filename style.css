@@ -3338,6 +3338,66 @@ body { height: var(--app-height, 100dvh); }
   gap: 14px;
 }
 
+.investment-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.investment-summary-card {
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  background: var(--color-bg);
+}
+
+.investment-summary-card span {
+  display: block;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  margin-bottom: 4px;
+}
+
+.investment-summary-card strong {
+  font-size: 14px;
+}
+
+.investment-chat-surface {
+  padding-top: 12px;
+}
+
+.investment-side-menu {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 14px;
+}
+
+.investment-side-menu button {
+  width: 100%;
+  padding: 8px 10px;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.investment-side-menu button:hover {
+  background: var(--color-bg-secondary);
+  color: #1D4ED8;
+}
+
+.investment-modal-note {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  padding: 10px 0 14px;
+}
+
 .investment-section {
   padding: 14px 0;
   border-bottom: 0.5px solid var(--color-border);
@@ -3524,7 +3584,8 @@ body { height: var(--app-height, 100dvh); }
   }
 
   .investment-grid,
-  .investment-form-row {
+  .investment-form-row,
+  .investment-summary-grid {
     grid-template-columns: 1fr;
   }
 }

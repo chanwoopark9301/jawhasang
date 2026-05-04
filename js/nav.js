@@ -8,6 +8,7 @@
 // ---------------------------------------------------------------------------
 
 function setView(view) {
+  const prevView = state.view;
   state.view       = view;
   state.selStudent = null;
   state.selSession = null;
@@ -15,6 +16,13 @@ function setView(view) {
   state.mode       = 'welcome';
   state.filterTags = [];
   state.searchQuery = '';
+  if (view === 'investment') {
+    if (prevView !== 'investment') {
+      state.currentChatMessages = [];
+      loadChatHistory();
+    }
+    if ((state.replyMode || 'dictation') === 'dictation') state.replyMode = 'question';
+  }
 
   logger.info('뷰 전환: %s', view);
   render();

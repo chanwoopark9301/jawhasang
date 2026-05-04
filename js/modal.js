@@ -53,6 +53,10 @@ function buildModalHTML(id, data) {
     case 'pattern':       return renderModalPattern(data.result);
     case 'chat-summary':  return renderModalChatSummary(data);
     case 'custom-role':   return renderModalCustomRole(data);
+    case 'investment-positions': return renderModalInvestmentPositions();
+    case 'investment-rules':     return renderModalInvestmentRules();
+    case 'investment-decisions': return renderModalInvestmentDecisions();
+    case 'investment-news':      return renderModalInvestmentNews();
     default:              return `<p>알 수 없는 팝업: ${esc(id)}</p>`;
   }
 }

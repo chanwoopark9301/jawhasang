@@ -134,6 +134,13 @@ function _updateRpContent() {
     content.innerHTML = `
       <div class="ctx-alias" style="color:#2563EB;">투자 파트너</div>
       <div class="ctx-meta">${inv.positions.length}개 종목 · ${inv.decisions.length}개 판단</div>
+      <div class="investment-side-menu">
+        <button id="investment-menu-portfolio" onclick="renderChatView()">포트폴리오</button>
+        <button id="investment-menu-positions" onclick="openModal('investment-positions')">종목 관리</button>
+        <button id="investment-menu-rules" onclick="openModal('investment-rules')">투자 원칙</button>
+        <button id="investment-menu-decisions" onclick="openModal('investment-decisions')">매매 기록</button>
+        <button id="investment-menu-news" onclick="openModal('investment-news')">뉴스 동향</button>
+      </div>
       <div class="ctx-block">
         <div class="ctx-lbl">역할</div>
         <div class="ctx-txt">종목 추천이 아니라 사전에 정한 원칙 위반 여부를 점검합니다.</div>

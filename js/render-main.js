@@ -88,7 +88,7 @@ function updateContextChip() {
 function updateInputArea() {
   const inputArea = document.getElementById('input-area');
   if (!inputArea) return;
-  if (state.view === 'calendar' || state.view === 'investment') { inputArea.style.display = 'none'; return; }
+  if (state.view === 'calendar') { inputArea.style.display = 'none'; return; }
   const isHome = !state.selTopic && !state.selStudent;
   const hasContext = (state.view === 'myrecords' && state.selTopic)
                   || (state.view === 'student' && state.selStudent);
@@ -120,7 +120,7 @@ function renderMain() {
     titleEl.textContent = '투자 파트너';
     subEl.textContent   = '';
     nsBtn.style.display = 'none';
-    content.innerHTML   = renderInvestmentView();
+    renderChatView();
     return;
   }
 

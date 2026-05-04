@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v37'; // Investment partner MVP
+const CACHE_NAME = 'jip-v38'; // Chat-first investment partner
 
 const STATIC_ASSETS = [
   '/style.css',
