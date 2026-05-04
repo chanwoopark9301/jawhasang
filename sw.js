@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v44'; // Simplify investment register and retry saves
+const CACHE_NAME = 'jip-v45'; // Dedicated investment position saves
 
 const STATIC_ASSETS = [
   '/style.css',

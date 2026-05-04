@@ -413,6 +413,49 @@ def save_data_route():
         log.error('POST /api/data 저장 실패: %s', e, exc_info=True)
         return jsonify({'error': '데이터 저장 실패'}), 500
 
+@app.route('/api/investment/positions', methods=['POST'])
+@require_auth
+def save_investment_position_route():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict) or not isinstance(payload.get('position'), dict):
+        return jsonify({'error': 'position 데이터가 필요합니다'}), 400
+
+    position = dict(payload['position'])
+    symbol = str(position.get('symbol', '')).strip().upper()
+    if not _MARKET_SYMBOL_RE.match(symbol):
+        return jsonify({'error': '유효하지 않은 종목 코드입니다'}), 400
+    position['symbol'] = symbol
+    position.setdefault('id', f'ip{int(time.time() * 1000)}')
+
+    numeric_fields = ['shares', 'avgPrice', 'currentPrice', 'targetPrice', 'stopPrice', 'previousClose', 'changePercent']
+    for field in numeric_fields:
+        if position.get(field) in (None, ''):
+            position[field] = None if field in ('currentPrice', 'previousClose', 'changePercent') else 0
+            continue
+        try:
+            position[field] = float(position[field])
+        except (TypeError, ValueError):
+            position[field] = None if field in ('currentPrice', 'previousClose', 'changePercent') else 0
+
+    try:
+        data = read_data()
+        inv = data['investment'] = _normalize_data(data)['investment']
+        positions = inv.get('positions', [])
+        replaced = False
+        for idx, item in enumerate(positions):
+            if str(item.get('id')) == str(position.get('id')) or str(item.get('symbol', '')).upper() == symbol:
+                positions[idx] = {**item, **position}
+                replaced = True
+                break
+        if not replaced:
+            positions.append(position)
+        inv['positions'] = positions
+        write_data(data)
+        return jsonify({'ok': True, 'investment': inv, 'position': position})
+    except Exception as e:
+        log.error('POST /api/investment/positions 저장 실패: %s', e, exc_info=True)
+        return jsonify({'error': '투자 종목 저장 실패'}), 500
+
 # ---------------------------------------------------------------------------
 # 시장 데이터 API — 현재가/지수 조회 프록시
 # ---------------------------------------------------------------------------
@@ -849,8 +892,17 @@ def _scrub_pii(text: str) -> str:
     """텍스트에서 개인식별정보 패턴을 마스킹한다."""
     if not isinstance(text, str):
         return text
+    urls = []
+
+    def keep_url(match):
+        urls.append(match.group(0))
+        return f'__URL_{len(urls) - 1}__'
+
+    text = re.sub(r'https?://[^\s)\]]+', keep_url, text)
     for pattern, replacement in _PII_PATTERNS:
         text = pattern.sub(replacement, text)
+    for idx, url in enumerate(urls):
+        text = text.replace(f'__URL_{idx}__', url)
     return text
 
 def _scrub_payload(payload: dict) -> dict:

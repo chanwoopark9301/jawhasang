@@ -208,6 +208,7 @@ async function fetchInvestmentNewsContext(text) {
   if (!shouldFetchInvestmentNews(text)) return '';
   const symbols = inferInvestmentNewsSymbols(text);
   if (!symbols.length) return '';
+  const today = new Date().toISOString().split('T')[0];
   try {
     const res = await fetch(`/api/investment/news?symbols=${encodeURIComponent(symbols.join(','))}&limit=3`, {
       credentials: 'same-origin',
@@ -216,10 +217,10 @@ async function fetchInvestmentNewsContext(text) {
     if (!res.ok) throw new Error(`investment news failed: ${res.status}`);
     const data = await res.json();
     const items = Array.isArray(data.news) ? data.news : [];
-    if (!items.length) return `\n\n실시간 뉴스 검색 결과:\n- ${symbols.join(', ')} 관련 최신 뉴스가 조회되지 않았습니다.`;
-    return `\n\n실시간 뉴스 검색 결과 (${data.source || 'news'}):\n${items.map(item =>
-      `- [${item.symbol}] ${item.title}${item.published ? ` (${item.published})` : ''}${item.summary ? `: ${item.summary}` : ''}${item.link ? `\n  링크: ${item.link}` : ''}`
-    ).join('\n')}\n\n뉴스 답변 규칙:\n- 위 검색 결과를 바탕으로만 최신 뉴스라고 말한다.\n- "실시간 인터넷 검색 기능이 없다"거나 사용자가 직접 검색하라고 답하지 않는다.\n- 투자 판단은 추천이 아니라 원칙 위반 여부와 리스크 체크 중심으로 정리한다.`;
+    if (!items.length) return `\n\n실시간 뉴스 검색 결과:\n- 조회 기준일: ${today}\n- ${symbols.join(', ')} 관련 최신 뉴스가 조회되지 않았습니다.`;
+    return `\n\n실시간 뉴스 검색 결과 (${data.source || 'news'}):\n조회 기준일: ${today}\n${items.map(item =>
+      `- [${item.symbol}] ${item.title}${item.published ? ` (발행/공시일: ${item.published})` : ''}${item.source ? ` / 출처: ${item.source}` : ''}${item.kind ? ` / 유형: ${item.kind}` : ''}${item.summary ? `: ${item.summary}` : ''}${item.link ? `\n  링크: ${item.link}` : ''}`
+    ).join('\n')}\n\n뉴스 답변 규칙:\n- 조회 기준일은 ${today}이다. 발행/공시일을 오늘 날짜라고 바꿔 말하지 않는다.\n- SEC EDGAR는 공식 원천 자료이고, 뉴스 흐름이 아니라 공시 원문으로 해석한다.\n- 위 검색 결과를 바탕으로만 최신 뉴스라고 말한다.\n- "실시간 인터넷 검색 기능이 없다"거나 사용자가 직접 검색하라고 답하지 않는다.\n- 투자 판단은 추천이 아니라 원칙 위반 여부와 리스크 체크 중심으로 정리한다.`;
   } catch (e) {
     logger.warn('투자 뉴스 검색 실패', e);
     return `\n\n실시간 뉴스 검색 결과:\n- 뉴스 조회에 실패했습니다. 실패 사실만 짧게 알리고, 기존 기록 기준으로 해석 가능한 범위만 답하세요.`;

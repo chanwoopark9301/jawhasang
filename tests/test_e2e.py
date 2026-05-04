@@ -267,7 +267,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260504-14');
+            const res = await fetch('/js/data.js?v=20260504-15');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -793,7 +793,7 @@ class TestInvestmentPartner:
                         quotes: [{ symbol: 'MSFT', price: 410, changePercent: 0.7, previousClose: 407, name: 'Microsoft' }],
                     }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
                 }
-                if (String(url).includes('/api/data') && opts?.method === 'POST') {
+                if (String(url).includes('/api/investment/positions') && opts?.method === 'POST') {
                     saveAttempts += 1;
                     if (saveAttempts < 3) {
                         return Promise.resolve(new Response(JSON.stringify({ error: 'temporary' }), {
@@ -801,7 +801,21 @@ class TestInvestmentPartner:
                             headers: { 'Content-Type': 'application/json' },
                         }));
                     }
-                    return Promise.resolve(new Response(JSON.stringify({ ok: true }), {
+                    const position = JSON.parse(opts.body).position;
+                    return Promise.resolve(new Response(JSON.stringify({
+                        ok: true,
+                        position,
+                        investment: {
+                            positions: [position],
+                            rules: state.investment.rules,
+                            journal: [],
+                            events: [],
+                            decisions: [],
+                            chat: [],
+                            market: { indexes: [], fetchedAt: null, source: '' },
+                            alerts: [],
+                        },
+                    }), {
                         status: 200,
                         headers: { 'Content-Type': 'application/json' },
                     }));
@@ -891,6 +905,9 @@ class TestInvestmentPartner:
         system_prompt = logged_in_page.evaluate("() => window.__analyzePayloads[0].system[0].text")
         assert '실시간 뉴스 검색 결과' in system_prompt
         assert 'IREN expands AI cloud capacity' in system_prompt
+        assert '조회 기준일' in system_prompt
+        assert '발행/공시일을 오늘 날짜라고 바꿔 말하지 않는다' in system_prompt
+        assert 'https://finance.yahoo.com/news/iren-test' in system_prompt
         assert '실시간 인터넷 검색 기능이 없다' in system_prompt
         assert logged_in_page.locator('.chat-bubble-ai').count() == 1
 

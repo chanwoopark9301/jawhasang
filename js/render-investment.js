@@ -307,6 +307,33 @@ function renderInvestmentDecisionList(decisions) {
   </div>`;
 }
 
+async function saveInvestmentPositionToServer(position, retries = 3) {
+  let lastError = null;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      const res = await fetch('/api/investment/positions', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ position }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'investment position save failed');
+      if (data.investment) state.investment = normalizeInvestmentState(data.investment);
+      return true;
+    } catch (e) {
+      lastError = e;
+      if (attempt < retries) {
+        logger.warn('투자 종목 저장 재시도 %d/%d', attempt + 1, retries, e);
+        await _delay(350 * (attempt + 1));
+      }
+    }
+  }
+  logger.error('투자 종목 서버 저장 실패', lastError);
+  return false;
+}
+
 async function addInvestmentPositionFromForm(event) {
   event.preventDefault();
   const symbol = document.getElementById('ip-symbol')?.value.trim().toUpperCase();
@@ -343,7 +370,7 @@ async function addInvestmentPositionFromForm(event) {
     logger.warn('종목 등록 현재가 조회 실패', e);
   }
   if (button) button.textContent = 'DB 저장 중';
-  const persisted = await saveData({ retries: 3 });
+  const persisted = await saveInvestmentPositionToServer(position, 3);
   if (!persisted) {
     showToast('서버 저장에 실패했어요. 잠시 후 다시 저장해주세요.');
     if (button) {

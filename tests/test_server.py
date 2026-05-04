@@ -58,6 +58,31 @@ class TestDataAPI:
         assert loaded['investment']['rules']['cooldownMinutes'] == 45
         assert loaded['investment']['chat'][0]['text'] == 'NVDA 뉴스 확인'
 
+    def test_save_investment_position_endpoint_persists_position(self, client):
+        payload = {
+            'position': {
+                'id': 'ip-iren',
+                'symbol': 'iren',
+                'name': 'Iris Energy',
+                'shares': 2,
+                'avgPrice': 40,
+                'currentPrice': 46.06,
+            }
+        }
+        r = client.post('/api/investment/positions',
+                        data=json.dumps(payload),
+                        content_type='application/json')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['ok'] is True
+        assert data['position']['symbol'] == 'IREN'
+
+        loaded = client.get('/api/data').get_json()
+        pos = loaded['investment']['positions'][0]
+        assert pos['symbol'] == 'IREN'
+        assert pos['currentPrice'] == 46.06
+
     def test_market_quote_endpoint_returns_normalized_quotes(self, client, monkeypatch):
         import server
 
@@ -283,6 +308,13 @@ class TestPIIScrubbing:
         scrub = self._scrub()
         text = '오늘 상담에서 내담자가 힘들다고 했어요.'
         assert scrub(text) == text
+
+    def test_sec_url_is_not_masked_as_phone_number(self):
+        scrub = self._scrub()
+        url = 'https://www.sec.gov/Archives/edgar/data/1878848/00009501702607919/ny20064909x2_8k.htm'
+        result = scrub(f'원문: {url}')
+        assert url in result
+        assert '[전화번호]' not in result
 
     def test_payload_scrub_messages(self):
         import server
