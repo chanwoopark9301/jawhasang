@@ -622,7 +622,7 @@ class TestInvestmentPartner:
         logged_in_page.locator('#investment-menu-positions').click()
         logged_in_page.wait_for_selector('#investment-position-form', timeout=8_000)
         assert '종목 관리' in logged_in_page.locator('#modal-box').inner_text()
-        assert logged_in_page.locator('#ip-current').count() == 0
+        assert logged_in_page.locator('#ip-current').count() == 1
         logged_in_page.locator('.modal-close').click()
 
         logged_in_page.locator('#investment-menu-news').click()
@@ -708,6 +708,41 @@ class TestInvestmentPartner:
 
         logged_in_page.click('#nav-cal')
         logged_in_page.wait_for_selector('.cal-dot-invest', timeout=8_000)
+
+    def test_manual_current_price_is_not_overwritten_on_register(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.locator('#investment-menu-positions').click()
+        logged_in_page.evaluate("""() => {
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = (url, opts) => {
+                if (String(url).includes('/api/market/quote')) {
+                    return Promise.resolve(new Response(JSON.stringify({
+                        quotes: [{ symbol: 'TQQQ', price: 77, changePercent: 1.4, previousClose: 75.9, name: 'ProShares UltraPro QQQ' }],
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                return originalFetch(url, opts);
+            };
+        }""")
+
+        logged_in_page.locator('#ip-symbol').fill('TQQQ')
+        logged_in_page.locator('#ip-name').fill('TQQQ')
+        logged_in_page.locator('#ip-shares').fill('1')
+        logged_in_page.locator('#ip-avg').fill('40')
+        logged_in_page.locator('#ip-current').fill('46.06')
+        logged_in_page.locator('#investment-add-position').click()
+        logged_in_page.wait_for_function(
+            "() => state.investment.positions.at(-1)?.currentPrice === 46.06",
+            timeout=8_000,
+        )
+
+        saved = logged_in_page.evaluate("""() => {
+            const p = state.investment.positions.at(-1);
+            return { price: p.currentPrice, manual: p.manualPrice, source: p.marketSource };
+        }""")
+
+        assert saved['price'] == 46.06
+        assert saved['manual'] is True
+        assert saved['source'] == 'manual'
 
     def test_investment_chat_records_news_when_requested(self, logged_in_page):
         self._open_investment(logged_in_page)

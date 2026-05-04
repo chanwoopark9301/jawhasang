@@ -60,6 +60,12 @@ function applyInvestmentQuotes(quotes) {
   inv.positions.forEach(p => {
     const q = map[String(p.symbol || '').toUpperCase()];
     if (!q) return;
+    if (p.manualPrice) {
+      p.lastMarketPrice = q.price != null ? Number(q.price) : p.lastMarketPrice;
+      p.lastMarketUpdatedAt = new Date().toISOString();
+      p.changePercent = q.changePercent != null ? Number(q.changePercent) : p.changePercent;
+      return;
+    }
     if (q.price != null) p.currentPrice = Number(q.price);
     if (q.previousClose != null) p.previousClose = Number(q.previousClose);
     if (q.changePercent != null) p.changePercent = Number(q.changePercent);
