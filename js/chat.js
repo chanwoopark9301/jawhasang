@@ -32,6 +32,12 @@ function sendCurrentChat() {
     return;
   }
 
+  // 받아쓰기 모드: 사용자가 쭉 말할 수 있도록 AI가 매 턴 끼어들지 않는다.
+  if ((state.replyMode || 'dictation') === 'dictation') {
+    appendMessage('user', text);
+    return;
+  }
+
   console.log('[chat] continueContextChat 호출, text=', text);
   continueContextChat(text);
 }
@@ -42,18 +48,25 @@ function setReplyMode(mode) {
   updateReplyModeUI();
 }
 
+function selectReplyModeFromModal(mode) {
+  setReplyMode(mode);
+  closeModal();
+}
+
 function updateReplyModeUI() {
   const modes = {
-    dictation: '정리 안 된 말 그대로 적어도 돼요',
-    question:  '질문 받고 싶은 지점을 적어주세요',
-    summary:   '여기까지 정리해달라고 말해도 좋아요',
-    advice:    '의견이 필요한 상황을 적어주세요',
+    dictation: { label: '받아쓰기 중', hint: 'AI는 끼어들지 않아요', placeholder: '정리 안 된 말 그대로 적어도 돼요' },
+    question:  { label: '질문 하나',   hint: '보내면 질문 하나만 받을게요', placeholder: '질문 받고 싶은 지점을 적어주세요' },
+    summary:   { label: '정리',        hint: '보내면 여기까지 정리해요', placeholder: '여기까지 정리해달라고 말해도 좋아요' },
+    advice:    { label: '조언',        hint: '보내면 짧게 의견을 줄게요', placeholder: '의견이 필요한 상황을 적어주세요' },
   };
-  document.querySelectorAll('.reply-mode-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.id === `reply-mode-${state.replyMode}`);
-  });
+  const current = modes[state.replyMode] || modes.dictation;
+  const chip = document.getElementById('reply-mode-chip');
+  const hint = document.getElementById('reply-mode-hint');
   const input = document.getElementById('chat-input-bottom');
-  if (input) input.placeholder = modes[state.replyMode] || modes.dictation;
+  if (chip) chip.textContent = current.label;
+  if (hint) hint.textContent = current.hint;
+  if (input) input.placeholder = current.placeholder;
 }
 
 async function continueContextChat(text) {
@@ -305,6 +318,5 @@ function startContextChat() {
       return;
     }
   }
-
-  appendSystemMessage('받아쓰기 모드예요. 정리 안 된 말 그대로 남겨도 괜찮아요.');
+  renderChatView();
 }

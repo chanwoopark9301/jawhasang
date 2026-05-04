@@ -436,6 +436,7 @@ class TestChatRoleAndReplyMode:
     def test_reply_mode_buttons_update_current_mode(self, logged_in_page):
         self._select_topic_with_role(logged_in_page, 'listener')
 
+        logged_in_page.locator('#reply-mode-chip').click()
         logged_in_page.locator('#reply-mode-question').click()
         mode = logged_in_page.evaluate("() => state.replyMode")
         prompt = logged_in_page.evaluate("""() => {
@@ -445,7 +446,27 @@ class TestChatRoleAndReplyMode:
 
         assert mode == 'question'
         assert '질문은 정확히 하나만 한다' in prompt
-        assert logged_in_page.locator('#reply-mode-question').get_attribute('class').find('active') >= 0
+        assert logged_in_page.locator('#reply-mode-chip').inner_text() == '질문 하나'
+
+    def test_dictation_mode_records_without_ai_reply(self, logged_in_page):
+        self._select_topic_with_role(logged_in_page, 'listener')
+
+        logged_in_page.locator('#chat-input-bottom').fill('오늘 그냥 너무 피곤했음')
+        logged_in_page.locator('#chat-input-bottom').press('Enter')
+        logged_in_page.wait_for_selector('.chat-bubble-user', timeout=6_000)
+        logged_in_page.wait_for_timeout(300)
+
+        assert logged_in_page.locator('.chat-bubble-user').count() == 1
+        assert logged_in_page.locator('.chat-bubble-ai').count() == 0
+        assert logged_in_page.locator('#chat-typing-indicator').count() == 0
+
+    def test_ai_does_not_start_chat_first(self, logged_in_page):
+        self._select_topic_with_role(logged_in_page, 'listener')
+
+        msg_count = logged_in_page.evaluate("() => state.currentChatMessages.length")
+        assert msg_count == 0
+        assert logged_in_page.locator('.chat-system-msg').count() == 0
+        assert logged_in_page.locator('.chat-bubble-ai').count() == 0
 
 
 # ---------------------------------------------------------------------------

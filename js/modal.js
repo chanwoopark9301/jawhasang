@@ -47,6 +47,7 @@ function buildModalHTML(id, data) {
     case 'verbatim':      return renderModalVerbatim();
     case 'write':         return renderModalWrite();
     case 'mode':          return renderModalMode();
+    case 'reply-mode':    return renderModalReplyMode();
     case 'report':        return renderModalReport(data.analysis);
     case 'diary-result':  return renderModalDiaryResult(data.draft, data.date);
     case 'pattern':       return renderModalPattern(data.result);
@@ -404,6 +405,45 @@ function renderModalMode() {
         </div>
         ${state.chatMode === m.id ? '<span style="margin-left:auto;">✓</span>' : ''}
       </div>`).join('')}
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">닫기</button>
+    </div>`;
+}
+
+function renderModalReplyMode() {
+  const modes = [
+    {
+      id: 'dictation',
+      label: '받아쓰기',
+      desc: 'AI가 답하지 않고, 내가 쓰는 말을 조용히 쌓아둡니다.',
+    },
+    {
+      id: 'question',
+      label: '질문 하나',
+      desc: '지금 흐름에서 생각을 이어갈 질문 하나만 받습니다.',
+    },
+    {
+      id: 'summary',
+      label: '정리',
+      desc: '지금까지의 말을 기록 초안처럼 간단히 정리합니다.',
+    },
+    {
+      id: 'advice',
+      label: '조언',
+      desc: '의견이나 다음 행동이 필요할 때만 짧게 조언받습니다.',
+    },
+  ];
+  return `
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-title">AI 응답 방식</div>
+    <div class="reply-mode-options">
+      ${modes.map(m => `
+        <button class="reply-mode-option${state.replyMode === m.id ? ' active' : ''}"
+          id="reply-mode-${m.id}" onclick="selectReplyModeFromModal('${m.id}')" type="button">
+          <span class="reply-mode-option-label">${esc(m.label)}</span>
+          <span class="reply-mode-option-desc">${esc(m.desc)}</span>
+        </button>`).join('')}
+    </div>
     <div class="modal-footer">
       <button class="btn-secondary" onclick="closeModal()">닫기</button>
     </div>`;

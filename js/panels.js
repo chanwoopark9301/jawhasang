@@ -19,7 +19,7 @@ function openPlusMenu() {
   const items = [
     { icon: '📎', label: '축어록 첨부',   action: `closePlusMenu();openModal('verbatim')`,       show: !isMyRecords },
     { icon: '✎',  label: '직접 쓰기',     action: `closePlusMenu();openModal('write')`,          show: isMyRecords },
-    { icon: '◑',  label: '대화 모드 변경', action: `closePlusMenu();openModal('mode')` },
+    { icon: '◑',  label: 'AI 응답 방식',  action: `closePlusMenu();openModal('reply-mode')` },
     { icon: '＋', label: isMyRecords ? '새 주제 만들기' : '새 내담자 추가',
       action: isMyRecords
         ? `closePlusMenu();openModal('new-topic')`
