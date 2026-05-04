@@ -56,9 +56,8 @@ class TestAuth:
 
 class TestHomePage:
     def _go_to_calendar(self, page):
-        """캘린더 뷰로 이동 (새 UI: #nav-cal 클릭)."""
-        page.wait_for_selector('#nav-cal', timeout=8_000)
-        page.click('#nav-cal')
+        """메인 캘린더 허브로 이동."""
+        page.evaluate("() => setView('calendar')")
         page.wait_for_selector('.cal-grid', timeout=8_000)
 
     def test_calendar_renders(self, logged_in_page):
@@ -73,6 +72,7 @@ class TestHomePage:
         assert '일상' in hub_text
         assert '상담' in hub_text
         assert '투자' in hub_text
+        assert not re.search(r'\b\d+\b', hub_text)
 
     def test_calendar_has_date_cells(self, logged_in_page):
         """캘린더에 날짜 셀이 존재해야 함."""
@@ -115,6 +115,7 @@ class TestSidebar:
         assert '일상' in buttons_text
         assert '상담' in buttons_text
         assert '투자' in buttons_text
+        assert '캘린더' not in buttons_text
 
 
 # ---------------------------------------------------------------------------
@@ -275,7 +276,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260504-16');
+            const res = await fetch('/js/data.js?v=20260504-17');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -738,7 +739,7 @@ class TestInvestmentPartner:
         assert result['lastStatus'] == 'block'
         assert result['eventType'] == 'alert'
 
-        logged_in_page.click('#nav-cal')
+        logged_in_page.evaluate("() => setView('calendar')")
         logged_in_page.wait_for_selector('.cal-dot-invest', timeout=8_000)
 
     def test_position_register_waits_for_server_persistence(self, logged_in_page):

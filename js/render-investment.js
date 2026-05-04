@@ -344,12 +344,15 @@ async function addInvestmentPositionFromForm(event) {
   }
   if (button) button.textContent = 'DB 저장 중';
   const saved = await apiSaveInvestmentPosition(position, 3);
-  if (!saved) {
-    showToast('서버 저장에 실패했어요. 잠시 후 다시 저장해주세요.');
+  if (!saved?.ok) {
+    state.investment.positions = state.investment.positions.filter(p => p.id !== position.id);
+    logger.error('투자 종목 등록 실패', { symbol, error: saved?.error });
+    showToast(saved?.error || '서버 저장에 실패했어요. 잠시 후 다시 저장해주세요.');
     if (button) {
       button.disabled = false;
       button.textContent = '종목 등록';
     }
+    render();
     return;
   }
   if (saved.investment) state.investment = normalizeInvestmentState(saved.investment);

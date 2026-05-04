@@ -570,7 +570,8 @@ body {
   border-radius: var(--radius-lg);
   border: 0.5px solid var(--color-border);
   overflow: hidden;
-  margin-bottom: 18px;
+  margin: 0 auto 14px;
+  max-width: 760px;
 }
 
 .calendar-hub {
@@ -584,9 +585,9 @@ body {
   border: 0;
   border-right: 0.5px solid var(--color-border);
   background: var(--color-bg);
-  padding: 12px 14px;
+  padding: 9px 12px;
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   cursor: pointer;
   color: var(--color-text-primary);
@@ -602,10 +603,6 @@ body {
   color: var(--color-text-secondary);
 }
 
-.calendar-hub-card strong {
-  font-size: 17px;
-}
-
 .calendar-hub-card:hover {
   background: var(--color-bg-secondary);
 }
@@ -614,7 +611,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: 9px 13px;
   border-bottom: 0.5px solid var(--color-border);
   background: var(--color-bg-secondary);
 }
@@ -651,9 +648,9 @@ body {
 
 .cal-weekday {
   text-align: center;
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--color-text-tertiary);
-  padding: 7px 0;
+  padding: 5px 0;
   font-weight: 500;
   letter-spacing: 0.04em;
 }
@@ -667,8 +664,8 @@ body {
 }
 
 .cal-day {
-  min-height: 72px;
-  padding: 7px 8px;
+  min-height: 56px;
+  padding: 5px 6px;
   border-right: 0.5px solid var(--color-border);
   border-bottom: 0.5px solid var(--color-border);
   cursor: pointer;
@@ -704,14 +701,14 @@ body {
 }
 
 .cal-day-num {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 400;
-  width: 24px;
-  height: 24px;
+  width: 21px;
+  height: 21px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 4px;
+  margin-bottom: 3px;
   letter-spacing: -0.01em;
 }
 
@@ -726,8 +723,8 @@ body {
 }
 
 .cal-dot {
-  width: 5px;
-  height: 5px;
+  width: 4px;
+  height: 4px;
   border-radius: 50%;
   opacity: 0.85;
   flex-shrink: 0;
@@ -738,9 +735,9 @@ body {
 .cal-dot-invest  { background: #2563EB; }
 
 .cal-dot-extra {
-  font-size: 9px;
+  font-size: 8px;
   color: var(--color-text-tertiary);
-  line-height: 5px;
+  line-height: 4px;
 }
 
 /* 캘린더 날짜 세션 목록 */

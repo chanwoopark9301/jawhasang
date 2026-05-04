@@ -83,6 +83,16 @@ class TestDataAPI:
         assert pos['symbol'] == 'IREN'
         assert pos['currentPrice'] == 46.06
 
+    def test_save_investment_position_endpoint_reports_request_id_on_bad_payload(self, client):
+        r = client.post('/api/investment/positions',
+                        data=json.dumps({'position': None}),
+                        content_type='application/json')
+
+        assert r.status_code == 400
+        data = r.get_json()
+        assert data['error']
+        assert data['requestId'].startswith('ipos-')
+
     def test_market_quote_endpoint_returns_normalized_quotes(self, client, monkeypatch):
         import server
 

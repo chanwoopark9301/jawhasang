@@ -60,13 +60,13 @@ function renderCalendar() {
   return `<div class="calendar">
     <div class="calendar-hub">
       <button class="calendar-hub-card hub-daily" onclick="setView('myrecords')">
-        <span>일상</span><strong>${state.myRecords.length}</strong>
+        <span>일상</span>
       </button>
       <button class="calendar-hub-card hub-counseling" onclick="setView('student')">
-        <span>상담</span><strong>${state.sessions.length}</strong>
+        <span>상담</span>
       </button>
       <button class="calendar-hub-card hub-invest" onclick="setView('investment')">
-        <span>투자</span><strong>${(state.investment?.positions || []).length}</strong>
+        <span>투자</span>
       </button>
     </div>
     <div class="cal-header">

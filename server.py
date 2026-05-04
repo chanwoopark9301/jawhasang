@@ -417,20 +417,29 @@ def save_data_route():
 @app.route('/api/investment/positions', methods=['POST'])
 @require_auth
 def save_investment_position_route():
+    request_id = f"ipos-{int(time.time() * 1000)}"
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict) or not isinstance(payload.get('position'), dict):
-        return jsonify({'error': 'position 데이터가 필요합니다'}), 400
+        log.warning('POST /api/investment/positions [%s] invalid payload keys=%s', request_id, list(payload.keys()) if isinstance(payload, dict) else type(payload).__name__)
+        return jsonify({'error': 'position 데이터가 필요합니다.', 'requestId': request_id}), 400
 
     try:
+        raw_position = payload['position']
+        raw_symbol = str(raw_position.get('symbol') or '').strip().upper()
         data = read_data()
-        data, inv, position = upsert_position(data, payload['position'], _normalize_data, _MARKET_SYMBOL_RE)
+        before_count = len(((data.get('investment') or {}).get('positions') or []))
+        log.info('POST /api/investment/positions [%s] start symbol=%s before=%d', request_id, raw_symbol or '-', before_count)
+        data, inv, position = upsert_position(data, raw_position, _normalize_data, _MARKET_SYMBOL_RE)
         write_data(data)
-        return jsonify({'ok': True, 'investment': inv, 'position': position})
+        after_count = len(inv.get('positions') or [])
+        log.info('POST /api/investment/positions [%s] saved symbol=%s id=%s before=%d after=%d', request_id, position.get('symbol'), position.get('id'), before_count, after_count)
+        return jsonify({'ok': True, 'investment': inv, 'position': position, 'requestId': request_id})
     except ValueError as e:
-        return jsonify({'error': str(e)}), 400
+        log.warning('POST /api/investment/positions [%s] validation failed: %s', request_id, e, exc_info=True)
+        return jsonify({'error': str(e), 'requestId': request_id}), 400
     except Exception as e:
-        log.error('POST /api/investment/positions 저장 실패: %s', e, exc_info=True)
-        return jsonify({'error': '투자 종목 저장 실패'}), 500
+        log.error('POST /api/investment/positions [%s] save failed: %s', request_id, e, exc_info=True)
+        return jsonify({'error': '투자 종목 저장 실패', 'requestId': request_id}), 500
 
 # ---------------------------------------------------------------------------
 # 시장 데이터 API — 현재가/지수 조회 프록시

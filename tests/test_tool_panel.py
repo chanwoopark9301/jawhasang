@@ -110,14 +110,14 @@ class TestToolButtonsDisabledByDefault:
     def test_deepq_disabled_with_no_selection(self, logged_in_page):
         """아무것도 선택하지 않으면 심층 질문 버튼이 비활성화돼야 함."""
         # 홈 화면 (캘린더)으로 이동
-        logged_in_page.click('#nav-cal')
+        logged_in_page.evaluate("() => setView('calendar')")
         logged_in_page.wait_for_timeout(300)
         btn = logged_in_page.locator('#rp-deepq-btn')
         assert btn.is_disabled(), "선택 없을 때 심층 질문 버튼이 활성화되어 있음"
 
     def test_timeline_disabled_with_no_selection(self, logged_in_page):
         """아무것도 선택하지 않으면 성장 타임라인 버튼이 비활성화돼야 함."""
-        logged_in_page.click('#nav-cal')
+        logged_in_page.evaluate("() => setView('calendar')")
         logged_in_page.wait_for_timeout(300)
         btn = logged_in_page.locator('#rp-timeline-btn')
         assert btn.is_disabled(), "선택 없을 때 성장 타임라인 버튼이 활성화되어 있음"
