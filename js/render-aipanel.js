@@ -135,7 +135,7 @@ function _updateRpContent() {
       <div class="ctx-alias" style="color:#2563EB;">투자 파트너</div>
       <div class="ctx-meta">${inv.positions.length}개 종목 · ${inv.decisions.length}개 판단</div>
       <div class="investment-side-menu">
-        <button id="investment-menu-portfolio" onclick="renderChatView()">포트폴리오</button>
+        <button id="investment-menu-portfolio" onclick="openModal('investment-portfolio')">포트폴리오</button>
         <button id="investment-menu-refresh" onclick="refreshInvestmentMarketData()">현재가 갱신</button>
         <button id="investment-menu-positions" onclick="openModal('investment-positions')">종목 관리</button>
         <button id="investment-menu-rules" onclick="openModal('investment-rules')">투자 원칙</button>

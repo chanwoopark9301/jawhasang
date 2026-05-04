@@ -111,6 +111,63 @@ function renderInvestmentPositions(positions, totals) {
   </div>`;
 }
 
+function getInvestmentPortfolioSlices(positions) {
+  const rows = (Array.isArray(positions) ? positions : [])
+    .map((p, index) => ({
+      ...p,
+      value: (Number(p.shares) || 0) * (Number(p.currentPrice) || 0),
+      color: investmentSliceColor(index),
+    }))
+    .filter(p => p.value > 0);
+  const total = rows.reduce((sum, p) => sum + p.value, 0);
+  return rows.map(p => ({ ...p, weight: total ? (p.value / total) * 100 : 0, total }));
+}
+
+function renderModalInvestmentPortfolio() {
+  const inv = state.investment = normalizeInvestmentState(state.investment);
+  const slices = getInvestmentPortfolioSlices(inv.positions);
+  const total = slices.reduce((sum, p) => sum + p.value, 0);
+  if (!slices.length) {
+    return `
+      <button class="modal-close" onclick="closeModal()">×</button>
+      <div class="modal-title">포트폴리오</div>
+      <div class="investment-empty">현재가와 수량이 있는 종목을 등록하면 원형 차트로 비중을 볼 수 있어요.</div>`;
+  }
+
+  let cursor = 0;
+  const gradient = slices.map(p => {
+    const start = cursor;
+    const end = cursor + (p.weight / 100) * 360;
+    cursor = end;
+    return `${p.color} ${start.toFixed(2)}deg ${end.toFixed(2)}deg`;
+  }).join(', ');
+
+  return `
+    <button class="modal-close" onclick="closeModal()">×</button>
+    <div class="modal-title">포트폴리오</div>
+    <div class="investment-portfolio-modal" id="investment-portfolio-modal">
+      <div class="investment-pie-wrap">
+        <div class="investment-pie-chart" style="background: conic-gradient(${gradient});">
+          <div>
+            <span>총 평가액</span>
+            <strong>${formatMoney(total)}</strong>
+          </div>
+        </div>
+      </div>
+      <div class="investment-portfolio-list">
+        ${slices.map(p => `<div class="investment-portfolio-row">
+          <span class="investment-dot" style="background:${p.color}"></span>
+          <div>
+            <strong>${esc(p.symbol || p.name || '종목')}</strong>
+            <small>${esc(p.name || '')}</small>
+          </div>
+          <em>${p.weight.toFixed(1)}%</em>
+          <b>${formatMoney(p.value)}</b>
+        </div>`).join('')}
+      </div>
+    </div>`;
+}
+
 function renderInvestmentPositionForm() {
   return `<form class="investment-form" id="investment-position-form" onsubmit="addInvestmentPositionFromForm(event)">
     <div class="investment-form-row">
@@ -293,13 +350,22 @@ async function addInvestmentPositionFromForm(event) {
       logger.warn('종목 등록 현재가 조회 실패', e);
     }
   }
-  saveData();
+  if (button) button.textContent = 'DB 저장 중';
+  const persisted = await saveData();
+  if (!persisted) {
+    showToast('서버 저장에 실패했어요. 잠시 후 다시 저장해주세요.');
+    if (button) {
+      button.disabled = false;
+      button.textContent = '종목 등록';
+    }
+    return;
+  }
   showToast(manualCurrent != null ? '보유 종목을 수동 현재가로 등록했어요.' : hasQuote ? '보유 종목을 등록하고 현재가를 가져왔어요.' : '종목은 등록했지만 현재가를 찾지 못했어요. 티커를 확인해주세요.');
   closeModal();
   render();
 }
 
-function saveInvestmentRulesFromForm(event) {
+async function saveInvestmentRulesFromForm(event) {
   event.preventDefault();
   state.investment.rules = {
     dailyLossLimit: Number(document.getElementById('ir-daily-loss')?.value) || 3,
@@ -311,13 +377,14 @@ function saveInvestmentRulesFromForm(event) {
     antiAveraging: !!document.getElementById('ir-anti-avg')?.checked,
     coreRules: document.getElementById('ir-core')?.value.trim() || '',
   };
-  saveData();
+  const persisted = await saveData();
+  if (!persisted) return showToast('서버 저장에 실패했어요. 잠시 후 다시 저장해주세요.');
   showToast('투자 원칙을 저장했어요.');
   closeModal();
   render();
 }
 
-function runInvestmentGateFromForm(event) {
+async function runInvestmentGateFromForm(event) {
   event.preventDefault();
   const positionId = document.getElementById('ig-position')?.value;
   const position = state.investment.positions.find(p => p.id === positionId);
@@ -360,13 +427,14 @@ function runInvestmentGateFromForm(event) {
     linkedDecisionId: decision.id,
     linkedRecordId: null,
   });
-  saveData();
+  const persisted = await saveData();
+  if (!persisted) return showToast('서버 저장에 실패했어요. 잠시 후 다시 저장해주세요.');
   showToast('판단 기록을 저장했어요.');
   closeModal();
   render();
 }
 
-function addInvestmentNewsFromForm(event) {
+async function addInvestmentNewsFromForm(event) {
   event.preventDefault();
   const symbol = document.getElementById('in-symbol')?.value.trim().toUpperCase() || '';
   const title = document.getElementById('in-title')?.value.trim() || '뉴스 동향';
@@ -384,7 +452,8 @@ function addInvestmentNewsFromForm(event) {
     linkedDecisionId: null,
     linkedRecordId: null,
   });
-  saveData();
+  const persisted = await saveData();
+  if (!persisted) return showToast('서버 저장에 실패했어요. 잠시 후 다시 저장해주세요.');
   showToast('뉴스 동향에 저장했어요.');
   closeModal();
   render();
@@ -403,4 +472,11 @@ function formatPercent(value) {
 
 function investmentActionLabel(action) {
   return ({ buy: '매수', add: '추가매수', sell: '매도', hold: '보유' })[action] || action;
+}
+
+function investmentSliceColor(index) {
+  return [
+    '#2563EB', '#1D9E75', '#EF9F27', '#DC2626', '#7C3AED',
+    '#0891B2', '#65A30D', '#DB2777', '#4F46E5', '#EA580C',
+  ][index % 10];
 }

@@ -103,7 +103,7 @@ function _useSampleData() {
   state.investment = defaultInvestmentState();
 }
 
-function saveData() {
+async function saveData() {
   const payload = {
     students:   state.students,
     sessions:   state.sessions,
@@ -117,22 +117,25 @@ function saveData() {
   // localStorage 캐시도 즉시 업데이트 (새로고침 시 삭제 데이터 복원 방지)
   const localSaved = _saveToLocalCache();
 
-  fetch('/api/data', {
-    method:  'POST',
-    credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  }).then(res => {
+  try {
+    const res = await fetch('/api/data', {
+      method:  'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     if (!_isJSONResponse(res)) throw new Error('non-json response');
     logger.debug('데이터 저장 완료');
-  }).catch(e => {
+    return true;
+  } catch (e) {
     if (localSaved) {
       logger.warn('서버 동기화 실패 — 로컬 저장 유지', e);
-      return;
+      return false;
     }
     logger.error('데이터 저장 실패 — 로컬 저장도 실패', e);
-  });
+    return false;
+  }
 }
 
 function _isJSONResponse(res) {

@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v41'; // Stabilize investment market quotes
+const CACHE_NAME = 'jip-v42'; // Persist investment saves and portfolio chart
 
 const STATIC_ASSETS = [
   '/style.css',
