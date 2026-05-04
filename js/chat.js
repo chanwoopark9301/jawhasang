@@ -36,6 +36,26 @@ function sendCurrentChat() {
   continueContextChat(text);
 }
 
+function setReplyMode(mode) {
+  const allowed = ['dictation', 'question', 'summary', 'advice'];
+  state.replyMode = allowed.includes(mode) ? mode : 'dictation';
+  updateReplyModeUI();
+}
+
+function updateReplyModeUI() {
+  const modes = {
+    dictation: '정리 안 된 말 그대로 적어도 돼요',
+    question:  '질문 받고 싶은 지점을 적어주세요',
+    summary:   '여기까지 정리해달라고 말해도 좋아요',
+    advice:    '의견이 필요한 상황을 적어주세요',
+  };
+  document.querySelectorAll('.reply-mode-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.id === `reply-mode-${state.replyMode}`);
+  });
+  const input = document.getElementById('chat-input-bottom');
+  if (input) input.placeholder = modes[state.replyMode] || modes.dictation;
+}
+
 async function continueContextChat(text) {
   if (!text || state._ctxChatLoading) return;
   state._ctxChatLoading = true;
@@ -81,6 +101,7 @@ async function continueContextChat(text) {
 
 // AI 대화용 시스템 프롬프트 생성 (현재 역할 기준으로 매 메시지마다 최신 반영)
 function _buildChatSysPrompt(isMyRecords, topic, student) {
+  const modePrompt = _replyModePrompt(state.replyMode || 'dictation');
   if (isMyRecords) {
     // currentRole → preset 조회, 없으면 topic.aiPrompt, 없으면 기본값
     let rolePrompt = '따뜻하게 경청하고 공감하는 친구처럼';
@@ -93,14 +114,59 @@ function _buildChatSysPrompt(isMyRecords, topic, student) {
     return `당신은 다음 역할입니다: ${rolePrompt}
 
 주제: '${topic?.title || '나의 기록'}'
-한국어 존댓말 사용. 질문은 한 번에 하나만.`;
+한국어 존댓말 사용.
+
+${modePrompt}`;
   } else {
     const student_ = student;
     return `당신은 학교상담 임상 슈퍼바이저입니다.
 내담자: ${student_?.alias || '?'} (${student_?.grade || ''}${student_?.gender ? ' · ' + student_.gender : ''})
 가정: ${student_?.family || '정보 없음'} / 교우: ${student_?.peers || '정보 없음'}
-한국어 존댓말 사용. 판단보다 질문으로 안내.`;
+한국어 존댓말 사용.
+
+${modePrompt}`;
   }
+}
+
+function _replyModePrompt(mode) {
+  const shared = `공통 원칙:
+- 사용자의 말을 끊거나 대화를 억지로 이어가지 않는다.
+- 사용자가 요청하지 않으면 분석, 조언, 해석을 길게 하지 않는다.
+- 응답은 기본적으로 1~3문장으로 짧게 한다.
+- 한국어 존댓말을 사용한다.`;
+
+  if (mode === 'question') {
+    return `${shared}
+
+현재 응답 모드: 질문 하나
+- 사용자가 생각을 이어갈 수 있도록 질문은 정확히 하나만 한다.
+- 질문 전에 사용자의 핵심을 한 문장으로 짚는다.
+- 질문 뒤에 추가 설명이나 두 번째 질문을 붙이지 않는다.`;
+  }
+  if (mode === 'summary') {
+    return `${shared}
+
+현재 응답 모드: 정리
+- 지금까지 사용자가 말한 내용을 기록으로 남길 수 있게 정리한다.
+- 제목 후보, 핵심 감정/생각, 남겨둘 문장을 간결하게 제안한다.
+- 후속 질문을 하지 않는다.`;
+  }
+  if (mode === 'advice') {
+    return `${shared}
+
+현재 응답 모드: 조언
+- 사용자가 조언을 원하는 것으로 보고, 조심스럽지만 분명한 의견을 준다.
+- 가능한 다음 행동은 하나만 제안한다.
+- 조언 뒤에 대화를 이어가려는 질문을 붙이지 않는다.`;
+  }
+  return `${shared}
+
+현재 응답 모드: 받아쓰기
+- 당신은 대화를 이어가기 위해 질문하는 챗봇이 아니라, 사용자의 말을 받아 적고 핵심을 짧게 붙잡는 기록 조력자다.
+- 사용자가 요청하지 않으면 후속 질문을 하지 않는다.
+- 사용자의 말을 기록 가능한 핵심 표현으로 1~2문장만 정리한다.
+- "더 말해볼까요?", "어떤 기분이었나요?" 같은 자동 질문을 피한다.
+- 필요하면 "기록해둘게요", "핵심은 ~로 남겨둘 수 있어요"처럼 반응한다.`;
 }
 
 // ---------------------------------------------------------------------------
@@ -240,5 +306,5 @@ function startContextChat() {
     }
   }
 
-  appendSystemMessage('대화 준비가 되었어요!');
+  appendSystemMessage('받아쓰기 모드예요. 정리 안 된 말 그대로 남겨도 괜찮아요.');
 }

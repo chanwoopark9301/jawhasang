@@ -399,6 +399,55 @@ class TestChatDialogue:
             f"모바일 대화 화면 가로 오버플로: scrollWidth={scroll_w}, clientWidth={client_w}"
 
 
+class TestChatRoleAndReplyMode:
+    """AI 역할과 응답 모드가 대화 프롬프트에 실제로 반영되는지 확인."""
+
+    def _select_topic_with_role(self, page, role='counselor'):
+        page.wait_for_load_state('networkidle')
+        page.evaluate(
+            """(role) => {
+                const preset = AI_ROLE_PRESETS.find(p => p.id === role);
+                state.myTopics = [{
+                    id: 't-role-e2e',
+                    title: 'role e2e',
+                    aiPrompt: preset ? preset.prompt : 'custom role prompt',
+                    selectedRole: role,
+                    createdAt: '2026-05-04',
+                }];
+                state.myRecords = [];
+                state.view = 'myrecords';
+                selectTopic('t-role-e2e');
+            }""",
+            role,
+        )
+
+    def test_dictation_mode_is_default_and_avoids_followup_questions(self, logged_in_page):
+        self._select_topic_with_role(logged_in_page, 'counselor')
+
+        prompt = logged_in_page.evaluate("""() => {
+            const topic = state.myTopics.find(t => t.id === 't-role-e2e');
+            return _buildChatSysPrompt(true, topic, null);
+        }""")
+
+        assert '받아쓰기' in prompt
+        assert '사용자가 요청하지 않으면 후속 질문을 하지 않는다' in prompt
+        assert '감정을 충분히 듣고 공감' in prompt
+
+    def test_reply_mode_buttons_update_current_mode(self, logged_in_page):
+        self._select_topic_with_role(logged_in_page, 'listener')
+
+        logged_in_page.locator('#reply-mode-question').click()
+        mode = logged_in_page.evaluate("() => state.replyMode")
+        prompt = logged_in_page.evaluate("""() => {
+            const topic = state.myTopics.find(t => t.id === 't-role-e2e');
+            return _buildChatSysPrompt(true, topic, null);
+        }""")
+
+        assert mode == 'question'
+        assert '질문은 정확히 하나만 한다' in prompt
+        assert logged_in_page.locator('#reply-mode-question').get_attribute('class').find('active') >= 0
+
+
 # ---------------------------------------------------------------------------
 # 접근성 / UI 기본 요소
 # ---------------------------------------------------------------------------

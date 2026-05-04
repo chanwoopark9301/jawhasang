@@ -82,6 +82,7 @@ function updateInputArea() {
   const hasContext = (state.view === 'myrecords' && state.selTopic)
                   || (state.view === 'student' && state.selStudent);
   inputArea.style.display = (isHome || hasContext) ? '' : 'none';
+  if (typeof updateReplyModeUI === 'function') updateReplyModeUI();
 }
 
 // ---------------------------------------------------------------------------
@@ -149,4 +150,3 @@ function renderMain() {
     return;
   }
 }
-

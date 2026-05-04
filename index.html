@@ -99,10 +99,16 @@
 
       <!-- 하단 입력창 (대화 탭 활성 시만 표시) -->
       <div class="input-area" id="input-area" style="display:none;">
+        <div class="reply-mode-bar" id="reply-mode-bar" aria-label="AI 응답 방식">
+          <button class="reply-mode-btn" id="reply-mode-dictation" onclick="setReplyMode('dictation')" type="button">받아쓰기</button>
+          <button class="reply-mode-btn" id="reply-mode-question" onclick="setReplyMode('question')" type="button">질문 하나</button>
+          <button class="reply-mode-btn" id="reply-mode-summary" onclick="setReplyMode('summary')" type="button">정리</button>
+          <button class="reply-mode-btn" id="reply-mode-advice" onclick="setReplyMode('advice')" type="button">조언</button>
+        </div>
         <div class="input-wrap">
           <button class="input-plus" onclick="openPlusMenu()" title="더 보기">+</button>
           <textarea class="input-field" id="chat-input-bottom"
-            placeholder="메시지를 입력하세요 (Enter 전송 · Shift+Enter 줄바꿈)"
+            placeholder="정리 안 된 말 그대로 적어도 돼요"
             rows="1"
             onkeydown="handleChatKey(event)"></textarea>
           <button class="input-send" onclick="sendCurrentChat()">

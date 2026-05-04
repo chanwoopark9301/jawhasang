@@ -3605,6 +3605,32 @@ body { height: var(--app-height, 100dvh); }
   transform: translateY(calc(-1 * var(--kb-offset, 0px)));
   transition: transform 0.25s ease;
 }
+.reply-mode-bar {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 8px 34px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.reply-mode-bar::-webkit-scrollbar { display: none; }
+.reply-mode-btn {
+  flex: 0 0 auto;
+  height: 26px;
+  padding: 0 10px;
+  border: 0.5px solid var(--color-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  font-family: var(--font);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.reply-mode-btn.active {
+  border-color: rgba(29,158,117,0.45);
+  background: rgba(29,158,117,0.1);
+  color: #0F6E56;
+}
 .input-wrap {
   display: flex;
   align-items: flex-end;

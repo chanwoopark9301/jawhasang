@@ -107,6 +107,7 @@ const state = {
 
   // 최종 아키텍처 — 대화창/모달 통합
   chatMode:            'general',  // 'general' | 'supervision' | 'diary-convert'
+  replyMode:           'dictation', // 'dictation' | 'question' | 'summary' | 'advice'
   currentChatMessages: [],         // 현재 대화창 메시지 [{role, text}]
   attachedVerbatim:    null,       // 첨부된 축어록 텍스트
   currentRole:         'listener', // 현재 AI 역할 ID
