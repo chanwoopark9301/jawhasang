@@ -93,6 +93,32 @@ class TestDataAPI:
         assert data['error']
         assert data['requestId'].startswith('ipos-')
 
+    def test_decode_stored_data_accepts_legacy_json_dict(self):
+        import server
+
+        raw = {'investment': {'positions': [{'symbol': 'IREN'}]}}
+        decoded = server._normalize_data(server._decode_stored_data(raw))
+        assert decoded['investment']['positions'][0]['symbol'] == 'IREN'
+
+    def test_decode_stored_data_accepts_json_text(self):
+        import server
+
+        raw = json.dumps({'investment': {'positions': [{'symbol': 'NVDA'}]}})
+        decoded = server._normalize_data(server._decode_stored_data(raw))
+        assert decoded['investment']['positions'][0]['symbol'] == 'NVDA'
+
+    def test_storage_adapter_keeps_bytea_encrypted(self):
+        import server
+
+        encrypted = b'gAAAA-test-token'
+        assert server._adapt_data_for_storage({'students': []}, encrypted, 'bytea') == encrypted
+
+    def test_storage_adapter_supports_text_columns(self):
+        import server
+
+        encrypted = b'gAAAA-test-token'
+        assert server._adapt_data_for_storage({'students': []}, encrypted, 'text') == 'gAAAA-test-token'
+
     def test_market_quote_endpoint_returns_normalized_quotes(self, client, monkeypatch):
         import server
 

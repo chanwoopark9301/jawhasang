@@ -194,11 +194,53 @@ def _ensure_table(conn):
         """)
     conn.commit()
 
+def _storage_data_type(conn):
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT data_type
+            FROM information_schema.columns
+            WHERE table_name = 'app_storage'
+              AND column_name = 'data'
+            LIMIT 1
+        """)
+        row = cur.fetchone()
+    return row[0] if row else 'unknown'
+
+def _decode_stored_data(raw):
+    if raw is None:
+        return EMPTY()
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, memoryview):
+        raw = raw.tobytes()
+    if isinstance(raw, bytearray):
+        raw = bytes(raw)
+    if isinstance(raw, bytes):
+        return _decrypt(raw)
+    if isinstance(raw, str):
+        text = raw.strip()
+        if not text:
+            return EMPTY()
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            return _decrypt(text.encode())
+    return raw
+
+def _adapt_data_for_storage(data, encrypted, data_type):
+    if data_type in ('json', 'jsonb'):
+        from psycopg2.extras import Json
+        return Json(data)
+    if data_type not in ('bytea', 'USER-DEFINED'):
+        return encrypted.decode()
+    return encrypted
+
 def read_data() -> dict:
     if DATABASE_URL:
         try:
             conn = _get_db_conn()
             _ensure_table(conn)
+            data_type = _storage_data_type(conn)
             with conn.cursor() as cur:
                 cur.execute("SELECT data FROM app_storage WHERE id = 1")
                 row = cur.fetchone()
@@ -206,7 +248,8 @@ def read_data() -> dict:
             if not row:
                 log.info('DB: 데이터 없음 → 빈 구조 반환')
                 return EMPTY()
-            data = _normalize_data(_decrypt(bytes(row[0])))
+            data = _normalize_data(_decode_stored_data(row[0]))
+            log.debug('DB: app_storage.data type=%s', data_type)
             log.debug('DB: 데이터 로드 완료 (학생 %d명, 회기 %d건)',
                       len(data.get('students', [])), len(data.get('sessions', [])))
             return data
@@ -252,13 +295,16 @@ def write_data(data: dict):
         try:
             conn = _get_db_conn()
             _ensure_table(conn)
+            data_type = _storage_data_type(conn)
+            stored_data = _adapt_data_for_storage(data, encrypted, data_type)
             with conn.cursor() as cur:
                 cur.execute("""
                     INSERT INTO app_storage (id, data) VALUES (1, %s)
                     ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
-                """, (encrypted,))
+                """, (stored_data,))
             conn.commit()
             conn.close()
+            log.debug('DB: app_storage.data type=%s', data_type)
             log.debug('DB: 데이터 저장 완료')
             return
         except Exception as e:
