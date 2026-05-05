@@ -524,6 +524,7 @@ def save_investment_position_route():
 # ---------------------------------------------------------------------------
 
 _MARKET_SYMBOL_RE = re.compile(r'^[A-Za-z0-9.\-^=]{1,16}$')
+_NEWS_QUERY_RE = re.compile(r'^[^<>]{2,160}$')
 
 def _parse_market_symbols(raw: str):
     symbols = []
@@ -540,6 +541,21 @@ def _parse_market_symbols(raw: str):
     if len(symbols) > 30:
         raise ValueError('한 번에 최대 30개까지만 조회할 수 있습니다')
     return symbols
+
+def _parse_news_queries(raw: str):
+    queries = []
+    parts = re.split(r'\|\||[\r\n]+', raw or '')
+    for part in parts:
+        query = re.sub(r'\s+', ' ', part).strip()
+        if not query:
+            continue
+        if not _NEWS_QUERY_RE.match(query):
+            raise ValueError(f'invalid news query: {query[:40]}')
+        if query.lower() not in [q.lower() for q in queries]:
+            queries.append(query)
+    if len(queries) > 8:
+        raise ValueError('news query is limited to 8 items')
+    return queries
 
 def _normalize_yahoo_quote(item: dict):
     price = item.get('regularMarketPrice')
@@ -740,6 +756,27 @@ def _fetch_google_rss_news(symbol: str, limit: int):
     items = root.findall('./channel/item')
     return [_normalize_rss_item(item, symbol, 'google-news-rss') for item in items][:limit]
 
+def _fetch_google_rss_query_news(query: str, limit: int):
+    resp = requests.get(
+        'https://news.google.com/rss/search',
+        params={'q': query, 'hl': 'en-US', 'gl': 'US', 'ceid': 'US:en'},
+        headers={'User-Agent': 'Mozilla/5.0 jip-investment-partner'},
+        timeout=10,
+    )
+    if not resp.ok:
+        log.warning('Google general news error (%s): HTTP %d', query, resp.status_code)
+        return []
+    root = ET.fromstring(resp.content)
+    items = root.findall('./channel/item')
+    out = []
+    for item in items[:limit]:
+        normalized = _normalize_rss_item(item, query, 'google-news-rss')
+        if normalized:
+            normalized['kind'] = 'general-news'
+            normalized['topic'] = query
+            out.append(normalized)
+    return out
+
 def _fetch_polygon_news(symbol: str, limit: int):
     if not POLYGON_API_KEY:
         return []
@@ -903,10 +940,16 @@ def _fetch_news_for_symbol(symbol: str, limit: int):
 @app.route('/api/investment/news', methods=['GET'])
 @require_auth
 def investment_news():
+    raw_symbols = request.args.get('symbols', '')
+    raw_query = request.args.get('query', '')
     try:
-        symbols = _parse_market_symbols(request.args.get('symbols', ''))
+        symbols = _parse_market_symbols(raw_symbols) if raw_symbols.strip() else []
+        queries = _parse_news_queries(raw_query)
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
+
+    if not symbols and not queries:
+        return jsonify({'error': 'symbols or query parameter is required'}), 400
 
     limit = request.args.get('limit', '5')
     try:
@@ -917,10 +960,17 @@ def investment_news():
     news = []
     for symbol in symbols:
         news.extend(_fetch_news_for_symbol(symbol, per_symbol_limit))
+    for query in queries:
+        try:
+            news.extend(_fetch_google_rss_query_news(query, per_symbol_limit))
+        except (requests.RequestException, ET.ParseError, ValueError, TypeError) as e:
+            log.warning('general news provider failed(%s): %s', query, e)
+    news = _dedupe_news(news)
 
     return jsonify({
         'source': 'aggregated-investment-news',
         'requested': symbols,
+        'requestedQueries': queries,
         'fetchedAt': int(time.time()),
         'providers': {
             'sec_edgar': True,

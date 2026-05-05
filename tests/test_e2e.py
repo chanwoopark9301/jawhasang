@@ -278,7 +278,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260505-01');
+            const res = await fetch('/js/data.js?v=20260505-02');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -883,8 +883,9 @@ class TestInvestmentPartner:
 
     def test_investment_news_request_injects_search_results(self, logged_in_page):
         self._open_investment(logged_in_page)
-        payloads = logged_in_page.evaluate_handle("""() => {
+        logged_in_page.evaluate("""() => {
             window.__analyzePayloads = [];
+            window.__newsUrls = [];
             state.investment.positions = [{
                 id: 'ip-news-iren',
                 symbol: 'IREN',
@@ -898,43 +899,57 @@ class TestInvestmentPartner:
             const originalFetch = window.fetch.bind(window);
             window.fetch = (url, opts) => {
                 if (String(url).includes('/api/investment/news')) {
+                    window.__newsUrls.push(String(url));
                     return Promise.resolve(new Response(JSON.stringify({
-                        source: 'yahoo-finance-rss',
+                        source: 'aggregated-investment-news',
+                        requested: ['IREN'],
+                        requestedQueries: ['crypto market structure clarity act'],
                         news: [{
                             symbol: 'IREN',
                             title: 'IREN expands AI cloud capacity',
                             summary: 'Iris Energy announced a new AI infrastructure update.',
                             published: 'Mon, 04 May 2026 10:00:00 GMT',
+                            source: 'yahoo-finance-rss',
+                            kind: 'news',
                             link: 'https://finance.yahoo.com/news/iren-test',
+                        }, {
+                            symbol: 'crypto market structure clarity act',
+                            topic: 'crypto market structure clarity act',
+                            title: 'Clarity Act crypto market structure bill advances',
+                            summary: 'Lawmakers moved a crypto market structure bill forward.',
+                            published: 'Tue, 05 May 2026 10:00:00 GMT',
+                            source: 'google-news-rss',
+                            kind: 'general-news',
+                            link: 'https://example.com/clarity-act',
                         }],
                     }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
                 }
                 if (String(url).includes('/api/analyze')) {
                     window.__analyzePayloads.push(JSON.parse(opts.body));
                     return Promise.resolve(new Response(JSON.stringify({
-                        content: [{ text: 'IREN 최신 뉴스는 AI 인프라 확장 내용입니다. 보유 원칙 기준으로 비중과 변동성을 먼저 점검하세요.' }],
+                        content: [{ text: 'IREN 뉴스와 Clarity Act 이슈를 분리해서 확인했습니다.' }],
                     }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
                 }
                 return originalFetch(url, opts);
             };
             setReplyMode('question');
-            return window.__analyzePayloads;
         }""")
 
-        logged_in_page.locator('#chat-input-bottom').fill('IREN 최신 뉴스 검색해줘')
+        logged_in_page.locator('#chat-input-bottom').fill('IREN latest news and clarity act news')
         logged_in_page.locator('#chat-input-bottom').press('Enter')
         logged_in_page.wait_for_function("() => window.__analyzePayloads?.length === 1", timeout=8_000)
 
+        news_url = logged_in_page.evaluate("() => window.__newsUrls[0]")
+        assert 'symbols=IREN' in news_url
+        assert 'query=crypto+market+structure+clarity+act' in news_url
         system_prompt = logged_in_page.evaluate("() => window.__analyzePayloads[0].system[0].text")
         assert '투자 뉴스/공시 조회 결과' in system_prompt
-        assert '링크 목록으로만 내보내지 말고' in system_prompt
         assert 'IREN expands AI cloud capacity' in system_prompt
-        assert '조회 기준일' in system_prompt
-        assert '발행/공시일을 조회 기준일과 혼동하지 않는다' in system_prompt
+        assert 'Clarity Act crypto market structure bill advances' in system_prompt
+        assert 'crypto market structure clarity act' in system_prompt
         assert 'https://finance.yahoo.com/news/iren-test' in system_prompt
-        assert '실시간 인터넷 검색 기능이 없다' in system_prompt
+        assert 'https://example.com/clarity-act' in system_prompt
         assert logged_in_page.locator('.chat-bubble-ai').count() == 1
-
     def test_investment_chat_is_stored_in_investment_data(self, logged_in_page):
         self._open_investment(logged_in_page)
         logged_in_page.evaluate("""() => {

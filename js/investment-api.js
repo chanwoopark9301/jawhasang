@@ -57,11 +57,15 @@ async function apiSaveInvestmentPosition(position, retries = 3) {
   return { ok: false, error: lastError?.message || '투자 종목 서버 저장 실패' };
 }
 
-async function apiFetchInvestmentNews(symbols, limit = 3) {
+async function apiFetchInvestmentNews(symbols, limit = 3, queries = []) {
   const clean = [...new Set((symbols || []).map(s => String(s || '').trim().toUpperCase()).filter(Boolean))];
-  if (!clean.length) return { news: [], requested: [] };
+  const cleanQueries = [...new Set((queries || []).map(q => String(q || '').trim()).filter(Boolean))];
+  if (!clean.length && !cleanQueries.length) return { news: [], requested: [], requestedQueries: [] };
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (clean.length) params.set('symbols', clean.join(','));
+  if (cleanQueries.length) params.set('query', cleanQueries.join('||'));
 
-  const res = await fetch(`/api/investment/news?symbols=${encodeURIComponent(clean.join(','))}&limit=${limit}`, {
+  const res = await fetch(`/api/investment/news?${params.toString()}`, {
     credentials: 'same-origin',
     headers: { 'Accept': 'application/json' },
   });

@@ -314,6 +314,39 @@ class TestDataAPI:
         assert data['news'][1]['source'] == 'yahoo-finance-rss'
         assert len(data['news']) == 2
 
+    def test_investment_news_endpoint_accepts_general_query(self, client, monkeypatch):
+        import server
+
+        class FakeGoogleResp:
+            ok = True
+            status_code = 200
+            content = b'''<?xml version="1.0" encoding="UTF-8"?>
+            <rss version="2.0"><channel>
+              <item>
+                <title>Crypto market structure clarity bill advances</title>
+                <link>https://example.com/clarity-act</link>
+                <pubDate>Tue, 05 May 2026 10:00:00 GMT</pubDate>
+                <description>Lawmakers advanced a crypto market structure bill.</description>
+              </item>
+            </channel></rss>'''
+
+        def fake_get(url, params=None, headers=None, timeout=None):
+            assert 'news.google.com' in url
+            assert params['q'] == 'crypto market structure clarity act'
+            return FakeGoogleResp()
+
+        monkeypatch.setattr(server.requests, 'get', fake_get)
+        r = client.get('/api/investment/news?query=crypto%20market%20structure%20clarity%20act&limit=2')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['requested'] == []
+        assert data['requestedQueries'] == ['crypto market structure clarity act']
+        assert data['news'][0]['symbol'] == 'crypto market structure clarity act'
+        assert data['news'][0]['topic'] == 'crypto market structure clarity act'
+        assert data['news'][0]['kind'] == 'general-news'
+        assert data['news'][0]['title'] == 'Crypto market structure clarity bill advances'
+
     def test_unauthorized_api_returns_json_401(self, app):
         with app.test_client() as c:
             r = c.get('/api/data')
