@@ -31,7 +31,12 @@ async function apiSaveInvestmentPosition(position, retries = 3) {
       if (!res.ok || !data.ok) {
         const detail = data?.error || text || `HTTP ${res.status}`;
         const requestId = data?.requestId ? ` requestId=${data.requestId}` : '';
-        throw new Error(`investment position save failed: ${detail}${requestId}`);
+        const diagnostic = [
+          data?.errorType,
+          data?.storageType ? `storage=${data.storageType}` : '',
+          data?.errorDetail,
+        ].filter(Boolean).join(' | ');
+        throw new Error(`investment position save failed: ${detail}${requestId}${diagnostic ? ` | ${diagnostic}` : ''}`);
       }
 
       logger.info('투자 종목 저장 완료', {

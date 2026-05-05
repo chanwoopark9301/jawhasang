@@ -111,13 +111,25 @@ class TestDataAPI:
         import server
 
         encrypted = b'gAAAA-test-token'
-        assert server._adapt_data_for_storage({'students': []}, encrypted, 'bytea') == encrypted
+        assert server._adapt_data_for_storage({'students': []}, encrypted, 'bytea').getquoted()
 
     def test_storage_adapter_supports_text_columns(self):
         import server
 
         encrypted = b'gAAAA-test-token'
         assert server._adapt_data_for_storage({'students': []}, encrypted, 'text') == 'gAAAA-test-token'
+
+    def test_storage_adapter_supports_jsonb_udt_name(self):
+        import server
+
+        adapted = server._adapt_data_for_storage({'students': []}, b'gAAAA-test-token', 'jsonb')
+        assert adapted.adapted == {'students': []}
+
+    def test_storage_adapter_wraps_bytea_binary(self):
+        import server
+
+        adapted = server._adapt_data_for_storage({'students': []}, b'gAAAA-test-token', 'bytea')
+        assert adapted.getquoted()
 
     def test_market_quote_endpoint_returns_normalized_quotes(self, client, monkeypatch):
         import server

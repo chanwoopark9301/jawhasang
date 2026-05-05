@@ -197,14 +197,19 @@ def _ensure_table(conn):
 def _storage_data_type(conn):
     with conn.cursor() as cur:
         cur.execute("""
-            SELECT data_type
+            SELECT data_type, udt_name
             FROM information_schema.columns
             WHERE table_name = 'app_storage'
               AND column_name = 'data'
             LIMIT 1
         """)
         row = cur.fetchone()
-    return row[0] if row else 'unknown'
+    if not row:
+        return 'unknown'
+    data_type, udt_name = row
+    if data_type == 'USER-DEFINED' and udt_name:
+        return udt_name
+    return udt_name or data_type or 'unknown'
 
 def _decode_stored_data(raw):
     if raw is None:
@@ -228,12 +233,25 @@ def _decode_stored_data(raw):
     return raw
 
 def _adapt_data_for_storage(data, encrypted, data_type):
+    data_type = str(data_type or '').lower()
     if data_type in ('json', 'jsonb'):
         from psycopg2.extras import Json
         return Json(data)
-    if data_type not in ('bytea', 'USER-DEFINED'):
+    if data_type == 'bytea':
+        import psycopg2
+        return psycopg2.Binary(encrypted)
+    if data_type in ('text', 'character varying', 'varchar'):
         return encrypted.decode()
     return encrypted
+
+def _safe_error_detail(e):
+    text = str(e) or e.__class__.__name__
+    for key in ('password=', 'apikey=', 'api_key=', 'DATABASE_URL=', 'postgres://', 'postgresql://'):
+        idx = text.lower().find(key.lower())
+        if idx >= 0:
+            text = text[:idx] + '[redacted]'
+            break
+    return text[:300]
 
 def read_data() -> dict:
     if DATABASE_URL:
@@ -485,7 +503,21 @@ def save_investment_position_route():
         return jsonify({'error': str(e), 'requestId': request_id}), 400
     except Exception as e:
         log.error('POST /api/investment/positions [%s] save failed: %s', request_id, e, exc_info=True)
-        return jsonify({'error': '투자 종목 저장 실패', 'requestId': request_id}), 500
+        storage_type = 'local'
+        if DATABASE_URL:
+            try:
+                conn = _get_db_conn()
+                storage_type = _storage_data_type(conn)
+                conn.close()
+            except Exception as type_error:
+                storage_type = f'unknown:{type_error.__class__.__name__}'
+        return jsonify({
+            'error': '투자 종목 저장 실패',
+            'requestId': request_id,
+            'errorType': e.__class__.__name__,
+            'errorDetail': _safe_error_detail(e),
+            'storageType': storage_type,
+        }), 500
 
 # ---------------------------------------------------------------------------
 # 시장 데이터 API — 현재가/지수 조회 프록시
