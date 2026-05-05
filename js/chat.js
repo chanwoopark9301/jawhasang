@@ -210,18 +210,24 @@ async function fetchInvestmentNewsContext(text) {
   if (!symbols.length) return '';
   const today = new Date().toISOString().split('T')[0];
   try {
-    const data = await apiFetchInvestmentNews(symbols, 3);
+    const data = await apiFetchInvestmentNews(symbols, 5);
     const items = Array.isArray(data.news) ? data.news : [];
-    if (!items.length) return `\n\n실시간 뉴스 검색 결과:\n- 조회 기준일: ${today}\n- ${symbols.join(', ')} 관련 최신 뉴스가 조회되지 않았습니다.`;
-    return `\n\n실시간 뉴스 검색 결과 (${data.source || 'news'}):\n조회 기준일: ${today}\n${items.map(item =>
-      `- [${item.symbol}] ${item.title}${item.published ? ` (발행/공시일: ${item.published})` : ''}${item.source ? ` / 출처: ${item.source}` : ''}${item.kind ? ` / 유형: ${item.kind}` : ''}${item.summary ? `: ${item.summary}` : ''}${item.link ? `\n  링크: ${item.link}` : ''}`
-    ).join('\n')}\n\n뉴스 답변 규칙:\n- 조회 기준일은 ${today}이다. 발행/공시일을 오늘 날짜라고 바꿔 말하지 않는다.\n- SEC EDGAR는 공식 원천 자료이고, 뉴스 흐름이 아니라 공시 원문으로 해석한다.\n- 위 검색 결과를 바탕으로만 최신 뉴스라고 말한다.\n- "실시간 인터넷 검색 기능이 없다"거나 사용자가 직접 검색하라고 답하지 않는다.\n- 투자 판단은 추천이 아니라 원칙 위반 여부와 리스크 체크 중심으로 정리한다.`;
+    if (!items.length) {
+      return `\n\n[투자 뉴스 조회 결과]\n- 조회 기준일: ${today}\n- 조회 종목: ${symbols.join(', ')}\n- 관련 원천 자료나 뉴스가 조회되지 않았습니다. 이 사실을 짧게 알리고, 기존 투자 원칙 기준으로만 답하세요.`;
+    }
+    const sourceLines = items.map((item, idx) => [
+      `${idx + 1}. ${item.symbol || symbols[0]} | ${item.title || '제목 없음'}`,
+      `   - 발행/공시일: ${item.published || '미상'}`,
+      `   - 출처: ${item.source || '미상'}${item.kind ? ` (${item.kind})` : ''}`,
+      `   - 요약 원문: ${item.summary || '제공된 요약 없음'}`,
+      `   - 링크: ${item.link || '없음'}`,
+    ].join('\n')).join('\n');
+    return `\n\n[투자 뉴스/공시 조회 결과]\n조회 기준일: ${today}\n조회 종목: ${symbols.join(', ')}\n\n${sourceLines}\n\n뉴스 답변 규칙:\n- 위 자료를 그대로 링크 목록으로만 내보내지 말고, 먼저 3~5문장으로 핵심 흐름을 요약한다.\n- SEC EDGAR는 공식 원천 자료로 취급하되, '뉴스 흐름'이 아니라 공시 원문으로 해석한다.\n- 발행/공시일을 조회 기준일과 혼동하지 않는다. 예: 조회 기준일은 ${today}이지만 자료 발행일은 별도로 말한다.\n- 사용자가 보유자 관점으로 물으면 '무슨 일이 있었나 → 왜 중요한가 → 내 원칙상 확인할 점' 순서로 답한다.\n- 마크다운을 정상 사용한다. 제목, 굵은 글씨, 짧은 목록, 링크를 읽기 좋게 배치한다.\n- 링크는 마지막 '원문 링크' 섹션에만 모으고, 본문은 해석과 리스크 체크 중심으로 쓴다.\n- "실시간 인터넷 검색 기능이 없다"거나 사용자가 직접 검색하라고 말하지 않는다.\n- 특정 종목 매수/매도 추천이나 수익률 예측은 하지 않는다.`;
   } catch (e) {
     logger.warn('투자 뉴스 검색 실패', e);
-    return `\n\n실시간 뉴스 검색 결과:\n- 뉴스 조회에 실패했습니다. 실패 사실만 짧게 알리고, 기존 기록 기준으로 해석 가능한 범위만 답하세요.`;
+    return `\n\n[투자 뉴스 조회 결과]\n- 조회 기준일: ${today}\n- 뉴스 조회가 실패했습니다. 실패 사실을 짧게 알리고, 기존 기록과 투자 원칙으로만 답하세요.`;
   }
 }
-
 // AI 대화용 시스템 프롬프트 생성 (현재 역할 기준으로 매 메시지마다 최신 반영)
 function _buildChatSysPrompt(isMyRecords, topic, student, extraContext = '') {
   const modePrompt = _replyModePrompt(state.replyMode || 'dictation');
@@ -450,10 +456,9 @@ function renderChatBubble(m) {
     return `<div class="chat-system-msg">${esc(m.text)}</div>`;
   }
   const isUser = m.role === 'user';
-  // 들여쓰기 없이 인라인 — white-space:pre-wrap 이 템플릿 공백을 그대로 렌더링하므로
-  return `<div class="chat-bubble-wrap ${isUser ? 'user' : 'ai'}"><div class="chat-bubble ${isUser ? 'chat-bubble-user' : 'chat-bubble-ai'}">${esc(m.text)}</div></div>`;
+  const body = isUser ? esc(m.text) : renderMarkdownBasic(m.text);
+  return `<div class="chat-bubble-wrap ${isUser ? 'user' : 'ai'}"><div class="chat-bubble ${isUser ? 'chat-bubble-user' : 'chat-bubble-ai chat-markdown'}">${body}</div></div>`;
 }
-
 // ---------------------------------------------------------------------------
 // 입력 중 표시 (점 3개 애니메이션)
 // ---------------------------------------------------------------------------

@@ -65,15 +65,17 @@ class TestHomePage:
         self._go_to_calendar(logged_in_page)
         assert logged_in_page.locator('.cal-grid').is_visible()
 
-    def test_calendar_is_default_hub_with_three_modes(self, logged_in_page):
-        """초기 메인 화면은 캘린더이고 일상/상담/투자 허브가 보여야 함."""
+    def test_calendar_is_default_home_without_mode_hub(self, logged_in_page):
+        """초기 메인 화면은 캘린더이고 상단 모드 허브는 없어야 함."""
         logged_in_page.wait_for_selector('.cal-grid', timeout=8_000)
-        hub_text = logged_in_page.locator('.calendar-hub').inner_text()
-        assert '일상' in hub_text
-        assert '상담' in hub_text
-        assert '투자' in hub_text
-        assert not re.search(r'\b\d+\b', hub_text)
+        assert logged_in_page.locator('.calendar-hub').count() == 0
 
+    def test_logo_returns_to_calendar_home(self, logged_in_page):
+        logged_in_page.click('#nav-invest')
+        logged_in_page.wait_for_selector('.investment-view', timeout=8_000)
+        logged_in_page.click('.sidebar-logo')
+        logged_in_page.wait_for_selector('.cal-grid', timeout=8_000)
+        assert logged_in_page.evaluate("() => state.view") == 'calendar'
     def test_calendar_has_date_cells(self, logged_in_page):
         """캘린더에 날짜 셀이 존재해야 함."""
         self._go_to_calendar(logged_in_page)
@@ -276,7 +278,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260504-17');
+            const res = await fetch('/js/data.js?v=20260505-01');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -290,6 +292,18 @@ class TestDataPersistence:
 class TestChatDialogue:
     """대화창 UI 동작 및 iOS 키보드 대응 테스트."""
 
+    def test_ai_chat_bubble_renders_basic_markdown(self, logged_in_page):
+        logged_in_page.evaluate("""() => {
+            state.currentChatMessages = [{
+                role: 'ai',
+                text: '**핵심**\\n- 리스크 확인\\n[원문](https://example.com)'
+            }];
+            renderChatView();
+        }""")
+        logged_in_page.wait_for_selector('.chat-markdown strong', timeout=5_000)
+        assert logged_in_page.locator('.chat-markdown strong').inner_text() == '핵심'
+        assert logged_in_page.locator('.chat-markdown li').inner_text() == '리스크 확인'
+        assert logged_in_page.locator('.chat-markdown a').get_attribute('href') == 'https://example.com'
     def _select_student_via_js(self, page):
         """
         학생 데이터 삽입 + JS state 갱신 + selectStudent() 호출.
@@ -740,7 +754,7 @@ class TestInvestmentPartner:
         assert result['eventType'] == 'alert'
 
         logged_in_page.evaluate("() => setView('calendar')")
-        logged_in_page.wait_for_selector('.cal-dot-invest', timeout=8_000)
+        logged_in_page.wait_for_selector('.cal-event-invest', timeout=8_000)
 
     def test_position_register_waits_for_server_persistence(self, logged_in_page):
         self._open_investment(logged_in_page)
@@ -912,10 +926,11 @@ class TestInvestmentPartner:
         logged_in_page.wait_for_function("() => window.__analyzePayloads?.length === 1", timeout=8_000)
 
         system_prompt = logged_in_page.evaluate("() => window.__analyzePayloads[0].system[0].text")
-        assert '실시간 뉴스 검색 결과' in system_prompt
+        assert '투자 뉴스/공시 조회 결과' in system_prompt
+        assert '링크 목록으로만 내보내지 말고' in system_prompt
         assert 'IREN expands AI cloud capacity' in system_prompt
         assert '조회 기준일' in system_prompt
-        assert '발행/공시일을 오늘 날짜라고 바꿔 말하지 않는다' in system_prompt
+        assert '발행/공시일을 조회 기준일과 혼동하지 않는다' in system_prompt
         assert 'https://finance.yahoo.com/news/iren-test' in system_prompt
         assert '실시간 인터넷 검색 기능이 없다' in system_prompt
         assert logged_in_page.locator('.chat-bubble-ai').count() == 1

@@ -22,6 +22,46 @@ function esc(str) {
     .replace(/'/g, '&#39;');
 }
 
+function renderMarkdownBasic(text) {
+  const safe = esc(text || '');
+  const lines = safe.split(/\r?\n/);
+  let html = '';
+  let inList = false;
+
+  const inline = (s) => s
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      if (inList) { html += '</ul>'; inList = false; }
+      html += '<br>';
+      continue;
+    }
+    const heading = line.match(/^(#{1,3})\s+(.+)$/);
+    if (heading) {
+      if (inList) { html += '</ul>'; inList = false; }
+      const level = heading[1].length + 3;
+      html += `<h${level}>${inline(heading[2])}</h${level}>`;
+      continue;
+    }
+    const bullet = line.match(/^[-*]\s+(.+)$/);
+    const numbered = line.match(/^\d+\.\s+(.+)$/);
+    if (bullet || numbered) {
+      if (!inList) { html += '<ul>'; inList = true; }
+      html += `<li>${inline((bullet || numbered)[1])}</li>`;
+      continue;
+    }
+    if (inList) { html += '</ul>'; inList = false; }
+    html += `<p>${inline(line)}</p>`;
+  }
+  if (inList) html += '</ul>';
+  return html;
+}
+
 // ---------------------------------------------------------------------------
 // JSON 파싱 (AI 응답용 — literal 줄바꿈 자동 수정)
 // ---------------------------------------------------------------------------

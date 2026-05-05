@@ -22,6 +22,8 @@ function renderCalendar() {
   state.myRecords.forEach(r => { recordCnt[r.date] = (recordCnt[r.date] || 0) + 1; });
   const investCnt = {};
   (state.investment?.events || []).forEach(e => { investCnt[e.date] = (investCnt[e.date] || 0) + 1; });
+  const topicById = Object.fromEntries((state.myTopics || []).map(t => [t.id, t]));
+  const studentById = Object.fromEntries((state.students || []).map(s => [s.id, s]));
 
   const days = [];
   for (let i = firstDay - 1; i >= 0; i--) {
@@ -41,34 +43,32 @@ function renderCalendar() {
     const sc = sessionCnt[d.ds] || 0;
     const rc = recordCnt[d.ds]  || 0;
     const ic = investCnt[d.ds]  || 0;
-    let dotsHTML = '';
-    if (sc > 0 || rc > 0 || ic > 0) {
-      const rDots  = Array(Math.min(rc, 3)).fill('<div class="cal-dot cal-dot-record"></div>').join('');
-      const rExtra = rc > 3 ? `<span class="cal-dot-extra">+${rc-3}</span>` : '';
-      const sDots  = Array(Math.min(sc, 3)).fill('<div class="cal-dot cal-dot-session"></div>').join('');
-      const sExtra = sc > 3 ? `<span class="cal-dot-extra">+${sc-3}</span>` : '';
-      const iDots  = Array(Math.min(ic, 3)).fill('<div class="cal-dot cal-dot-invest"></div>').join('');
-      const iExtra = ic > 3 ? `<span class="cal-dot-extra">+${ic-3}</span>` : '';
-      dotsHTML = `<div class="cal-day-dots">${rDots}${rExtra}${sDots}${sExtra}${iDots}${iExtra}</div>`;
-    }
+    const items = [
+      ...state.myRecords.filter(r => r.date === d.ds).map(r => ({
+        cls: 'record',
+        text: `${topicById[r.topicId]?.title || '일상'} ${r.recordNum || ''}`.trim(),
+      })),
+      ...state.sessions.filter(s => s.date === d.ds).map(s => ({
+        cls: 'session',
+        text: `${studentById[s.studentId]?.alias || '상담'} ${s.sessionNum || ''}회기`,
+      })),
+      ...(state.investment?.events || []).filter(e => e.date === d.ds).map(e => ({
+        cls: 'invest',
+        text: `${e.symbol || '투자'} ${e.title || '점검'}`,
+      })),
+    ];
+    const visibleItems = items.slice(0, 3).map(item =>
+      `<div class="cal-event cal-event-${item.cls}" title="${esc(item.text)}">${esc(item.text)}</div>`
+    ).join('');
+    const more = items.length > 3 ? `<div class="cal-event-more">+${items.length - 3}</div>` : '';
+    const eventsHTML = items.length ? `<div class="cal-events">${visibleItems}${more}</div>` : '';
     return `<div class="cal-day${d.other?' other-month':''}${d.ds===today?' today':''}${d.ds===state.calDate?' selected':''}"
       onclick="openCalPopup('${d.ds}')">
-      <div class="cal-day-num">${d.day}</div>${dotsHTML}
+      <div class="cal-day-num">${d.day}</div>${eventsHTML}
     </div>`;
   }).join('');
 
   return `<div class="calendar">
-    <div class="calendar-hub">
-      <button class="calendar-hub-card hub-daily" onclick="setView('myrecords')">
-        <span>일상</span>
-      </button>
-      <button class="calendar-hub-card hub-counseling" onclick="setView('student')">
-        <span>상담</span>
-      </button>
-      <button class="calendar-hub-card hub-invest" onclick="setView('investment')">
-        <span>투자</span>
-      </button>
-    </div>
     <div class="cal-header">
       <button class="cal-nav" onclick="navCal(-1)">‹</button>
       <span class="cal-title">${year}년 ${MONTHS[month]}</span>
@@ -85,6 +85,7 @@ function showHome() {
   state.selSession = null;
   state.selTopic   = null;
   state.selRecord  = null;
+  state.view       = 'calendar';
   state.mode       = 'welcome';
   state.myMode     = 'welcome';
   render();

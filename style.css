@@ -574,39 +574,6 @@ body {
   max-width: 760px;
 }
 
-.calendar-hub {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0;
-  border-bottom: 0.5px solid var(--color-border);
-}
-
-.calendar-hub-card {
-  border: 0;
-  border-right: 0.5px solid var(--color-border);
-  background: var(--color-bg);
-  padding: 9px 12px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-  color: var(--color-text-primary);
-  font-family: var(--font);
-}
-
-.calendar-hub-card:last-child {
-  border-right: 0;
-}
-
-.calendar-hub-card span {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-}
-
-.calendar-hub-card:hover {
-  background: var(--color-bg-secondary);
-}
-
 .cal-header {
   display: flex;
   align-items: center;
@@ -716,28 +683,87 @@ body {
 .cal-day:nth-child(7n+1) .cal-day-num { color: #b94040; }
 .cal-day:nth-child(7n)   .cal-day-num { color: var(--color-accent); }
 
-.cal-day-dots {
+.cal-events {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 
-.cal-dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  opacity: 0.85;
-  flex-shrink: 0;
+.cal-event,
+.cal-event-more {
+  border-radius: 3px;
+  font-size: 10px;
+  line-height: 1.35;
+  padding: 1px 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-secondary);
 }
 
-.cal-dot-session { background: #EF9F27; }
-.cal-dot-record  { background: #1D9E75; }
-.cal-dot-invest  { background: #2563EB; }
+.cal-event-record {
+  background: rgba(29, 158, 117, 0.12);
+  color: #0F6E56;
+}
 
-.cal-dot-extra {
-  font-size: 8px;
+.cal-event-session {
+  background: rgba(239, 159, 39, 0.16);
+  color: #9A5D00;
+}
+
+.cal-event-invest {
+  background: rgba(37, 99, 235, 0.12);
+  color: #1D4ED8;
+}
+
+.cal-event-more {
   color: var(--color-text-tertiary);
-  line-height: 4px;
+  padding-left: 2px;
+}
+
+.chat-markdown {
+  white-space: normal;
+}
+
+.chat-markdown p {
+  margin: 0 0 8px;
+}
+
+.chat-markdown p:last-child,
+.chat-markdown ul:last-child {
+  margin-bottom: 0;
+}
+
+.chat-markdown h4,
+.chat-markdown h5,
+.chat-markdown h6 {
+  font-size: 13px;
+  line-height: 1.35;
+  margin: 10px 0 6px;
+  font-weight: 650;
+}
+
+.chat-markdown ul {
+  margin: 4px 0 8px 18px;
+  padding: 0;
+}
+
+.chat-markdown li {
+  margin: 3px 0;
+}
+
+.chat-markdown a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.chat-markdown code {
+  font-size: 0.92em;
+  background: rgba(100, 80, 55, 0.08);
+  padding: 1px 4px;
+  border-radius: 3px;
 }
 
 /* 캘린더 날짜 세션 목록 */
