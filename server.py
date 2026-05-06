@@ -552,7 +552,9 @@ _COINGECKO_IDS = {
 
 def _canonical_market_symbol(symbol: str) -> str:
     raw = str(symbol or '').strip()
-    sym = re.sub(r'\s+', '', raw).upper()
+    parenthesized = re.search(r'\(([A-Za-z0-9.\-^=]{1,16})\)', raw)
+    candidate = parenthesized.group(1) if parenthesized else raw
+    sym = re.sub(r'\s+', '', candidate).upper()
     return _MARKET_SYMBOL_ALIASES.get(sym, _MARKET_SYMBOL_ALIASES.get(raw, sym))
 
 def _parse_market_symbols(raw: str):
@@ -796,6 +798,68 @@ def _fetch_stooq_quotes(symbols):
         })
     return quotes
 
+def _fetch_stockanalysis_quotes(symbols):
+    stock_symbols = [
+        sym for sym in symbols
+        if sym and not sym.startswith('^') and '-' not in sym and '=' not in sym and _MARKET_SYMBOL_RE.match(sym)
+    ]
+    quotes = []
+    for symbol in stock_symbols:
+        try:
+            resp = requests.get(
+                f'https://stockanalysis.com/stocks/{symbol.lower()}/',
+                headers={'User-Agent': 'Mozilla/5.0 jip-investment-partner'},
+                timeout=10,
+            )
+        except requests.RequestException as e:
+            log.warning('StockAnalysis quote 조회 실패(%s): %s', symbol, e)
+            continue
+        if not resp.ok:
+            log.warning('StockAnalysis quote 오류 응답(%s): HTTP %d', symbol, resp.status_code)
+            continue
+        import html as html_lib
+        text = html_lib.unescape(re.sub(r'<[^>]+>', '\n', resp.text))
+        lines = [re.sub(r'\s+', ' ', line).strip() for line in text.splitlines()]
+        lines = [line for line in lines if line]
+        price = None
+        change_percent = None
+        previous = None
+        name = symbol
+        for idx, line in enumerate(lines):
+            if f': {symbol}' in line.upper() or line.upper().endswith(f'({symbol})'):
+                if idx > 0 and len(lines[idx - 1]) <= 80:
+                    name = lines[idx - 1]
+                for candidate in lines[idx + 1:idx + 8]:
+                    if re.fullmatch(r'\d+(?:,\d{3})*(?:\.\d+)?', candidate):
+                        price = float(candidate.replace(',', ''))
+                        break
+                break
+        for line in lines:
+            if line.startswith('Previous Close'):
+                match = re.search(r'(\d+(?:,\d{3})*(?:\.\d+)?)', line)
+                if match:
+                    previous = float(match.group(1).replace(',', ''))
+                    break
+        for line in lines:
+            match = re.search(r'([+-]?\d+(?:\.\d+)?)%', line)
+            if match:
+                change_percent = float(match.group(1))
+                break
+        if price is None:
+            continue
+        quotes.append({
+            'symbol': symbol,
+            'name': name,
+            'price': price,
+            'change': price - previous if previous else None,
+            'changePercent': change_percent,
+            'previousClose': previous,
+            'currency': 'USD',
+            'marketState': 'REGULAR',
+            'marketTime': None,
+        })
+    return quotes
+
 @app.route('/api/market/quote', methods=['GET'])
 @require_auth
 def market_quote():
@@ -861,6 +925,16 @@ def market_quote():
         if stooq_quotes:
             source = 'stooq' if not quotes else f'{source}+stooq'
             quotes.extend(stooq_quotes)
+            found = {str(q.get('symbol', '')).upper() for q in quotes}
+            missing = [sym for sym in symbols if sym not in found]
+
+    if missing:
+        stockanalysis_quotes = _fetch_stockanalysis_quotes(missing)
+        if stockanalysis_quotes:
+            source = 'stockanalysis' if not quotes else f'{source}+stockanalysis'
+            quotes.extend(stockanalysis_quotes)
+            found = {str(q.get('symbol', '')).upper() for q in quotes}
+            missing = [sym for sym in symbols if sym not in found]
 
     if not quotes:
         return jsonify({'error': '시장 데이터 조회 실패', 'requested': symbols}), 502
@@ -868,6 +942,7 @@ def market_quote():
     return jsonify({
         'source': source,
         'requested': symbols,
+        'missing': missing,
         'fetchedAt': int(time.time()),
         'quotes': quotes,
     })

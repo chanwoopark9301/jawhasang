@@ -6,7 +6,10 @@
 const INVESTMENT_INDEX_SYMBOLS = ['^IXIC', '^GSPC'];
 const INVESTMENT_SYMBOL_ALIASES = {
   CIRCLE: 'CRCL',
+  CIRCLEINTERNETGROUP: 'CRCL',
   CRCL: 'CRCL',
+  '써클': 'CRCL',
+  '써클인터넷그룹': 'CRCL',
   ETH: 'ETH-USD',
   ETHEREUM: 'ETH-USD',
   '이더리움': 'ETH-USD',
@@ -21,7 +24,11 @@ const INVESTMENT_SYMBOL_ALIASES = {
 function normalizeInvestmentMarketSymbol(symbol) {
   const raw = String(symbol || '').trim();
   if (!raw) return '';
-  return INVESTMENT_SYMBOL_ALIASES[raw.toUpperCase()] || INVESTMENT_SYMBOL_ALIASES[raw] || raw.toUpperCase();
+  const parenthesized = raw.match(/\(([A-Za-z0-9.\-^=]{1,16})\)/);
+  const candidate = parenthesized ? parenthesized[1] : raw;
+  const compact = candidate.replace(/\s+/g, '');
+  const upper = compact.toUpperCase();
+  return INVESTMENT_SYMBOL_ALIASES[upper] || INVESTMENT_SYMBOL_ALIASES[compact] || upper;
 }
 
 async function fetchMarketQuotes(symbols) {

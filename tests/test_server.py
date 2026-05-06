@@ -397,6 +397,38 @@ class TestDataAPI:
         assert data['quotes'][0]['symbol'] == 'CRCL'
         assert data['quotes'][0]['price'] == 77.7
 
+    def test_market_quote_endpoint_extracts_circle_ticker_from_label(self, client, monkeypatch):
+        import server
+
+        class FakeResp:
+            ok = True
+            status_code = 200
+
+            def json(self):
+                return {
+                    'quoteResponse': {
+                        'result': [{
+                            'symbol': 'CRCL',
+                            'shortName': 'Circle Internet Group',
+                            'regularMarketPrice': 91.2,
+                            'regularMarketChangePercent': 1.1,
+                        }]
+                    }
+                }
+
+        def fake_get(url, params=None, headers=None, timeout=None):
+            assert params['symbols'] == 'CRCL'
+            return FakeResp()
+
+        monkeypatch.setattr(server.requests, 'get', fake_get)
+        r = client.get('/api/market/quote?symbols=%EC%8D%A8%ED%81%B4(CRCL)')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['requested'] == ['CRCL']
+        assert data['quotes'][0]['symbol'] == 'CRCL'
+        assert data['quotes'][0]['price'] == 91.2
+
     def test_market_quote_endpoint_falls_back_to_yahoo_search_for_circle(self, client, monkeypatch):
         import server
 
@@ -440,6 +472,54 @@ class TestDataAPI:
         assert data['source'] == 'yahoo-search'
         assert data['quotes'][0]['symbol'] == 'CRCL'
         assert data['quotes'][0]['price'] == 88.8
+
+    def test_market_quote_endpoint_falls_back_to_stockanalysis_for_crcl(self, client, monkeypatch):
+        import server
+
+        class EmptyResp:
+            ok = True
+            status_code = 200
+            text = 'Symbol,Date,Time,Open,High,Low,Close,Volume,Name\nCRCL.US,N/D,N/D,N/D,N/D,N/D,N/D,N/D,N/D'
+
+            def json(self):
+                if 'chart' in getattr(self, 'kind', ''):
+                    return {'chart': {'result': []}}
+                if 'search' in getattr(self, 'kind', ''):
+                    return {'quotes': []}
+                return {'quoteResponse': {'result': []}}
+
+        class StockAnalysisResp:
+            ok = True
+            status_code = 200
+            text = """
+                <h1>Circle Internet Group, Inc. (CRCL)</h1>
+                <div>NYSE: CRCL · Real-Time Price · USD</div>
+                <div>114.19</div>
+                <div>-5.34 (-4.47%)</div>
+                <div>Previous Close 119.53</div>
+            """
+
+        def fake_get(url, params=None, headers=None, timeout=None):
+            if 'stockanalysis.com/stocks/crcl' in url:
+                return StockAnalysisResp()
+            resp = EmptyResp()
+            if 'v8/finance/chart' in url:
+                resp.kind = 'chart'
+            if 'v1/finance/search' in url:
+                resp.kind = 'search'
+            return resp
+
+        monkeypatch.setattr(server.requests, 'get', fake_get)
+        r = client.get('/api/market/quote?symbols=CRCL')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['source'] == 'stockanalysis'
+        assert data['requested'] == ['CRCL']
+        assert data['quotes'][0]['symbol'] == 'CRCL'
+        assert data['quotes'][0]['price'] == 114.19
+        assert data['quotes'][0]['previousClose'] == 119.53
+        assert data['quotes'][0]['changePercent'] == -4.47
 
     def test_market_quote_endpoint_rejects_invalid_symbols(self, client):
         r = client.get('/api/market/quote?symbols=NVDA;DROP')
