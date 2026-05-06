@@ -301,3 +301,60 @@ async function addInvestmentNewsFromForm(event) {
   closeModal();
   render();
 }
+
+function fillInvestmentAICompareExample(text) {
+  const input = document.getElementById('iac-question');
+  if (input) input.value = text;
+}
+
+async function runInvestmentAICompare(event) {
+  event.preventDefault();
+  const input = document.getElementById('iac-question');
+  const result = document.getElementById('investment-ai-compare-result');
+  const button = document.getElementById('iac-run');
+  const question = (input?.value || '').trim();
+  if (!question) return showToast('비교할 투자 질문을 입력해주세요.');
+  if (button) {
+    button.disabled = true;
+    button.textContent = '비교 중';
+  }
+  if (result) result.innerHTML = '<div class="investment-empty">두 모델의 답변을 기다리는 중입니다.</div>';
+
+  try {
+    const newsContext = await fetchInvestmentNewsContext(question);
+    const systemText = typeof _buildChatSysPrompt === 'function'
+      ? _buildChatSysPrompt(false, null, null, newsContext)
+      : 'You are an investment behavior-control partner. Do not recommend or guarantee returns.';
+    const data = await apiCompareInvestmentAI({
+      max_tokens: 700,
+      system: [{ type: 'text', text: systemText }],
+      messages: [{ role: 'user', content: question }],
+    });
+    if (result) result.innerHTML = renderInvestmentAICompareResult(data.results || []);
+  } catch (e) {
+    logger.error('AI 비교 실패', e);
+    if (result) result.innerHTML = `<div class="investment-empty">AI 비교에 실패했습니다. ${esc(e.message || '')}</div>`;
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = '두 모델 비교';
+    }
+  }
+}
+
+function renderInvestmentAICompareResult(results) {
+  const list = Array.isArray(results) ? results : [];
+  if (!list.length) return '<div class="investment-empty">비교 결과가 없습니다.</div>';
+  return `<div class="investment-ai-compare-grid">
+    ${list.map(r => `<article class="investment-ai-card ${r.ok ? 'ok' : 'error'}">
+      <header>
+        <strong>${esc(r.provider === 'openai' ? 'OpenAI' : 'Claude')}</strong>
+        <small>${esc(r.model || (r.ok ? 'model' : 'not configured'))}</small>
+      </header>
+      ${r.ok
+        ? `<div class="chat-markdown">${renderMarkdownBasic(r.text || '')}</div>`
+        : `<p class="investment-ai-error">${esc(r.error || '응답 실패')}</p>`}
+    </article>`).join('')}
+  </div>
+  <div class="investment-modal-note">좋은 답변의 기준: 매수/매도 단정이 아니라 원칙 위반, 빠진 정보, 리스크, 다음 확인 행동을 분명히 말하는지 확인하세요.</div>`;
+}

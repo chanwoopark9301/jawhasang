@@ -8,6 +8,12 @@
 
 ## 2026-05-06
 
+### Claude/OpenAI 투자 답변 비교와 주문 연동 준비
+
+- 투자 사이드 메뉴에 `AI 비교`를 추가해 같은 투자 질문을 Claude와 OpenAI에 동시에 보내고 답변을 나란히 비교할 수 있게 했다.
+- 서버에 `/api/investment/ai-compare`를 추가하고, OpenAI 키가 있으면 OpenAI 응답도 함께 받아오도록 provider 호출을 분리했다.
+- 실제 증권사/투자 앱 연동을 대비해 주문 실행이 아닌 초안 상태의 주문 의도(order intent)를 만드는 `/api/investment/order-intent`와 `investment_broker.py` 어댑터 초안을 추가했다.
+
 ### 홈 초기 로딩 체감 속도 개선
 
 - 앱 시작 스플래시가 전체 스크립트 로드를 오래 가리지 않도록 빠르게 사라지는 부트 타이머를 추가했다.

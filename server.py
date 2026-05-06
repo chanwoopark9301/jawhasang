@@ -18,6 +18,7 @@ import requests
 import xml.etree.ElementTree as ET
 from functools import wraps
 from investment_backend import upsert_position
+from investment_broker import build_order_intent
 from flask import (
     Flask, request, jsonify, send_from_directory,
     session, redirect, render_template_string,
@@ -28,6 +29,8 @@ from cryptography.fernet import Fernet, InvalidToken
 
 load_dotenv('ecrk.env')
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
+OPENAI_API_KEY    = os.getenv('OPENAI_API_KEY', '')
+OPENAI_MODEL      = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
 APP_PASSWORD      = os.getenv('APP_PASSWORD', '')
 DATABASE_URL      = os.getenv('DATABASE_URL', '')
 POLYGON_API_KEY   = os.getenv('POLYGON_API_KEY', '')
@@ -523,6 +526,23 @@ def save_investment_position_route():
 # 시장 데이터 API — 현재가/지수 조회 프록시
 # ---------------------------------------------------------------------------
 
+@app.route('/api/investment/order-intent', methods=['POST'])
+@require_auth
+def investment_order_intent_route():
+    payload = request.get_json(silent=True)
+    try:
+        intent = build_order_intent(payload or {})
+        return jsonify({
+            'ok': True,
+            'intent': intent,
+            'brokerReady': False,
+            'message': 'order intent only; broker execution adapter is not connected',
+        })
+    except ValueError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+    except Exception as e:
+        log.error('POST /api/investment/order-intent failed: %s', e, exc_info=True)
+        return jsonify({'ok': False, 'error': 'order intent failed'}), 500
 _MARKET_SYMBOL_RE = re.compile(r'^[A-Za-z0-9.\-^=]{1,16}$')
 _NEWS_QUERY_RE = re.compile(r'^[^<>]{2,160}$')
 _MARKET_SYMBOL_ALIASES = {
@@ -1435,6 +1455,121 @@ def summarize_verbatim():
 # Anthropic API 프록시
 # ---------------------------------------------------------------------------
 
+def _system_to_text(system):
+    if isinstance(system, str):
+        return system
+    if isinstance(system, list):
+        return '\n\n'.join(
+            str(item.get('text') or '')
+            for item in system
+            if isinstance(item, dict)
+        ).strip()
+    return ''
+
+def _messages_for_openai(messages):
+    out = []
+    for msg in messages or []:
+        if not isinstance(msg, dict):
+            continue
+        role = msg.get('role')
+        mapped_role = 'assistant' if role == 'assistant' else 'user'
+        content = msg.get('content', '')
+        if isinstance(content, list):
+            content = '\n'.join(
+                str(part.get('text') or '')
+                for part in content
+                if isinstance(part, dict)
+            )
+        out.append({'role': mapped_role, 'content': str(content)})
+    return out
+
+def _extract_anthropic_text(data):
+    return ''.join(c.get('text', '') for c in data.get('content', []) if isinstance(c, dict)).strip()
+
+def _extract_openai_text(data):
+    choices = data.get('choices') or []
+    if not choices:
+        return ''
+    msg = choices[0].get('message') or {}
+    return str(msg.get('content') or '').strip()
+
+def _call_anthropic_for_compare(payload):
+    if not ANTHROPIC_API_KEY:
+        return {'ok': False, 'provider': 'claude', 'error': 'ANTHROPIC_API_KEY missing'}
+    clean = _scrub_payload({
+        'model': payload.get('claudeModel') or payload.get('model') or 'claude-sonnet-4-6',
+        'max_tokens': int(payload.get('max_tokens') or 700),
+        'system': payload.get('system') or [],
+        'messages': payload.get('messages') or [],
+    })
+    resp = requests.post(
+        'https://api.anthropic.com/v1/messages',
+        headers={
+            'x-api-key': ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01',
+            'anthropic-beta': 'prompt-caching-2024-07-31',
+            'Content-Type': 'application/json',
+        },
+        json=clean,
+        timeout=90,
+    )
+    if not resp.ok:
+        return {'ok': False, 'provider': 'claude', 'status': resp.status_code, 'error': resp.text[:300]}
+    data = resp.json()
+    return {'ok': True, 'provider': 'claude', 'model': clean['model'], 'text': _extract_anthropic_text(data)}
+
+def _call_openai_for_compare(payload):
+    if not OPENAI_API_KEY:
+        return {'ok': False, 'provider': 'openai', 'error': 'OPENAI_API_KEY missing'}
+    system_text = _system_to_text(payload.get('system') or '')
+    messages = _messages_for_openai(payload.get('messages') or [])
+    if system_text:
+        messages = [{'role': 'system', 'content': system_text}] + messages
+    clean = _scrub_payload({
+        'model': payload.get('openaiModel') or OPENAI_MODEL,
+        'messages': messages,
+        'max_tokens': int(payload.get('max_tokens') or 700),
+    })
+    resp = requests.post(
+        'https://api.openai.com/v1/chat/completions',
+        headers={
+            'Authorization': f'Bearer {OPENAI_API_KEY}',
+            'Content-Type': 'application/json',
+        },
+        json=clean,
+        timeout=90,
+    )
+    if not resp.ok:
+        return {'ok': False, 'provider': 'openai', 'status': resp.status_code, 'error': resp.text[:300]}
+    data = resp.json()
+    return {'ok': True, 'provider': 'openai', 'model': clean['model'], 'text': _extract_openai_text(data)}
+
+@app.route('/api/investment/ai-compare', methods=['POST'])
+@require_auth
+def investment_ai_compare():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({'error': 'invalid payload'}), 400
+    messages = payload.get('messages') or []
+    if not isinstance(messages, list) or not messages:
+        return jsonify({'error': 'messages required'}), 400
+
+    payload = _scrub_payload(payload)
+    results = []
+    for caller in (_call_anthropic_for_compare, _call_openai_for_compare):
+        provider = 'claude' if caller == _call_anthropic_for_compare else 'openai'
+        try:
+            results.append(caller(payload))
+        except requests.Timeout:
+            results.append({'ok': False, 'provider': provider, 'error': 'timeout'})
+        except requests.RequestException as e:
+            results.append({'ok': False, 'provider': provider, 'error': str(e)[:300]})
+
+    return jsonify({
+        'ok': any(r.get('ok') for r in results),
+        'mode': 'investment-ai-compare',
+        'results': results,
+    })
 @app.route('/api/analyze', methods=['POST'])
 @require_auth
 def analyze():

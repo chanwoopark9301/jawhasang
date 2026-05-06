@@ -118,6 +118,72 @@ class TestDataAPI:
         assert pos['avgPrice'] == 1.0
         assert pos['currentPrice'] == 1.0
 
+    def test_investment_order_intent_endpoint_creates_draft(self, client):
+        payload = {
+            'symbol': 'IREN',
+            'action': 'buy',
+            'quantity': 3,
+            'orderType': 'limit',
+            'price': 46.06,
+            'reason': 'planned entry',
+        }
+        r = client.post('/api/investment/order-intent',
+                        data=json.dumps(payload),
+                        content_type='application/json')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['ok'] is True
+        assert data['brokerReady'] is False
+        assert data['intent']['symbol'] == 'IREN'
+        assert data['intent']['status'] == 'draft'
+
+    def test_investment_ai_compare_endpoint_calls_claude_and_openai(self, client, monkeypatch):
+        import server
+
+        monkeypatch.setattr(server, 'ANTHROPIC_API_KEY', 'test-anthropic')
+        monkeypatch.setattr(server, 'OPENAI_API_KEY', 'test-openai')
+
+        class FakeResp:
+            ok = True
+            status_code = 200
+            text = ''
+
+            def __init__(self, body):
+                self._body = body
+
+            def json(self):
+                return self._body
+
+        calls = []
+
+        def fake_post(url, headers=None, json=None, timeout=None, stream=False):
+            calls.append((url, json))
+            if 'anthropic.com' in url:
+                return FakeResp({'content': [{'text': 'Claude says check rules.'}]})
+            if 'openai.com' in url:
+                return FakeResp({'choices': [{'message': {'content': 'OpenAI says check risk.'}}]})
+            raise AssertionError(url)
+
+        monkeypatch.setattr(server.requests, 'post', fake_post)
+
+        r = client.post('/api/investment/ai-compare',
+                        data=json.dumps({
+                            'system': [{'type': 'text', 'text': 'Investment rules only'}],
+                            'messages': [{'role': 'user', 'content': 'IREN add?'}],
+                            'max_tokens': 300,
+                        }),
+                        content_type='application/json')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['ok'] is True
+        assert [item['provider'] for item in data['results']] == ['claude', 'openai']
+        assert data['results'][0]['text'] == 'Claude says check rules.'
+        assert data['results'][1]['text'] == 'OpenAI says check risk.'
+        assert any('anthropic.com' in call[0] for call in calls)
+        assert any('openai.com' in call[0] for call in calls)
+
     def test_decode_stored_data_accepts_legacy_json_dict(self):
         import server
 

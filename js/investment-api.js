@@ -86,3 +86,33 @@ async function apiFetchInvestmentNews(symbols, limit = 3, queries = []) {
 
   return data;
 }
+
+async function apiCompareInvestmentAI(payload) {
+  const res = await fetch('/api/investment/ai-compare', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const text = await res.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch (e) {
+    throw new Error(`AI compare returned non-json: ${res.status}`);
+  }
+  if (!res.ok) throw new Error(data?.error || `AI compare failed: ${res.status}`);
+  return data;
+}
+
+async function apiCreateInvestmentOrderIntent(payload) {
+  const res = await fetch('/api/investment/order-intent', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok || !data.ok) throw new Error(data?.error || `order intent failed: ${res.status}`);
+  return data;
+}

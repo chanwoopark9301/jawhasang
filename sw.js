@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v66'; // Faster boot splash and lightweight sync
+const CACHE_NAME = 'jip-v67'; // Investment AI compare
 
 const STATIC_ASSETS = [
   '/style.css',

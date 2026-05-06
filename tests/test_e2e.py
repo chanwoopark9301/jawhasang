@@ -310,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260506-16');
+            const res = await fetch('/js/data.js?v=20260506-17');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -846,6 +846,30 @@ class TestInvestmentPartner:
         assert 'Circle news' in timeline_text
         assert 'IREN' in timeline_text
         assert 'Planned entry memo' in timeline_text
+
+    def test_investment_ai_compare_modal_renders_two_provider_cards(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            window.apiCompareInvestmentAI = async () => ({
+                ok: true,
+                results: [
+                    { ok: true, provider: 'claude', model: 'claude-test', text: 'Check the rule first.' },
+                    { ok: true, provider: 'openai', model: 'openai-test', text: 'Check the risk first.' },
+                ],
+            });
+            window.fetchInvestmentNewsContext = async () => '';
+        }""")
+
+        logged_in_page.locator('#investment-menu-ai-compare').click()
+        logged_in_page.wait_for_selector('#investment-ai-compare-form', timeout=8_000)
+        logged_in_page.locator('#iac-question').fill('IREN add?')
+        logged_in_page.locator('#iac-run').click()
+        logged_in_page.wait_for_selector('.investment-ai-card', timeout=8_000)
+        modal_text = logged_in_page.locator('#modal-box').inner_text()
+        assert 'Claude' in modal_text
+        assert 'OpenAI' in modal_text
+        assert 'Check the rule first.' in modal_text
+        assert 'Check the risk first.' in modal_text
 
     def test_refresh_data_from_server_updates_investment_positions(self, logged_in_page):
         self._open_investment(logged_in_page)

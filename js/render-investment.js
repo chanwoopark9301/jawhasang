@@ -589,6 +589,25 @@ function renderModalInvestmentTimeline() {
     </div>`;
 }
 
+function renderModalInvestmentAICompare() {
+  return `
+    <button class="modal-close" onclick="closeModal()">x</button>
+    <div class="modal-title">Claude / OpenAI 투자 답변 비교</div>
+    <div class="investment-modal-note">같은 투자 질문을 두 모델에 동시에 보내고, 답변이 원칙·숫자·리스크를 얼마나 잘 지키는지 비교합니다. 이 기능은 종목 추천기가 아니라 판단 품질 점검용입니다.</div>
+    <form class="investment-form" id="investment-ai-compare-form" onsubmit="runInvestmentAICompare(event)">
+      <textarea class="form-input investment-textarea" id="iac-question" placeholder="예: IREN 추가매수해도 돼? 내 원칙 기준으로 비교해줘."></textarea>
+      <div class="investment-form-row">
+        <button class="btn-ghost" type="button" onclick="fillInvestmentAICompareExample('IREN 추가매수해도 돼? 내 원칙 기준으로 판단해줘.')">IREN 추가매수</button>
+        <button class="btn-ghost" type="button" onclick="fillInvestmentAICompareExample('CRCL 뉴스가 내 포트폴리오에 어떤 의미인지 해석해줘.')">CRCL 뉴스</button>
+        <button class="btn-ghost" type="button" onclick="fillInvestmentAICompareExample('이 매매 기록이 내 투자 원칙 위반인지 봐줘.')">원칙 위반</button>
+      </div>
+      <button class="btn-primary investment-primary" id="iac-run" type="submit">두 모델 비교</button>
+    </form>
+    <div class="investment-ai-compare-result" id="investment-ai-compare-result">
+      <div class="investment-empty">질문을 입력하면 Claude와 OpenAI 답변을 나란히 보여줍니다.</div>
+    </div>`;
+}
+
 function renderInvestmentVerdict(decision) {
   const cls = decision.verdict || decision.status;
   const label = decision.label || (cls === 'block' ? '차단 권고' : cls === 'cooldown' ? '쿨다운 필요' : '진행 가능');
