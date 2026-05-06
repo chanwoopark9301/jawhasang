@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v52'; // Analyst portfolio report
+const CACHE_NAME = 'jip-v53'; // Investment news report markdown
 
 const STATIC_ASSETS = [
   '/style.css',

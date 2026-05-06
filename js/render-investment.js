@@ -322,29 +322,50 @@ function renderModalInvestmentDecisions() {
 
 function renderModalInvestmentNews() {
   const news = state.investment.events.filter(e => e.type === 'news').slice().reverse();
+  const symbols = [...new Set(news.map(e => String(e.symbol || '').trim().toUpperCase()).filter(Boolean))];
+  const latestDate = news.map(e => e.date || '').filter(Boolean).sort().at(-1) || '';
+  const latest = news[0];
   return `
-    <button class="modal-close" onclick="closeModal()">×</button>
-    <div class="modal-title">뉴스 동향</div>
-    <div class="investment-modal-note">대화창에서 "내 보유 주식 관련 최신 뉴스 있니?"라고 묻고, "뉴스 동향에 기록해줘"라고 말하면 여기에 저장됩니다.</div>
-    <form class="investment-form" id="investment-news-form" onsubmit="addInvestmentNewsFromForm(event)">
-      <div class="investment-form-row">
-        <input class="form-input" id="in-symbol" placeholder="종목 코드" autocomplete="off">
-        <input class="form-input" id="in-title" placeholder="뉴스 제목" autocomplete="off">
-        <input class="form-input" id="in-date" type="date" value="${new Date().toISOString().split('T')[0]}">
-      </div>
-      <textarea class="form-input investment-textarea" id="in-body" placeholder="뉴스 내용과 나의 해석"></textarea>
-      <button class="btn-primary investment-primary" type="submit">뉴스 저장</button>
-    </form>
-    <div class="investment-decision-list">
-      ${news.length ? news.map(e => `<div class="investment-decision">
-        <span class="investment-badge allow">뉴스</span>
-        <strong>${esc(e.symbol || '투자')} · ${esc(e.title || '뉴스 동향')}</strong>
-        <p>${esc(e.body || '')}</p>
-        <small>${esc(e.date || '')}</small>
-      </div>`).join('') : '<div class="investment-empty">저장된 뉴스 동향이 없습니다.</div>'}
+    <button class="modal-close" onclick="closeModal()">x</button>
+    <div class="modal-title">뉴스 동향 리포트</div>
+    <div class="investment-news-modal" id="investment-news-modal">
+      <section class="investment-news-overview">
+        <div><span>저장 뉴스</span><strong>${news.length}</strong></div>
+        <div><span>관련 종목</span><strong>${symbols.length ? symbols.join(', ') : '전체'}</strong></div>
+        <div><span>최근 기록일</span><strong>${latestDate || '-'}</strong></div>
+        <div><span>최근 주제</span><strong>${esc(latest?.title || '-')}</strong></div>
+      </section>
+
+      <section class="investment-news-guide">
+        <h4>뉴스 기록 방식</h4>
+        <p>대화창에서 최신 뉴스와 원칙 관점 해석을 먼저 논의한 뒤, "뉴스 동향에 기록해줘"라고 말하면 여기에 누적됩니다.</p>
+        <p>저장된 내용은 마크다운으로 렌더링되므로 제목, 목록, 원문 링크를 그대로 보관할 수 있습니다.</p>
+      </section>
+
+      <form class="investment-form investment-news-form" id="investment-news-form" onsubmit="addInvestmentNewsFromForm(event)">
+        <div class="investment-form-row">
+          <input class="form-input" id="in-symbol" placeholder="종목/이슈" autocomplete="off">
+          <input class="form-input" id="in-title" placeholder="뉴스 제목" autocomplete="off">
+          <input class="form-input" id="in-date" type="date" value="${new Date().toISOString().split('T')[0]}">
+        </div>
+        <textarea class="form-input investment-textarea investment-news-textarea" id="in-body" placeholder="뉴스 내용과 나의 해석을 마크다운으로 기록"></textarea>
+        <button class="btn-primary investment-primary" type="submit">뉴스 저장</button>
+      </form>
+
+      <section class="investment-news-list">
+        ${news.length ? news.map(e => `<article class="investment-news-card">
+          <header>
+            <span class="investment-badge allow">뉴스</span>
+            <div>
+              <strong>${esc(e.symbol || '투자')} · ${esc(e.title || '뉴스 동향')}</strong>
+              <small>${esc(e.date || '')}</small>
+            </div>
+          </header>
+          <div class="investment-news-body chat-markdown">${renderMarkdownBasic(e.body || '')}</div>
+        </article>`).join('') : '<div class="investment-empty">저장된 뉴스 동향이 없습니다.</div>'}
+      </section>
     </div>`;
 }
-
 function renderInvestmentVerdict(decision) {
   const cls = decision.verdict || decision.status;
   const label = decision.label || (cls === 'block' ? '차단 권고' : cls === 'cooldown' ? '쿨다운 필요' : '진행 가능');

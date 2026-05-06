@@ -3653,6 +3653,112 @@ body { height: var(--app-height, 100dvh); }
   padding: 26px;
 }
 
+.modal-box.modal-investment-news {
+  width: min(980px, 95vw);
+  padding: 26px;
+}
+
+.investment-news-modal {
+  display: grid;
+  gap: 14px;
+}
+
+.investment-news-overview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.investment-news-overview > div,
+.investment-news-guide,
+.investment-news-card {
+  border: 0.5px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg);
+}
+
+.investment-news-overview > div {
+  padding: 12px;
+  background: rgba(29, 158, 117, 0.045);
+}
+
+.investment-news-overview span {
+  display: block;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  margin-bottom: 5px;
+}
+
+.investment-news-overview strong {
+  display: block;
+  font-size: 15px;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.investment-news-guide {
+  padding: 13px;
+  background: var(--color-bg-secondary);
+}
+
+.investment-news-guide h4 {
+  font-size: 13px;
+  margin: 0 0 8px;
+}
+
+.investment-news-guide p {
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 0 0 6px;
+  color: var(--color-text-secondary);
+}
+
+.investment-news-form {
+  border: 0.5px solid var(--color-border);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--color-bg-secondary);
+}
+
+.investment-news-textarea {
+  min-height: 120px;
+}
+
+.investment-news-list {
+  display: grid;
+  gap: 10px;
+}
+
+.investment-news-card {
+  padding: 13px;
+}
+
+.investment-news-card header {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.investment-news-card header strong {
+  display: block;
+  font-size: 14px;
+}
+
+.investment-news-card header small {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+.investment-news-body {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
 .investment-portfolio-overview {
   grid-column: 1 / -1;
   display: grid;
@@ -3936,6 +4042,10 @@ body { height: var(--app-height, 100dvh); }
   }
 
   .investment-portfolio-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .investment-news-overview {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

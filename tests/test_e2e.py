@@ -278,7 +278,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260506-03');
+            const res = await fetch('/js/data.js?v=20260506-04');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -693,6 +693,20 @@ class TestInvestmentPartner:
         logged_in_page.locator('#investment-menu-news').click()
         logged_in_page.wait_for_selector('#investment-news-form', timeout=8_000)
         assert '뉴스 동향' in logged_in_page.locator('#modal-box').inner_text()
+        logged_in_page.locator('#in-symbol').fill('IREN')
+        logged_in_page.locator('#in-title').fill('Clarity Act update')
+        logged_in_page.locator('#in-body').fill('## 핵심 요약\n- 규제 불확실성 완화\n[원문](https://example.com/news)')
+        logged_in_page.locator('#investment-news-form button[type="submit"]').click()
+        logged_in_page.wait_for_function("() => !document.getElementById('modal-overlay').classList.contains('open')", timeout=8_000)
+        logged_in_page.locator('#investment-menu-news').click()
+        logged_in_page.wait_for_selector('.investment-news-card .chat-markdown h5', timeout=8_000)
+        news_text = logged_in_page.locator('#modal-box').inner_text()
+        assert '뉴스 동향 리포트' in news_text
+        assert '저장 뉴스' in news_text
+        assert '관련 종목' in news_text
+        assert logged_in_page.locator('.investment-news-card .chat-markdown h5').inner_text() == '핵심 요약'
+        assert logged_in_page.locator('.investment-news-card .chat-markdown li').inner_text() == '규제 불확실성 완화'
+        assert logged_in_page.locator('.investment-news-card .chat-markdown a').get_attribute('href') == 'https://example.com/news'
 
     def test_rule_engine_blocks_overweight_add(self, logged_in_page):
         logged_in_page.wait_for_load_state('networkidle')
