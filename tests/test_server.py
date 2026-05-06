@@ -95,6 +95,29 @@ class TestDataAPI:
         assert data['error']
         assert data['requestId'].startswith('ipos-')
 
+    def test_save_cash_position_normalizes_amount(self, client):
+        payload = {
+            'position': {
+                'id': 'ip-cash',
+                'assetType': 'cash',
+                'symbol': 'cash',
+                'name': 'USD Cash',
+                'shares': '12,345.67',
+            }
+        }
+        r = client.post('/api/investment/positions',
+                        data=json.dumps(payload),
+                        content_type='application/json')
+
+        assert r.status_code == 200
+        pos = r.get_json()['position']
+        assert pos['assetType'] == 'cash'
+        assert pos['symbol'] == 'CASH'
+        assert pos['shares'] == 12345.67
+        assert pos['cashAmount'] == 12345.67
+        assert pos['avgPrice'] == 1.0
+        assert pos['currentPrice'] == 1.0
+
     def test_decode_stored_data_accepts_legacy_json_dict(self):
         import server
 
@@ -228,6 +251,78 @@ class TestDataAPI:
         assert round(data['quotes'][0]['changePercent'], 2) == 2.75
         assert any('v7/finance/quote' in url for url in calls)
         assert any('v8/finance/chart/NVDA' in url for url in calls)
+
+    def test_market_quote_endpoint_falls_back_to_stooq_for_us_stock(self, client, monkeypatch):
+        import server
+
+        class EmptyYahooResp:
+            ok = True
+            status_code = 200
+            text = ''
+
+            def json(self):
+                if 'chart' in getattr(self, 'kind', ''):
+                    return {'chart': {'result': []}}
+                return {'quoteResponse': {'result': []}}
+
+        class StooqResp:
+            ok = True
+            status_code = 200
+            text = 'Symbol,Date,Time,Open,High,Low,Close,Volume,Name\nCRCL.US,2026-05-06,22:00:00,80,82,79,81.5,12345,Circle Internet Group\n'
+
+        calls = []
+
+        def fake_get(url, params=None, headers=None, timeout=None):
+            calls.append((url, params))
+            if 'stooq.com' in url:
+                return StooqResp()
+            resp = EmptyYahooResp()
+            if 'v8/finance/chart' in url:
+                resp.kind = 'chart'
+            return resp
+
+        monkeypatch.setattr(server.requests, 'get', fake_get)
+        r = client.get('/api/market/quote?symbols=CRCL')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['source'] == 'stooq'
+        assert data['quotes'][0]['symbol'] == 'CRCL'
+        assert data['quotes'][0]['name'] == 'Circle Internet Group'
+        assert data['quotes'][0]['price'] == 81.5
+        assert any(call[1] and call[1].get('s') == 'crcl.us' for call in calls)
+
+    def test_market_quote_endpoint_normalizes_crypto_alias(self, client, monkeypatch):
+        import server
+
+        class FakeResp:
+            ok = True
+            status_code = 200
+
+            def json(self):
+                return {
+                    'quoteResponse': {
+                        'result': [{
+                            'symbol': 'ETH-USD',
+                            'shortName': 'Ethereum USD',
+                            'regularMarketPrice': 3100.25,
+                            'regularMarketChangePercent': 1.7,
+                        }]
+                    }
+                }
+
+        def fake_get(url, params=None, headers=None, timeout=None):
+            assert params['symbols'] == 'ETH-USD'
+            return FakeResp()
+
+        monkeypatch.setattr(server.requests, 'get', fake_get)
+        r = client.get('/api/market/quote?symbols=ETH')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['requested'] == ['ETH-USD']
+        assert data['quotes'][0]['symbol'] == 'ETH-USD'
+        assert data['quotes'][0]['price'] == 3100.25
 
     def test_market_quote_endpoint_rejects_invalid_symbols(self, client):
         r = client.get('/api/market/quote?symbols=NVDA;DROP')

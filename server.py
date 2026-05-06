@@ -525,11 +525,21 @@ def save_investment_position_route():
 
 _MARKET_SYMBOL_RE = re.compile(r'^[A-Za-z0-9.\-^=]{1,16}$')
 _NEWS_QUERY_RE = re.compile(r'^[^<>]{2,160}$')
+_MARKET_SYMBOL_ALIASES = {
+    'ETH': 'ETH-USD',
+    'ETHEREUM': 'ETH-USD',
+    'BTC': 'BTC-USD',
+    'BITCOIN': 'BTC-USD',
+}
+
+def _canonical_market_symbol(symbol: str) -> str:
+    sym = str(symbol or '').strip().upper()
+    return _MARKET_SYMBOL_ALIASES.get(sym, sym)
 
 def _parse_market_symbols(raw: str):
     symbols = []
     for part in (raw or '').split(','):
-        sym = part.strip().upper()
+        sym = _canonical_market_symbol(part)
         if not sym:
             continue
         if not _MARKET_SYMBOL_RE.match(sym):
@@ -622,6 +632,64 @@ def _fetch_yahoo_chart_quotes(symbols):
             quotes.append(quote)
     return quotes
 
+def _stooq_symbol(symbol: str) -> str:
+    sym = str(symbol or '').strip().lower()
+    if not sym or sym.startswith('^') or '-' in sym or '=' in sym:
+        return ''
+    if '.' in sym:
+        return sym
+    return f'{sym}.us'
+
+def _fetch_stooq_quotes(symbols):
+    stooq_map = {symbol: _stooq_symbol(symbol) for symbol in symbols}
+    stooq_symbols = [sym for sym in stooq_map.values() if sym]
+    if not stooq_symbols:
+        return []
+    try:
+        resp = requests.get(
+            'https://stooq.com/q/l/',
+            params={'s': ','.join(stooq_symbols), 'f': 'sd2t2ohlcvn', 'h': '', 'e': 'csv'},
+            headers={'User-Agent': 'Mozilla/5.0 jip-investment-partner'},
+            timeout=10,
+        )
+    except requests.RequestException as e:
+        log.warning('Stooq quote 조회 실패: %s', e)
+        return []
+    if not resp.ok:
+        log.warning('Stooq quote 오류 응답: HTTP %d', resp.status_code)
+        return []
+    lines = [line for line in resp.text.splitlines() if line.strip()]
+    if len(lines) < 2:
+        return []
+    import csv
+    rows = csv.DictReader(lines)
+    reverse = {v.upper(): k for k, v in stooq_map.items() if v}
+    quotes = []
+    for row in rows:
+        raw_symbol = str(row.get('Symbol') or '').upper()
+        requested = reverse.get(raw_symbol)
+        close = row.get('Close')
+        if not requested or not close or str(close).upper() == 'N/D':
+            continue
+        try:
+            price = float(close)
+            previous = float(row.get('Open') or 0) or None
+        except (TypeError, ValueError):
+            continue
+        change_percent = ((price - previous) / previous) * 100 if previous else None
+        quotes.append({
+            'symbol': requested,
+            'name': row.get('Name') or requested,
+            'price': price,
+            'change': price - previous if previous else None,
+            'changePercent': change_percent,
+            'previousClose': previous,
+            'currency': 'USD',
+            'marketState': 'REGULAR',
+            'marketTime': None,
+        })
+    return quotes
+
 @app.route('/api/market/quote', methods=['GET'])
 @require_auth
 def market_quote():
@@ -663,6 +731,14 @@ def market_quote():
         if fallback_quotes:
             source = 'yahoo-chart' if not quotes else 'yahoo-finance+chart'
             quotes.extend(fallback_quotes)
+            found = {str(q.get('symbol', '')).upper() for q in quotes}
+            missing = [sym for sym in symbols if sym not in found]
+
+    if missing:
+        stooq_quotes = _fetch_stooq_quotes(missing)
+        if stooq_quotes:
+            source = 'stooq' if not quotes else f'{source}+stooq'
+            quotes.extend(stooq_quotes)
 
     if not quotes:
         return jsonify({'error': '시장 데이터 조회 실패', 'requested': symbols}), 502

@@ -99,6 +99,8 @@ function normalizeInvestmentState(investment) {
   const src = investment && typeof investment === 'object' ? investment : {};
   const positions = Array.isArray(src.positions) ? src.positions.map(p => ({
     ...p,
+    assetType: p.assetType || 'stock',
+    currency: p.currency || 'USD',
     shares: parseInvestmentNumber(p.shares),
     avgPrice: parseInvestmentNumber(p.avgPrice),
     currentPrice: p.currentPrice == null ? null : parseInvestmentNumber(p.currentPrice),

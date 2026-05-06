@@ -96,15 +96,16 @@ function renderInvestmentPositions(positions, totals) {
     ${positions.map(p => {
       const value = investmentPositionValue(p, 'currentPrice');
       const weight = totals.totalValue ? (value / totals.totalValue) * 100 : 0;
-      const hasPrice = p.currentPrice != null && parseInvestmentNumber(p.currentPrice) > 0;
+      const isCash = isCashInvestmentPosition(p);
+      const hasPrice = isCash || (p.currentPrice != null && parseInvestmentNumber(p.currentPrice) > 0);
       return `<div class="investment-position">
         <div>
           <strong>${esc(p.symbol || '-')}</strong>
-          <span>${esc(p.name || '')}${p.manualPrice ? ' · 수동 현재가' : ''}</span>
+          <span>${esc(p.name || '')}${isCash ? ' · 현금' : p.manualPrice ? ' · 수동 현재가' : ''}</span>
         </div>
         <div class="investment-position-meta">
           <span>${hasPrice ? formatMoney(value) : '현재가 미조회'}</span>
-          <span>${hasPrice ? `${weight.toFixed(1)}% · ${formatPercent(p.changePercent)}` : '현재가 갱신 필요'}</span>
+          <span>${hasPrice ? `${weight.toFixed(1)}%${isCash ? ' · 대기 자금' : ` · ${formatPercent(p.changePercent)}`}` : '현재가 갱신 필요'}</span>
         </div>
       </div>`;
     }).join('')}
@@ -238,6 +239,14 @@ function renderModalInvestmentPortfolio() {
 function renderInvestmentPositionForm() {
   return `<form class="investment-form" id="investment-position-form" onsubmit="addInvestmentPositionFromForm(event)">
     <div class="investment-form-row">
+      <select class="form-input" id="ip-asset-type" onchange="syncInvestmentPositionAssetType()">
+        <option value="stock">주식/ETF</option>
+        <option value="crypto">코인</option>
+        <option value="cash">현금</option>
+      </select>
+      <div class="investment-form-hint">코인은 ETH, Ethereum, 이더리움처럼 입력해도 됩니다.</div>
+    </div>
+    <div class="investment-form-row">
     <input type="hidden" id="ip-id" value="">
       <input class="form-input" id="ip-symbol" placeholder="종목 코드" autocomplete="off">
       <input class="form-input" id="ip-name" placeholder="종목명" autocomplete="off">
@@ -272,7 +281,7 @@ function renderPortfolioManagementPanel() {
       ${positions.length ? positions.map(p => `<div class="investment-manage-row">
         <div>
           <strong>${esc(p.symbol || '-')}</strong>
-          <small>${esc(p.name || '')} · 수량 ${formatShares(p.shares)} · 평단 ${formatMoney(p.avgPrice)}</small>
+          <small>${esc(p.name || '')} · ${isCashInvestmentPosition(p) ? `현금 ${formatMoney(investmentPositionValue(p, 'currentPrice'))}` : `${p.assetType === 'crypto' ? '코인' : '주식'} · 수량 ${formatShares(p.shares)} · 평단 ${formatMoney(p.avgPrice)}`}</small>
         </div>
         <div>
           <button type="button" onclick="editInvestmentPosition('${esc(p.id)}')">수정</button>
@@ -315,10 +324,11 @@ function renderModalInvestmentRules() {
 }
 
 function renderInvestmentGateForm(positions) {
+  const tradable = (positions || []).filter(p => !isCashInvestmentPosition(p));
   return `<form class="investment-form" id="investment-gate-form" onsubmit="runInvestmentGateFromForm(event)">
-    <select class="form-input" id="ig-position" ${positions.length ? '' : 'disabled'}>
-      ${positions.length
-        ? positions.map(p => `<option value="${esc(p.id)}">${esc(p.symbol || p.name || p.id)}</option>`).join('')
+    <select class="form-input" id="ig-position" ${tradable.length ? '' : 'disabled'}>
+      ${tradable.length
+        ? tradable.map(p => `<option value="${esc(p.id)}">${esc(p.symbol || p.name || p.id)}</option>`).join('')
         : '<option value="">등록된 종목 없음</option>'}
     </select>
     <div class="investment-form-row">
@@ -342,7 +352,7 @@ function renderInvestmentGateForm(positions) {
       <div class="investment-form-hint">허용된 매매만 포트폴리오에 자동 반영됩니다.</div>
     </div>
     <textarea class="form-input investment-textarea" id="ig-reason" placeholder="지금 이 행동을 하려는 이유"></textarea>
-    <button class="btn-primary investment-primary" id="investment-gate-run" type="submit" ${positions.length ? '' : 'disabled'}>점검하기</button>
+    <button class="btn-primary investment-primary" id="investment-gate-run" type="submit" ${tradable.length ? '' : 'disabled'}>점검하기</button>
   </form>`;
 }
 
@@ -429,7 +439,9 @@ function renderInvestmentDecisionList(decisions) {
 
 async function addInvestmentPositionFromForm(event) {
   event.preventDefault();
-  const symbol = document.getElementById('ip-symbol')?.value.trim().toUpperCase();
+  const assetType = document.getElementById('ip-asset-type')?.value || 'stock';
+  let symbol = normalizeInvestmentMarketSymbol(document.getElementById('ip-symbol')?.value);
+  if (assetType === 'cash' && !symbol) symbol = 'CASH';
   if (!symbol) return showToast('종목 코드를 입력해주세요.');
   const button = document.getElementById('investment-add-position');
   if (button) {
@@ -442,8 +454,9 @@ async function addInvestmentPositionFromForm(event) {
   const position = {
     ...(existing || {}),
     id: editId || ('ip' + (state.investment.positions.length + 1)),
+    assetType,
     symbol,
-    name: document.getElementById('ip-name')?.value.trim() || symbol,
+    name: document.getElementById('ip-name')?.value.trim() || (assetType === 'cash' ? '현금' : symbol),
     shares: parseInvestmentNumber(document.getElementById('ip-shares')?.value),
     avgPrice: parseInvestmentNumber(document.getElementById('ip-avg')?.value),
     currentPrice: existing?.currentPrice ?? null,
@@ -455,6 +468,14 @@ async function addInvestmentPositionFromForm(event) {
     addRule: document.getElementById('ip-add-rule')?.value.trim() || '',
     marketSource: '',
   };
+  if (assetType === 'cash') {
+    position.shares = parseInvestmentNumber(document.getElementById('ip-shares')?.value);
+    position.avgPrice = 1;
+    position.currentPrice = 1;
+    position.cashAmount = position.shares;
+    position.manualPrice = true;
+    position.currency = 'USD';
+  }
   if (existing) {
     state.investment.positions = state.investment.positions.map(p => String(p.id) === String(position.id) ? position : p);
   } else {
@@ -463,9 +484,13 @@ async function addInvestmentPositionFromForm(event) {
   state.selInvestmentPosition = position.id;
   let hasQuote = false;
   try {
-    const quotes = await fetchMarketQuotes([symbol]);
-    applyInvestmentQuotes(quotes);
-    hasQuote = quotes.some(q => String(q.symbol || '').toUpperCase() === symbol);
+    if (assetType !== 'cash') {
+      const quotes = await fetchMarketQuotes([symbol]);
+      applyInvestmentQuotes(quotes);
+      hasQuote = quotes.some(q => String(q.symbol || '').toUpperCase() === symbol);
+    } else {
+      hasQuote = true;
+    }
   } catch (e) {
     logger.warn('종목 등록 현재가 조회 실패', e);
   }
@@ -485,7 +510,7 @@ async function addInvestmentPositionFromForm(event) {
     return;
   }
   if (saved.investment) state.investment = normalizeInvestmentState(saved.investment);
-  showToast(hasQuote ? '보유 종목을 등록하고 현재가를 가져왔어요.' : '종목은 등록했지만 현재가를 찾지 못했어요. 티커를 확인해주세요.');
+  showToast(assetType === 'cash' ? '현금 보유액을 포트폴리오에 반영했어요.' : hasQuote ? '보유 종목을 등록하고 현재가를 가져왔어요.' : '종목은 등록했지만 현재가를 찾지 못했어요. 티커를 확인해주세요.');
   if (state.activeModal === 'investment-portfolio') {
     openModal('investment-portfolio');
   } else {
@@ -499,10 +524,13 @@ function clearInvestmentPositionForm() {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
+  const assetType = document.getElementById('ip-asset-type');
+  if (assetType) assetType.value = 'stock';
   const longTerm = document.getElementById('ip-longterm');
   if (longTerm) longTerm.checked = false;
   const btn = document.getElementById('investment-add-position');
   if (btn) btn.textContent = '종목 저장';
+  syncInvestmentPositionAssetType();
 }
 
 function editInvestmentPosition(id) {
@@ -512,10 +540,12 @@ function editInvestmentPosition(id) {
     const el = document.getElementById(field);
     if (el) el.value = value ?? '';
   };
+  const assetType = document.getElementById('ip-asset-type');
+  if (assetType) assetType.value = p.assetType || 'stock';
   set('ip-id', p.id);
   set('ip-symbol', p.symbol || '');
   set('ip-name', p.name || '');
-  set('ip-shares', p.shares || '');
+  set('ip-shares', isCashInvestmentPosition(p) ? (p.cashAmount ?? p.shares ?? '') : (p.shares || ''));
   set('ip-avg', p.avgPrice || '');
   set('ip-target', p.targetPrice || '');
   set('ip-stop', p.stopPrice || '');
@@ -525,7 +555,36 @@ function editInvestmentPosition(id) {
   if (longTerm) longTerm.checked = !!p.longTerm;
   const btn = document.getElementById('investment-add-position');
   if (btn) btn.textContent = '종목 수정 저장';
+  syncInvestmentPositionAssetType();
   document.getElementById('investment-position-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function syncInvestmentPositionAssetType() {
+  const type = document.getElementById('ip-asset-type')?.value || 'stock';
+  const symbol = document.getElementById('ip-symbol');
+  const name = document.getElementById('ip-name');
+  const shares = document.getElementById('ip-shares');
+  const avg = document.getElementById('ip-avg');
+  const target = document.getElementById('ip-target');
+  const stop = document.getElementById('ip-stop');
+  const longTerm = document.getElementById('ip-longterm');
+  if (symbol) {
+    symbol.placeholder = type === 'crypto' ? 'ETH, BTC, ETH-USD' : type === 'cash' ? 'CASH' : '종목 코드';
+    symbol.disabled = type === 'cash';
+    if (type === 'cash' && !symbol.value) symbol.value = 'CASH';
+  }
+  if (name) {
+    name.placeholder = type === 'cash' ? '현금' : '종목명';
+    if (type === 'cash' && !name.value) name.value = '현금';
+  }
+  if (shares) shares.placeholder = type === 'cash' ? '현금 보유액' : '수량';
+  if (avg) {
+    avg.placeholder = type === 'cash' ? '자동 1달러' : '평균 단가';
+    avg.disabled = type === 'cash';
+    if (type === 'cash') avg.value = '1';
+  }
+  [target, stop].forEach(el => { if (el) el.disabled = type === 'cash'; });
+  if (longTerm) longTerm.disabled = type === 'cash';
 }
 
 async function deleteInvestmentPosition(id) {

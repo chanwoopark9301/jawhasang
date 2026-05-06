@@ -278,7 +278,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260506-05');
+            const res = await fetch('/js/data.js?v=20260506-06');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -868,6 +868,49 @@ class TestInvestmentPartner:
             "() => !state.investment.positions.some(p => p.id === 'ip-edit')",
             timeout=8_000,
         )
+
+    def test_portfolio_registers_crypto_alias_and_cash(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.locator('#investment-menu-positions').click()
+        logged_in_page.evaluate("""() => {
+            state.investment.positions = [];
+            window.apiSaveInvestmentPosition = async () => ({
+                ok: true,
+                investment: { ...state.investment, positions: state.investment.positions },
+            });
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = (url, opts) => {
+                if (String(url).includes('/api/market/quote')) {
+                    return Promise.resolve(new Response(JSON.stringify({
+                        quotes: [{ symbol: 'ETH-USD', price: 3100, changePercent: 1.5, previousClose: 3054, name: 'Ethereum USD' }],
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                return originalFetch(url, opts);
+            };
+        }""")
+
+        logged_in_page.locator('#ip-asset-type').select_option('crypto')
+        logged_in_page.locator('#ip-symbol').fill('이더리움')
+        logged_in_page.locator('#ip-shares').fill('2')
+        logged_in_page.locator('#ip-avg').fill('2500')
+        logged_in_page.locator('#investment-add-position').click()
+        logged_in_page.wait_for_function(
+            "() => state.investment.positions.some(p => p.symbol === 'ETH-USD' && p.currentPrice === 3100)",
+            timeout=8_000,
+        )
+
+        logged_in_page.locator('#ip-asset-type').select_option('cash')
+        logged_in_page.locator('#ip-shares').fill('1000')
+        logged_in_page.locator('#investment-add-position').click()
+        logged_in_page.wait_for_function(
+            "() => state.investment.positions.some(p => p.assetType === 'cash' && p.cashAmount === 1000)",
+            timeout=8_000,
+        )
+        result = logged_in_page.evaluate("""() => ({
+            total: investmentTotals(state.investment.positions).totalValue,
+            cashInGate: [...document.querySelectorAll('#ig-position option')].some(o => o.value.includes('cash')),
+        })""")
+        assert result['total'] == 7200
 
     def test_position_register_waits_for_server_persistence(self, logged_in_page):
         self._open_investment(logged_in_page)

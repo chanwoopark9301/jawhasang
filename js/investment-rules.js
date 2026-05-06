@@ -11,7 +11,14 @@ function parseInvestmentNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function isCashInvestmentPosition(position) {
+  return String(position?.assetType || '').toLowerCase() === 'cash';
+}
+
 function investmentPositionValue(position, priceKey = 'currentPrice') {
+  if (isCashInvestmentPosition(position)) {
+    return parseInvestmentNumber(position?.cashAmount ?? position?.shares);
+  }
   const shares = parseInvestmentNumber(position?.shares);
   const price = parseInvestmentNumber(position?.[priceKey]);
   return shares * price;
@@ -33,6 +40,7 @@ function buildInvestmentRiskAlerts(positions, rules) {
   const alerts = [];
 
   list.forEach(p => {
+    if (isCashInvestmentPosition(p)) return;
     const symbol = p.symbol || '종목';
     const price = parseInvestmentNumber(p.currentPrice);
     const target = parseInvestmentNumber(p.targetPrice);

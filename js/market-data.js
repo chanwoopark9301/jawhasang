@@ -4,6 +4,20 @@
    ============================================= */
 
 const INVESTMENT_INDEX_SYMBOLS = ['^IXIC', '^GSPC'];
+const INVESTMENT_SYMBOL_ALIASES = {
+  ETH: 'ETH-USD',
+  ETHEREUM: 'ETH-USD',
+  '이더리움': 'ETH-USD',
+  BTC: 'BTC-USD',
+  BITCOIN: 'BTC-USD',
+  '비트코인': 'BTC-USD',
+};
+
+function normalizeInvestmentMarketSymbol(symbol) {
+  const raw = String(symbol || '').trim();
+  if (!raw) return '';
+  return INVESTMENT_SYMBOL_ALIASES[raw.toUpperCase()] || INVESTMENT_SYMBOL_ALIASES[raw] || raw.toUpperCase();
+}
 
 async function fetchMarketQuotes(symbols) {
   const data = await fetchMarketQuoteData(symbols);
@@ -12,7 +26,7 @@ async function fetchMarketQuotes(symbols) {
 
 async function fetchMarketQuoteData(symbols) {
   const clean = [...new Set((symbols || [])
-    .map(s => String(s || '').trim().toUpperCase())
+    .map(s => normalizeInvestmentMarketSymbol(s))
     .filter(Boolean))];
   if (!clean.length) return { requested: [], quotes: [] };
 
@@ -27,7 +41,10 @@ async function fetchMarketQuoteData(symbols) {
 
 async function refreshInvestmentMarketData() {
   const inv = state.investment = normalizeInvestmentState(state.investment);
-  const positionSymbols = inv.positions.map(p => p.symbol).filter(Boolean);
+  const positionSymbols = inv.positions
+    .filter(p => !isCashInvestmentPosition(p))
+    .map(p => p.symbol)
+    .filter(Boolean);
   const symbols = [...positionSymbols, ...INVESTMENT_INDEX_SYMBOLS];
   if (!symbols.length) {
     showToast('조회할 종목이 없습니다.');
@@ -58,6 +75,7 @@ function applyInvestmentQuotes(quotes) {
   (quotes || []).forEach(q => { if (q.symbol) map[String(q.symbol).toUpperCase()] = q; });
 
   inv.positions.forEach(p => {
+    if (isCashInvestmentPosition(p)) return;
     const q = map[String(p.symbol || '').toUpperCase()];
     if (!q) return;
     if (p.manualPrice) {

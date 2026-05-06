@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v54'; // Portfolio management and trade sync
+const CACHE_NAME = 'jip-v55'; // Stock crypto cash portfolio support
 
 const STATIC_ASSETS = [
   '/style.css',
