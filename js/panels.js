@@ -11,38 +11,81 @@
 function openPlusMenu() {
   const existing = document.getElementById('plus-menu');
   if (existing) {
-    existing.classList.toggle('open');
+    closePlusMenu();
     return;
   }
 
-  const modes = [
-    { id: 'dictation', label: '받아쓰기', desc: 'AI 응답 없이 쌓기' },
-    { id: 'question',  label: '답변',     desc: '내 질문에 바로 답하기' },
-    { id: 'summary',   label: '정리',     desc: '여기까지 기록 초안으로' },
-    { id: 'advice',    label: '조언',     desc: '딱 하나만 제안받기' },
+  const groups = [
+    {
+      id: 'daily',
+      label: '일상',
+      desc: '말을 받아 적고 정리하기',
+      open: state.view === 'myrecords',
+      modes: [
+        { id: 'dictation', label: '받아쓰기', desc: 'AI 응답 없이 쌓기' },
+        { id: 'question',  label: '답변',     desc: '내 질문에 바로 답하기' },
+        { id: 'summary',   label: '정리',     desc: '여기까지 기록 초안으로' },
+        { id: 'advice',    label: '조언',     desc: '딱 하나만 제안받기' },
+      ],
+    },
+    {
+      id: 'counseling',
+      label: '상담',
+      desc: '축어록과 슈퍼비전 중심',
+      open: state.view === 'student',
+      modes: [
+        { id: 'question', label: '질문', desc: '상담 장면을 바로 묻기' },
+        { id: 'summary',  label: '정리', desc: '회기 메모처럼 정리하기' },
+        { id: 'advice',   label: '개입', desc: '다음 개입 하나 제안받기' },
+      ],
+    },
+    {
+      id: 'investment',
+      label: '투자',
+      desc: '상태·뉴스·원칙·매매 판단',
+      open: state.view === 'investment',
+      modes: [
+        { id: 'invest-status',  label: '상태', desc: '현재가·손익·위험 신호 확인' },
+        { id: 'invest-news',    label: '뉴스', desc: '뉴스·공시·시장 동향 조회' },
+        { id: 'invest-rules',   label: '원칙', desc: '투자 원칙 세우기·수정' },
+        { id: 'invest-trade',   label: '매매', desc: '매수·매도 전 판단 게이트' },
+        { id: 'invest-summary', label: '정리', desc: '대화를 투자 기록으로 정돈' },
+      ],
+    },
   ];
+  if (!groups.some(group => group.open)) groups[0].open = true;
 
   const menu = document.createElement('div');
   menu.id        = 'plus-menu';
-  menu.className = 'plus-menu reply-mode-menu open';
-  menu.innerHTML = modes.map(mode => `
-    <button class="pm-mode-item${state.replyMode === mode.id ? ' active' : ''}"
-      id="reply-mode-${mode.id}" type="button"
-      onclick="setReplyMode('${mode.id}');closePlusMenu();">
-      <span class="pm-mode-label">${esc(mode.label)}</span>
-      <span class="pm-mode-desc">${esc(mode.desc)}</span>
-    </button>`).join('');
+  menu.className = 'plus-menu reply-mode-menu plus-accordion-menu open';
+  menu.innerHTML = groups.map(group => `
+    <details class="pm-group pm-group-${group.id}"${group.open ? ' open' : ''}>
+      <summary class="pm-group-summary">
+        <span class="pm-group-title">${esc(group.label)}</span>
+        <span class="pm-group-desc">${esc(group.desc)}</span>
+      </summary>
+      <div class="pm-group-body">
+        ${group.modes.map(mode => `
+          <button class="pm-mode-item${state.replyMode === mode.id ? ' active' : ''}"
+            id="reply-mode-${mode.id}" type="button"
+            onclick="setReplyMode('${mode.id}');closePlusMenu();">
+            <span class="pm-mode-label">${esc(mode.label)}</span>
+            <span class="pm-mode-desc">${esc(mode.desc)}</span>
+          </button>`).join('')}
+      </div>
+    </details>`).join('');
 
   const inputArea = document.getElementById('input-area');
   if (inputArea) inputArea.appendChild(menu);
   else document.body.appendChild(menu);
 
   setTimeout(() => {
-    document.addEventListener('click', _closePlusMenuOutside, { once: true });
+    document.addEventListener('click', _closePlusMenuOutside);
   }, 0);
 }
 
 function closePlusMenu() {
+  document.removeEventListener('click', _closePlusMenuOutside);
   document.getElementById('plus-menu')?.remove();
 }
 

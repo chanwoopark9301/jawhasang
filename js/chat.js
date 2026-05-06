@@ -44,7 +44,10 @@ function sendCurrentChat() {
 }
 
 function setReplyMode(mode) {
-  const allowed = ['dictation', 'question', 'summary', 'advice'];
+  const allowed = [
+    'dictation', 'question', 'summary', 'advice',
+    'invest-status', 'invest-news', 'invest-rules', 'invest-trade', 'invest-summary',
+  ];
   state.replyMode = allowed.includes(mode) ? mode : 'dictation';
   updateReplyModeUI();
 }
@@ -60,6 +63,11 @@ function updateReplyModeUI() {
     question:  '묻고 싶은 걸 그대로 적어주세요',
     summary:   '여기까지 정리해달라고 말해도 좋아요',
     advice:    '의견이 필요한 상황을 적어주세요',
+    'invest-status':  '확인할 종목이나 포트폴리오 상태를 물어보세요',
+    'invest-news':    '찾아볼 종목, 법안, 공시, 뉴스를 적어주세요',
+    'invest-rules':   '세우거나 고칠 투자 원칙을 말해보세요',
+    'invest-trade':   '매수·매도 판단을 그대로 적어주세요',
+    'invest-summary': '이 대화를 어디에 기록할지 말해보세요',
   };
   const input = document.getElementById('chat-input-bottom');
   if (input) input.placeholder = modes[state.replyMode] || modes.dictation;
@@ -270,11 +278,13 @@ function inferInvestmentSymbol(text) {
 
 function shouldFetchInvestmentNews(text) {
   const ask = (text || '').toLowerCase();
+  if (state.view === 'investment' && state.replyMode === 'invest-news') return true;
   return /\uB274\uC2A4|\uCD5C\uC2E0|\uB3D9\uD5A5|\uACF5\uC2DC|\uBC95\uC548|\uADDC\uC81C|news|headline|filing|bill|act|regulation/.test(ask);
 }
 
 function shouldFetchInvestmentMarketContext(text) {
   const ask = String(text || '').toLowerCase();
+  if (state.view === 'investment' && state.replyMode === 'invest-status') return true;
   return /\uC0C1\uD0DC|\uC2DC\uC138|\uD604\uC7AC\uAC00|\uAC00\uACA9|\uC5B4\uB54C|\uD3C9\uAC00|\uC190\uC775|\uD3EC\uD2B8\uD3F4\uB9AC\uC624|status|price|quote|position|portfolio/.test(ask);
 }
 
@@ -510,6 +520,46 @@ function _replyModePrompt(mode) {
 - 응답은 기본적으로 1~3문장으로 짧게 한다.
 - 한국어 존댓말을 사용한다.`;
 
+  if (mode === 'invest-status') {
+    return `${shared}
+
+현재 응답 모드: 투자 상태
+- 보유 종목, 현재가, 평단, 평가손익, 목표가/손절가 거리, 포트폴리오 비중을 먼저 본다.
+- 시세 컨텍스트가 있으면 그 숫자를 기준으로 답하고, 조회가 실패하면 기록된 현재가 기준이라고 명시한다.
+- 결론은 "현재 상태 / 원칙상 확인할 점 / 지금 하지 말아야 할 행동" 순서로 짧게 정리한다.`;
+  }
+  if (mode === 'invest-news') {
+    return `${shared}
+
+현재 응답 모드: 투자 뉴스
+- 뉴스, 공시, 법안, 실적 발표를 원천 자료와 금융 뉴스 기준으로 분리해 정리한다.
+- 단순 링크 나열이 아니라 "무슨 일 / 왜 중요함 / 내 보유 종목과 원칙상 영향"으로 해석한다.
+- 확인되지 않은 내용은 추정이라고 분명히 표시하고 매수·매도 단정은 하지 않는다.`;
+  }
+  if (mode === 'invest-rules') {
+    return `${shared}
+
+현재 응답 모드: 투자 원칙
+- 사용자의 말에서 실제로 집행 가능한 원칙 문장, 조건, 예외, 점검 주기를 뽑는다.
+- 정보가 부족하면 종목, 기준 가격, 금지 행동, 쿨다운, 비중 중 필요한 항목만 짧게 묻는다.
+- 저장을 요청받으면 투자 원칙 메뉴에 들어갈 수 있는 형태로 제목과 규칙을 정돈한다.`;
+  }
+  if (mode === 'invest-trade') {
+    return `${shared}
+
+현재 응답 모드: 매매 판단
+- 종목, 행동(매수/매도/보유), 수량, 가격, 손절가, 목표가, 이유, 원칙 위반 여부를 점검한다.
+- 물타기, 추격매수, 손절 회피, 익절 미루기 위험을 먼저 확인한다.
+- 결론은 허가/금지 단정이 아니라 "통과 조건 / 위반 가능성 / 지금 필요한 확인 하나"로 말한다.`;
+  }
+  if (mode === 'invest-summary') {
+    return `${shared}
+
+현재 응답 모드: 투자 정리
+- 지금 대화를 투자 타임라인, 뉴스 동향, 투자 원칙, 매매 기록 중 어디에 저장할지 구분해 정리한다.
+- 저장 가능한 제목, 본문, 관련 종목, 날짜, 다음 점검 항목을 포함한다.
+- 저장에 필요한 핵심 정보가 부족하면 누락된 항목만 짧게 묻는다.`;
+  }
   if (mode === 'question') {
     return `${shared}
 

@@ -21,7 +21,9 @@ function setView(view) {
       state.currentChatMessages = [];
       loadChatHistory();
     }
-    if ((state.replyMode || 'dictation') === 'dictation') state.replyMode = 'question';
+    if (!String(state.replyMode || '').startsWith('invest-')) state.replyMode = 'invest-status';
+  } else if (String(state.replyMode || '').startsWith('invest-')) {
+    state.replyMode = 'dictation';
   }
 
   logger.info('뷰 전환: %s', view);

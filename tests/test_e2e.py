@@ -310,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260506-18');
+            const res = await fetch('/js/data.js?v=20260506-19');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -550,16 +550,27 @@ class TestChatRoleAndReplyMode:
         assert '되묻거나 대화를 이어가기 위한 질문을 하지 않는다' in prompt
         assert logged_in_page.locator('#chat-input-bottom').get_attribute('placeholder') == '묻고 싶은 걸 그대로 적어주세요'
 
-    def test_plus_menu_only_shows_reply_modes(self, logged_in_page):
+    def test_plus_menu_shows_domain_accordion_modes(self, logged_in_page):
         self._select_topic_with_role(logged_in_page, 'listener')
 
         logged_in_page.locator('.input-plus').click()
         menu_text = logged_in_page.locator('#plus-menu').inner_text()
 
+        assert logged_in_page.locator('.pm-group-daily').is_visible()
+        assert logged_in_page.locator('.pm-group-counseling').is_visible()
+        assert logged_in_page.locator('.pm-group-investment').is_visible()
+        assert '일상' in menu_text
+        assert '상담' in menu_text
+        assert '투자' in menu_text
         assert '받아쓰기' in menu_text
         assert '답변' in menu_text
         assert '정리' in menu_text
         assert '조언' in menu_text
+        logged_in_page.locator('.pm-group-investment summary').click()
+        assert logged_in_page.locator('#reply-mode-invest-status').is_visible()
+        assert logged_in_page.locator('#reply-mode-invest-news').is_visible()
+        assert logged_in_page.locator('#reply-mode-invest-rules').is_visible()
+        assert logged_in_page.locator('#reply-mode-invest-trade').is_visible()
         assert '직접 쓰기' not in menu_text
         assert 'AI 응답 방식' not in menu_text
 
@@ -673,6 +684,19 @@ class TestInvestmentPartner:
         assert '대화를 시작해보세요' in logged_in_page.locator('#main-content').inner_text()
         assert logged_in_page.locator('#investment-position-form').count() == 0
         assert logged_in_page.locator('#investment-gate-form').count() == 0
+
+    def test_investment_plus_menu_defaults_to_investment_modes(self, logged_in_page):
+        self._open_investment(logged_in_page)
+
+        logged_in_page.locator('.input-plus').click()
+        assert logged_in_page.locator('.pm-group-investment').get_attribute('open') is not None
+        logged_in_page.locator('#reply-mode-invest-status').click()
+
+        assert logged_in_page.evaluate("() => state.replyMode") == 'invest-status'
+        assert logged_in_page.locator('#chat-input-bottom').get_attribute('placeholder') == '확인할 종목이나 포트폴리오 상태를 물어보세요'
+        prompt = logged_in_page.evaluate("() => _replyModePrompt(state.replyMode)")
+        assert '현재 응답 모드: 투자 상태' in prompt
+        assert '현재가, 평단, 평가손익' in prompt
 
     def test_investment_side_menu_opens_management_modals(self, logged_in_page):
         self._open_investment(logged_in_page)

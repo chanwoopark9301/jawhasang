@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v68'; // Investment chat market context
+const CACHE_NAME = 'jip-v69'; // Plus menu accordion modes
 
 const STATIC_ASSETS = [
   '/style.css',
