@@ -310,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260506-17');
+            const res = await fetch('/js/data.js?v=20260506-18');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -870,6 +870,61 @@ class TestInvestmentPartner:
         assert 'OpenAI' in modal_text
         assert 'Check the rule first.' in modal_text
         assert 'Check the risk first.' in modal_text
+
+    def test_investment_chat_fetches_market_context_for_position_status(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.investment.positions = [{
+                id: 'ip-crcl-status',
+                symbol: 'CRCL',
+                name: 'Circle Internet Group',
+                shares: 2,
+                avgPrice: 128.91,
+                currentPrice: 120,
+                targetPrice: 300,
+                stopPrice: 50,
+            }];
+            const originalFetch = window.fetch.bind(window);
+            window.__capturedAnalyzePayload = null;
+            window.fetch = (url, opts) => {
+                const textUrl = String(url);
+                if (textUrl.includes('/api/market/quote')) {
+                    return Promise.resolve(new Response(JSON.stringify({
+                        source: 'test-quote',
+                        requested: ['CRCL'],
+                        quotes: [{
+                            symbol: 'CRCL',
+                            name: 'Circle Internet Group',
+                            price: 131.25,
+                            changePercent: 2.4,
+                            previousClose: 128.17,
+                        }],
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                if (textUrl.includes('/api/analyze')) {
+                    window.__capturedAnalyzePayload = JSON.parse(opts.body);
+                    return Promise.resolve(new Response(JSON.stringify({
+                        content: [{ text: 'CRCL 현재가는 $131.25 기준으로 보겠습니다.' }],
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                return originalFetch(url, opts);
+            };
+            render();
+        }""")
+
+        logged_in_page.evaluate("() => continueContextChat('지금 써클 상태 어때?')")
+        logged_in_page.wait_for_function(
+            "() => window.__capturedAnalyzePayload?.system?.[0]?.text?.includes('투자 시세/보유 상태 조회 결과')",
+            timeout=8_000,
+        )
+        system_prompt = logged_in_page.evaluate("() => window.__capturedAnalyzePayload.system[0].text")
+        assert 'CRCL' in system_prompt
+        assert '131.25' in system_prompt
+        assert '실시간 시세 조회 기능이 없다' in system_prompt
+        logged_in_page.wait_for_function(
+            "() => state.investment.positions.find(p => p.symbol === 'CRCL')?.currentPrice === 131.25",
+            timeout=8_000,
+        )
 
     def test_refresh_data_from_server_updates_investment_positions(self, logged_in_page):
         self._open_investment(logged_in_page)

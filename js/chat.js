@@ -77,10 +77,23 @@ async function continueContextChat(text) {
   const topic   = isMyRecords ? state.myTopics.find(t => t.id === state.selTopic) : null;
   const student = (!isMyRecords && !isInvestment) ? state.students.find(s => s.id === state.selStudent) : null;
 
-  const investmentNewsContext = isInvestment ? await fetchInvestmentNewsContext(text) : '';
+  let investmentNewsContext = '';
+  let investmentMarketContext = '';
+  if (isInvestment) {
+    try {
+      investmentNewsContext = await fetchInvestmentNewsContext(text);
+    } catch (e) {
+      logger.warn('투자 뉴스 컨텍스트 생성 실패', e);
+    }
+    try {
+      investmentMarketContext = await fetchInvestmentMarketContext(text);
+    } catch (e) {
+      logger.warn('투자 시세 컨텍스트 생성 실패', e);
+    }
+  }
 
   // AI 역할: state.currentRole → AI_ROLE_PRESETS에서 prompt 조회. 없으면 topic.aiPrompt 폴백
-  const sysPrompt = _buildChatSysPrompt(isMyRecords, topic, student, investmentNewsContext);
+  const sysPrompt = _buildChatSysPrompt(isMyRecords, topic, student, [investmentNewsContext, investmentMarketContext].filter(Boolean).join('\n'));
 
   // 슬라이딩 윈도우: 최근 20개만 전송 (토큰 절약)
   // 장기 맥락은 topic.patternAnalysis(사용자가 저장한 분석)가 시스템 프롬프트로 대체
@@ -260,6 +273,95 @@ function shouldFetchInvestmentNews(text) {
   return /\uB274\uC2A4|\uCD5C\uC2E0|\uB3D9\uD5A5|\uACF5\uC2DC|\uBC95\uC548|\uADDC\uC81C|news|headline|filing|bill|act|regulation/.test(ask);
 }
 
+function shouldFetchInvestmentMarketContext(text) {
+  const ask = String(text || '').toLowerCase();
+  return /\uC0C1\uD0DC|\uC2DC\uC138|\uD604\uC7AC\uAC00|\uAC00\uACA9|\uC5B4\uB54C|\uD3C9\uAC00|\uC190\uC775|\uD3EC\uD2B8\uD3F4\uB9AC\uC624|status|price|quote|position|portfolio/.test(ask);
+}
+
+function inferInvestmentMarketSymbols(text) {
+  const inv = state.investment || defaultInvestmentState();
+  const raw = String(text || '').toUpperCase();
+  const lower = String(text || '').toLowerCase();
+  const known = (inv.positions || [])
+    .map(p => normalizeInvestmentMarketSymbol(p.symbol || ''))
+    .filter(Boolean);
+  const aliases = [
+    { symbols: ['CRCL'], terms: ['써클', '서클', 'circle'] },
+    { symbols: ['IREN'], terms: ['아이렌', 'iris energy'] },
+    { symbols: ['ETH-USD', 'ETH'], terms: ['이더리움', 'ether', 'ethereum'] },
+    { symbols: ['BTC-USD', 'BTC'], terms: ['비트코인', 'bitcoin'] },
+  ];
+  const aliasSymbols = aliases
+    .filter(item => item.terms.some(term => lower.includes(term)))
+    .flatMap(item => item.symbols)
+    .map(sym => normalizeInvestmentMarketSymbol(sym))
+    .filter(sym => known.includes(sym));
+  if (aliasSymbols.length) return [...new Set(aliasSymbols)].slice(0, 8);
+  const mentioned = known.filter(sym => raw.includes(sym));
+  if (mentioned.length) return [...new Set(mentioned)].slice(0, 8);
+  const explicit = [...raw.matchAll(/\b[A-Z][A-Z0-9.\-]{0,7}\b/g)]
+    .map(m => normalizeInvestmentMarketSymbol(m[0]))
+    .filter(sym => !['AI', 'API', 'USD', 'NEWS'].includes(sym));
+  if (explicit.length) return [...new Set(explicit)].slice(0, 8);
+  if (/\uB0B4|\uBCF4\uC720|\uD3EC\uD2B8\uD3F4\uB9AC\uC624/.test(text || '')) return known.slice(0, 8);
+  return known.slice(0, 5);
+}
+
+async function fetchInvestmentMarketContext(text) {
+  if (!shouldFetchInvestmentMarketContext(text)) return '';
+  const inv = state.investment = normalizeInvestmentState(state.investment);
+  const symbols = inferInvestmentMarketSymbols(text);
+  if (!symbols.length) return '';
+  const today = new Date().toISOString().split('T')[0];
+
+  let quotes = [];
+  let source = '';
+  let quoteError = '';
+  try {
+    const data = await fetchMarketQuoteData(symbols);
+    quotes = data.quotes || [];
+    source = data.source || 'market quote proxy';
+    if (quotes.length) {
+      applyInvestmentQuotes(quotes);
+      saveData({ retries: 0 });
+    }
+  } catch (e) {
+    quoteError = e.message || String(e);
+    logger.warn('투자 대화 시세 조회 실패', e);
+  }
+
+  const quoteMap = {};
+  quotes.forEach(q => {
+    if (q.symbol) quoteMap[String(q.symbol).toUpperCase()] = q;
+  });
+  const totals = investmentTotals(inv.positions);
+  const rows = symbols.map(sym => {
+    const position = (inv.positions || []).find(p => normalizeInvestmentMarketSymbol(p.symbol) === sym);
+    const quote = quoteMap[sym];
+    const current = quote?.price ?? position?.currentPrice ?? 0;
+    const avg = parseInvestmentNumber(position?.avgPrice);
+    const shares = parseInvestmentNumber(position?.shares);
+    const value = shares * parseInvestmentNumber(current);
+    const gain = value - shares * avg;
+    const gainPercent = shares && avg ? (gain / (shares * avg)) * 100 : 0;
+    const weight = totals.totalValue ? (value / totals.totalValue) * 100 : 0;
+    return [
+      `- ${sym}${position?.name ? ` (${position.name})` : ''}`,
+      `  - 보유 수량: ${shares || 0}`,
+      `  - 평균 단가: ${avg || 0}`,
+      `  - 조회/기록 현재가: ${current || '미조회'}`,
+      quote?.changePercent != null ? `  - 당일 변동률: ${Number(quote.changePercent).toFixed(2)}%` : '',
+      shares ? `  - 평가액: $${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}, 평가손익: ${gain >= 0 ? '+' : '-'}$${Math.abs(gain).toLocaleString(undefined, { maximumFractionDigits: 2 })} (${gainPercent >= 0 ? '+' : ''}${gainPercent.toFixed(2)}%)` : '',
+      weight ? `  - 포트폴리오 비중: ${weight.toFixed(1)}%` : '',
+      position?.targetPrice ? `  - 목표가: ${position.targetPrice}` : '',
+      position?.stopPrice ? `  - 손절가: ${position.stopPrice}` : '',
+      position?.thesis ? `  - 투자 논리: ${position.thesis}` : '',
+    ].filter(Boolean).join('\n');
+  }).join('\n');
+
+  return `\n\n[투자 시세/보유 상태 조회 결과]\n- 조회 기준일: ${today}\n- 조회 대상: ${symbols.join(', ')}\n- 시세 출처: ${source || (quoteError ? '조회 실패' : '기록된 현재가')}\n${quoteError ? `- 시세 조회 오류: ${quoteError}\n` : ''}${rows}\n\n시세 응답 규칙:\n- 위 [투자 시세/보유 상태 조회 결과]가 있으면 "실시간 시세 조회 기능이 없다"고 말하지 않는다.\n- 현재가가 조회되었으면 현재가, 평단, 손익, 목표가/손절가와의 거리, 원칙상 확인할 점을 짧게 답한다.\n- 현재가 조회가 실패했더라도 보유 기록의 현재가가 있으면 그 기준이라고 명시하고 해석한다.\n- 매수/매도 단정이나 수익률 보장은 하지 않는다.`;
+}
+
 function inferInvestmentNewsSymbols(text) {
   const inv = state.investment || defaultInvestmentState();
   const raw = (text || '').toUpperCase();
@@ -348,6 +450,8 @@ function _buildChatSysPrompt(isMyRecords, topic, student, extraContext = '') {
     return `당신은 개인 투자자의 이성적 매매 통제 파트너입니다.
 목표는 수익률 예측이나 종목 추천이 아니라, 사용자가 사전에 정한 원칙을 기억하고 감정적 매매를 줄이는 것입니다.
 감정 상태를 묻지 말고, 원칙·숫자·기록·뉴스 해석을 기준으로 짧고 분명하게 돕습니다.
+앱은 '/api/market/quote'를 통해 보유 종목 현재가와 지수를 조회할 수 있습니다. 시세/상태 컨텍스트가 제공된 경우 절대 "실시간 시세 조회 기능이 없다"고 말하지 않습니다.
+사용자가 "상태 어때", "현재 어때", "시세", "가격", "보유 종목 어때"처럼 물으면 현재가, 평단, 평가손익, 목표가/손절가 거리, 원칙상 확인할 점을 우선 답합니다.
 사용자가 "뉴스 동향에 기록", "투자 원칙으로 저장", "매매 기록으로 남겨"처럼 말하면 저장될 수 있게 제목과 본문을 정돈해서 답합니다.
 저장에 필요한 정보가 부족하면 바로 저장하지 말고 딱 필요한 항목만 짧게 물어봅니다.
 매매 기록에 필요한 최소 항목은 종목, 매수/매도/보유, 이유입니다. 가능하면 수량, 가격, 손절가, 목표가도 확인합니다.
