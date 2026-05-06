@@ -129,14 +129,14 @@ function getInvestmentPortfolioSlices(positions) {
 
 function renderModalInvestmentPortfolio() {
   const inv = state.investment = normalizeInvestmentState(state.investment);
-  const slices = getInvestmentPortfolioSlices(inv.positions);
+  const slices = getInvestmentPortfolioSlices(inv.positions).sort((a, b) => b.value - a.value);
   const totals = investmentTotals(inv.positions);
   const total = totals.totalValue;
   if (!slices.length) {
     return `
       <button class="modal-close" onclick="closeModal()">x</button>
       <div class="modal-title">포트폴리오</div>
-      <div class="investment-empty">현재가와 수량이 있는 종목을 등록하면 원형 차트로 비중을 볼 수 있어요.</div>`;
+      <div class="investment-empty">현재가와 수량이 있는 종목을 등록하면 포트폴리오 리포트로 상태를 볼 수 있어요.</div>`;
   }
 
   let cursor = 0;
@@ -147,16 +147,51 @@ function renderModalInvestmentPortfolio() {
     return `${p.color} ${start.toFixed(2)}deg ${end.toFixed(2)}deg`;
   }).join(', ');
 
+  const top = slices[0];
+  const gainRows = slices.map(p => ({ ...p, gain: p.value - p.cost, gainPercent: p.cost ? ((p.value - p.cost) / p.cost) * 100 : 0 }));
+  const best = [...gainRows].sort((a, b) => b.gain - a.gain)[0];
+  const worst = [...gainRows].sort((a, b) => a.gain - b.gain)[0];
+  const staleCount = slices.filter(p => !p.marketUpdatedAt && !p.lastMarketUpdatedAt).length;
+  const concentrationLabel = top.weight >= 50 ? '고집중' : top.weight >= 30 ? '집중' : '분산';
+  const concentrationTone = top.weight >= 50 ? 'block' : top.weight >= 30 ? 'watch' : 'allow';
+  const alerts = buildInvestmentRiskAlerts(inv.positions, inv.rules).slice(0, 4);
+  const ruleSummary = inv.rules?.coreRules ? inv.rules.coreRules : `종목별 최대 비중 ${inv.rules?.maxPositionWeight || 30}% · 쿨다운 ${inv.rules?.cooldownMinutes || 30}분`;
+  const updatedAt = inv.market?.fetchedAt || slices.map(p => p.marketUpdatedAt || p.lastMarketUpdatedAt).filter(Boolean).sort().at(-1) || '';
+
   return `
     <button class="modal-close" onclick="closeModal()">x</button>
-    <div class="modal-title">포트폴리오</div>
+    <div class="modal-title">포트폴리오 리포트</div>
     <div class="investment-portfolio-modal" id="investment-portfolio-modal">
       <div class="investment-portfolio-overview">
         <div><span>총 평가액</span><strong>${formatMoney(totals.totalValue)}</strong></div>
         <div><span>총 매입금</span><strong>${formatMoney(totals.totalCost)}</strong></div>
         <div><span>평가손익</span><strong class="${totals.totalGain >= 0 ? 'up' : 'down'}">${formatMoneySigned(totals.totalGain)}</strong></div>
         <div><span>수익률</span><strong class="${totals.totalGain >= 0 ? 'up' : 'down'}">${formatPercent(totals.totalGainPercent)}</strong></div>
+        <div><span>최대 보유</span><strong>${esc(top.symbol || '-')} ${top.weight.toFixed(1)}%</strong></div>
+        <div><span>집중도</span><strong class="${concentrationTone}">${concentrationLabel}</strong></div>
+        <div><span>가격 상태</span><strong>${staleCount ? `${staleCount}개 갱신 필요` : '최신'}</strong></div>
+        <div><span>위험 신호</span><strong>${alerts.length}개</strong></div>
       </div>
+
+      <section class="investment-portfolio-status">
+        <div>
+          <span class="investment-badge ${concentrationTone}">${concentrationLabel}</span>
+          <h4>현재 상태</h4>
+          <p>최대 보유 종목은 <strong>${esc(top.symbol || '-')}</strong>이고 포트폴리오의 <strong>${top.weight.toFixed(1)}%</strong>를 차지합니다. ${top.weight >= 50 ? '단일 종목 변동성이 전체 성과를 크게 흔드는 구조입니다.' : top.weight >= 30 ? '핵심 종목 중심 구조라 비중 점검이 필요합니다.' : '상대적으로 분산된 구조입니다.'}</p>
+          <p>가격 갱신: ${updatedAt ? formatDateTimeShort(updatedAt) : '기록 없음'}${staleCount ? ` · ${staleCount}개 종목은 현재가 갱신이 필요합니다.` : ''}</p>
+        </div>
+        <div>
+          <h4>투자 원칙 체크</h4>
+          <p>${esc(ruleSummary)}</p>
+          <p>최대 비중 원칙 ${inv.rules?.maxPositionWeight || 30}% 기준으로 ${top.weight > (inv.rules?.maxPositionWeight || 30) ? '초과 상태입니다.' : '허용 범위입니다.'}</p>
+        </div>
+        <div>
+          <h4>성과 기여</h4>
+          <p>최대 플러스: <strong>${esc(best.symbol || '-')}</strong> ${formatMoneySigned(best.gain)} (${formatPercent(best.gainPercent)})</p>
+          <p>최대 마이너스: <strong>${esc(worst.symbol || '-')}</strong> ${formatMoneySigned(worst.gain)} (${formatPercent(worst.gainPercent)})</p>
+        </div>
+      </section>
+
       <div class="investment-pie-wrap">
         <div class="investment-pie-chart" style="background: conic-gradient(${gradient});">
           <div>
@@ -166,10 +201,16 @@ function renderModalInvestmentPortfolio() {
           </div>
         </div>
       </div>
+
       <div class="investment-portfolio-list">
+        <div class="investment-portfolio-list-head">
+          <strong>보유 종목 분석</strong>
+          <span>비중 · 평가액 · 손익 · 가격 상태</span>
+        </div>
         ${slices.map(p => {
           const gain = p.value - p.cost;
           const gainPercent = p.cost ? (gain / p.cost) * 100 : 0;
+          const priceFresh = p.marketUpdatedAt || p.lastMarketUpdatedAt;
           return `<div class="investment-portfolio-row">
             <span class="investment-dot" style="background:${p.color}"></span>
             <div class="investment-portfolio-name">
@@ -178,11 +219,16 @@ function renderModalInvestmentPortfolio() {
             </div>
             <em>${p.weight.toFixed(1)}%</em>
             <b>${formatMoney(p.value)}</b>
-            <small class="investment-portfolio-detail">수량 ${formatShares(p.shares)} · 평단 ${formatMoney(p.avgPrice)} · 현재 ${formatMoney(p.currentPrice)}</small>
-            <small class="investment-portfolio-detail ${gain >= 0 ? 'up' : 'down'}">손익 ${formatMoneySigned(gain)} · ${formatPercent(gainPercent)}</small>
+            <small class="investment-portfolio-detail">수량 ${formatShares(p.shares)} · 평단 ${formatMoney(p.avgPrice)} · 현재 ${formatMoney(p.currentPrice)} · 매입금 ${formatMoney(p.cost)}</small>
+            <small class="investment-portfolio-detail ${gain >= 0 ? 'up' : 'down'}">손익 ${formatMoneySigned(gain)} · ${formatPercent(gainPercent)} · ${priceFresh ? `갱신 ${formatDateTimeShort(priceFresh)}` : '현재가 갱신 필요'}</small>
           </div>`;
         }).join('')}
       </div>
+
+      <section class="investment-portfolio-alerts">
+        <h4>위험 신호</h4>
+        ${alerts.length ? alerts.map(a => `<div class="investment-alert ${esc(a.severity || 'watch')}"><strong>${esc(a.title)}</strong><p>${esc(a.body)}</p></div>`).join('') : '<p>현재 등록된 목표가·손절가·비중 기준에서 즉시 표시할 위험 신호는 없습니다.</p>'}
+      </section>
     </div>`;
 }
 function renderInvestmentPositionForm() {
@@ -486,6 +532,18 @@ function formatMoneySigned(value) {
 function formatShares(value) {
   const n = parseInvestmentNumber(value);
   return n.toLocaleString(undefined, { maximumFractionDigits: 4 });
+}
+
+function formatDateTimeShort(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value).slice(0, 16);
+  return d.toLocaleString('ko-KR', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function formatPercent(value) {

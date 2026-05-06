@@ -3649,7 +3649,7 @@ body { height: var(--app-height, 100dvh); }
 }
 
 .modal-box.modal-investment-portfolio {
-  width: min(900px, 94vw);
+  width: min(1080px, 95vw);
   padding: 26px;
 }
 
@@ -3677,6 +3677,48 @@ body { height: var(--app-height, 100dvh); }
 .investment-portfolio-overview strong {
   font-size: 16px;
   color: var(--color-text-primary);
+}
+
+.investment-portfolio-overview .allow { color: #0F6E56; }
+.investment-portfolio-overview .watch { color: #B45309; }
+.investment-portfolio-overview .block { color: #B91C1C; }
+
+.investment-portfolio-status,
+.investment-portfolio-alerts {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 10px;
+}
+
+.investment-portfolio-status {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.investment-portfolio-status > div,
+.investment-portfolio-alerts {
+  border: 0.5px solid var(--color-border);
+  border-radius: 8px;
+  padding: 13px;
+  background: var(--color-bg-secondary);
+}
+
+.investment-portfolio-status h4,
+.investment-portfolio-alerts h4 {
+  font-size: 13px;
+  margin: 0 0 8px;
+}
+
+.investment-portfolio-status p,
+.investment-portfolio-alerts p {
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 0 0 6px;
+  color: var(--color-text-secondary);
+}
+
+.investment-portfolio-status p:last-child,
+.investment-portfolio-alerts p:last-child {
+  margin-bottom: 0;
 }
 
 .investment-pie-wrap {
@@ -3725,6 +3767,24 @@ body { height: var(--app-height, 100dvh); }
 .investment-portfolio-list {
   display: grid;
   gap: 8px;
+}
+
+.investment-portfolio-list-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 6px;
+  border-bottom: 0.5px solid var(--color-border);
+}
+
+.investment-portfolio-list-head strong {
+  font-size: 13px;
+}
+
+.investment-portfolio-list-head span {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
 }
 
 .investment-portfolio-row {
@@ -3877,6 +3937,10 @@ body { height: var(--app-height, 100dvh); }
 
   .investment-portfolio-overview {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .investment-portfolio-status {
+    grid-template-columns: 1fr;
   }
 
   .investment-portfolio-row {

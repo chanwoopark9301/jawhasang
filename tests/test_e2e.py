@@ -278,7 +278,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260506-02');
+            const res = await fetch('/js/data.js?v=20260506-03');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -653,6 +653,7 @@ class TestInvestmentPartner:
                 shares: '1,700',
                 avgPrice: '46.06',
                 currentPrice: 58,
+                marketUpdatedAt: '2026-05-06T04:00:00.000Z',
             }, {
                 id: 'ip-chart-2',
                 symbol: 'AAPL',
@@ -673,6 +674,14 @@ class TestInvestmentPartner:
         assert '$78,342' in modal_text
         assert '1,700' in modal_text
         assert '99.9%' in modal_text
+        assert '포트폴리오 리포트' in modal_text
+        assert '현재 상태' in modal_text
+        assert '투자 원칙 체크' in modal_text
+        assert '성과 기여' in modal_text
+        assert '최대 보유' in modal_text
+        assert '고집중' in modal_text
+        assert '위험 신호' in modal_text
+        assert '현재가 갱신 필요' in modal_text
         logged_in_page.locator('.modal-close').click()
 
         logged_in_page.locator('#investment-menu-positions').click()
