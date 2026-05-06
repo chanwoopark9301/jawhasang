@@ -61,6 +61,7 @@ function buildModalHTML(id, data) {
     case 'investment-rules':     return renderModalInvestmentRules();
     case 'investment-decisions': return renderModalInvestmentDecisions();
     case 'investment-news':      return renderModalInvestmentNews();
+    case 'investment-timeline':  return renderModalInvestmentTimeline();
     default:              return `<p>알 수 없는 팝업: ${esc(id)}</p>`;
   }
 }

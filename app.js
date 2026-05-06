@@ -12,4 +12,5 @@
    ============================================= */
 
 loadData();
+setupDataAutoSync();
 _initVisualViewport(); // iOS 키보드 대응 (panels.js)

@@ -146,14 +146,18 @@ function saveInvestmentChatArtifacts(userText, aiText) {
   const content = (aiText || '').trim();
   if (!ask || !content) return;
   const today = new Date().toISOString().split('T')[0];
+  const wantsSave = /기록|저장|추가|반영|설정|정해|남겨|수정/.test(ask);
+  if (!wantsSave) return;
 
-  if (ask.includes('뉴스 동향') && (ask.includes('기록') || ask.includes('저장'))) {
+  const symbol = inferInvestmentSymbol(ask);
+  const lower = ask.toLowerCase();
+  if (/뉴스|동향|공시|기사|news|headline|filing/.test(ask)) {
     state.investment.events.push({
       id: 'ie' + Date.now(),
       date: today,
       type: 'news',
-      symbol: inferInvestmentSymbol(ask),
-      title: `${inferInvestmentSymbol(ask) || '투자'} 뉴스 동향`,
+      symbol,
+      title: `${symbol || '투자'} 뉴스 동향`,
       body: content,
       severity: 'info',
       linkedDecisionId: null,
@@ -165,15 +169,83 @@ function saveInvestmentChatArtifacts(userText, aiText) {
     return;
   }
 
-  if (ask.includes('투자 원칙') && (ask.includes('설정') || ask.includes('세워') || ask.includes('저장') || ask.includes('정해'))) {
+  if (/투자\s*원칙|원칙|매매\s*원칙|방향성|체크리스트|리스크/.test(ask)) {
     const prev = state.investment.rules.coreRules || '';
     state.investment.rules.coreRules = [prev, content].filter(Boolean).join('\n\n');
     saveData();
     showToast('투자 원칙에 반영했어요.');
     renderRightPanel();
+    return;
+  }
+
+  if (/매매|거래|매수|매도|추가매수|분할|진입|청산|trade|buy|sell/.test(lower + ask)) {
+    const action = inferInvestmentAction(ask);
+    const position = findInvestmentPositionFromText(ask, symbol);
+    const decision = {
+      id: 'id' + Date.now(),
+      createdAt: new Date().toISOString(),
+      symbol: symbol || position?.symbol || '미지정',
+      action,
+      context: 'chat',
+      setup: /충동/.test(ask) ? 'impulse' : 'planned',
+      timeframe: 'swing',
+      reason: ask,
+      invalidation: '',
+      plannedStop: extractLabeledNumber(ask, /(손절|스탑|stop)/),
+      plannedTarget: extractLabeledNumber(ask, /(목표|익절|target)/),
+      riskReward: 0,
+      orderType: 'limit',
+      checklist: { thesis: false, risk: false, size: false, cooldown: false },
+      verdict: 'journal',
+      label: '대화 기록',
+      summary: content,
+      findings: [],
+      nextSteps: [],
+      tradeShares: extractLabeledNumber(ask, /(수량|주|개)/),
+      tradePrice: extractLabeledNumber(ask, /(가격|체결|단가|price)/),
+    };
+    state.investment.decisions.push(decision);
+    state.investment.events.push({
+      id: 'ie' + Date.now(),
+      date: today,
+      type: 'trade-note',
+      symbol: decision.symbol,
+      title: `${decision.symbol} ${investmentActionLabel(action)} 기록`,
+      body: content,
+      severity: 'info',
+      linkedDecisionId: decision.id,
+      linkedRecordId: null,
+    });
+    saveData();
+    showToast('매매 기록에 남겼어요.');
+    renderRightPanel();
   }
 }
 
+function inferInvestmentAction(text) {
+  const raw = String(text || '').toLowerCase();
+  if (/추가매수|물타기|add/.test(raw)) return 'add';
+  if (/매도|청산|익절|손절|sell/.test(raw)) return 'sell';
+  if (/보유|홀드|hold/.test(raw)) return 'hold';
+  return 'buy';
+}
+
+function findInvestmentPositionFromText(text, symbol = '') {
+  const raw = String(text || '').toUpperCase();
+  const target = String(symbol || '').toUpperCase();
+  return (state.investment?.positions || []).find(p => {
+    const sym = String(p.symbol || '').toUpperCase();
+    const name = String(p.name || '').toUpperCase();
+    return (target && sym === target) || (sym && raw.includes(sym)) || (name && raw.includes(name));
+  }) || null;
+}
+
+function extractLabeledNumber(text, labelRegex) {
+  const raw = String(text || '');
+  const m = raw.match(new RegExp(`${labelRegex.source}[^0-9-]*([0-9][0-9,.]*)`, 'i'));
+  if (!m) return 0;
+  return parseInvestmentNumber(m[1]);
+}
 function inferInvestmentSymbol(text) {
   const known = (state.investment?.positions || []).find(p =>
     p.symbol && text.toUpperCase().includes(String(p.symbol).toUpperCase())
@@ -277,6 +349,9 @@ function _buildChatSysPrompt(isMyRecords, topic, student, extraContext = '') {
 목표는 수익률 예측이나 종목 추천이 아니라, 사용자가 사전에 정한 원칙을 기억하고 감정적 매매를 줄이는 것입니다.
 감정 상태를 묻지 말고, 원칙·숫자·기록·뉴스 해석을 기준으로 짧고 분명하게 돕습니다.
 사용자가 "뉴스 동향에 기록", "투자 원칙으로 저장", "매매 기록으로 남겨"처럼 말하면 저장될 수 있게 제목과 본문을 정돈해서 답합니다.
+저장에 필요한 정보가 부족하면 바로 저장하지 말고 딱 필요한 항목만 짧게 물어봅니다.
+매매 기록에 필요한 최소 항목은 종목, 매수/매도/보유, 이유입니다. 가능하면 수량, 가격, 손절가, 목표가도 확인합니다.
+투자 원칙은 사용자의 말에서 원칙 문장을 만들되, 기준이 애매하면 "어느 조건에서 적용할지"를 먼저 물어봅니다.
 
 투자 원칙:
 - 하루 손실 한도: ${inv.rules.dailyLossLimit}%

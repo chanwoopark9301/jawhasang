@@ -310,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260506-14');
+            const res = await fetch('/js/data.js?v=20260506-15');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -764,7 +764,7 @@ class TestInvestmentPartner:
         assert '주문 전 확인' in journal_text
         logged_in_page.locator('.modal-close').click()
 
-    def test_investment_currency_toggle_changes_display_and_position_input(self, logged_in_page):
+    def test_investment_krw_auxiliary_display_keeps_usd_inputs(self, logged_in_page):
         self._open_investment(logged_in_page)
         logged_in_page.evaluate("""() => {
             state.investment.positions = [{
@@ -775,7 +775,6 @@ class TestInvestmentPartner:
                 avgPrice: 100,
                 currentPrice: 120,
             }];
-            state.investment.displayCurrency = 'USD';
             state.investment.usdKrwRate = 1300;
             window.apiSaveInvestmentPosition = async (position) => ({
                 ok: true,
@@ -797,27 +796,94 @@ class TestInvestmentPartner:
 
         logged_in_page.locator('#investment-menu-portfolio').click()
         logged_in_page.wait_for_selector('#investment-portfolio-modal', timeout=8_000)
-        assert '$240' in logged_in_page.locator('#modal-box').inner_text()
-
-        logged_in_page.locator('#investment-currency-toggle-modal').click()
-        logged_in_page.wait_for_function("() => state.investment.displayCurrency === 'KRW'", timeout=8_000)
-        logged_in_page.wait_for_function(
-            "() => document.getElementById('modal-box')?.innerText.includes('₩312,000')",
-            timeout=8_000,
-        )
-        assert '₩312,000' in logged_in_page.locator('#modal-box').inner_text()
-        assert '평균 단가 (원)' in logged_in_page.locator('#ip-avg').get_attribute('placeholder')
+        modal_text = logged_in_page.locator('#modal-box').inner_text()
+        assert '$240' in modal_text
+        assert '₩312,000' in modal_text
+        assert logged_in_page.locator('#investment-currency-toggle-modal').count() == 0
+        assert '($)' in logged_in_page.locator('#ip-avg').get_attribute('placeholder')
 
         logged_in_page.locator('#investment-manage-tools summary').click()
-        logged_in_page.locator('#ip-symbol').fill('KRW1')
-        logged_in_page.locator('#ip-name').fill('Krw Test')
+        logged_in_page.locator('#ip-symbol').fill('USD1')
+        logged_in_page.locator('#ip-name').fill('Usd Test')
         logged_in_page.locator('#ip-shares').fill('3')
-        logged_in_page.locator('#ip-avg').fill('13000')
+        logged_in_page.locator('#ip-avg').fill('80')
         logged_in_page.locator('#investment-add-position').click()
         logged_in_page.wait_for_function(
-            "() => Math.round(state.investment.positions.at(-1).avgPrice * 100) / 100 === 10",
+            "() => Math.round(state.investment.positions.at(-1).avgPrice * 100) / 100 === 80",
             timeout=8_000,
         )
+
+    def test_investment_timeline_modal_lists_events_and_decisions(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.investment.events = [{
+                id: 'ie-timeline-news',
+                date: '2026-05-06',
+                type: 'news',
+                symbol: 'CRCL',
+                title: 'Circle news',
+                body: 'Stablecoin policy update',
+                severity: 'info',
+            }];
+            state.investment.decisions = [{
+                id: 'id-timeline',
+                createdAt: '2026-05-05T10:00:00',
+                symbol: 'IREN',
+                action: 'buy',
+                setup: 'planned',
+                timeframe: 'swing',
+                verdict: 'journal',
+                label: 'Chat note',
+                summary: 'Planned entry memo',
+            }];
+            render();
+        }""")
+
+        logged_in_page.locator('#investment-menu-timeline').click()
+        logged_in_page.wait_for_selector('.investment-timeline', timeout=8_000)
+        timeline_text = logged_in_page.locator('#modal-box').inner_text()
+        assert 'CRCL' in timeline_text
+        assert 'Circle news' in timeline_text
+        assert 'IREN' in timeline_text
+        assert 'Planned entry memo' in timeline_text
+
+    def test_refresh_data_from_server_updates_investment_positions(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = (url, opts) => {
+                if (String(url).includes('/api/data')) {
+                    return Promise.resolve(new Response(JSON.stringify({
+                        students: [],
+                        sessions: [],
+                        my_topics: [],
+                        my_records: [],
+                        investment: {
+                            ...state.investment,
+                            positions: [{
+                                id: 'ip-sync',
+                                symbol: 'SYNC',
+                                name: 'Synced Position',
+                                shares: 4,
+                                avgPrice: 10,
+                                currentPrice: 12,
+                            }],
+                        },
+                    }), {
+                        status: 200,
+                        headers: { 'Content-Type': 'application/json' },
+                    }));
+                }
+                return originalFetch(url, opts);
+            };
+        }""")
+
+        logged_in_page.evaluate("() => refreshDataFromServer({ force: true })")
+        logged_in_page.wait_for_function(
+            "() => state.investment.positions.some(p => p.symbol === 'SYNC')",
+            timeout=8_000,
+        )
+        assert 'SYNC' in logged_in_page.locator('#investment-view').inner_text()
 
     def test_rule_engine_blocks_overweight_add(self, logged_in_page):
         logged_in_page.wait_for_load_state('networkidle')

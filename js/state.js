@@ -100,7 +100,6 @@ function defaultInvestmentState() {
       source: '',
     },
     alerts: [],
-    displayCurrency: 'USD',
     usdKrwRate: 1350,
   };
 }
@@ -129,7 +128,6 @@ function normalizeInvestmentState(investment) {
     chat: Array.isArray(src.chat) ? src.chat : [],
     market: src.market && typeof src.market === 'object' ? src.market : base.market,
     alerts: Array.isArray(src.alerts) ? src.alerts : [],
-    displayCurrency: src.displayCurrency === 'KRW' ? 'KRW' : 'USD',
     usdKrwRate: parseInvestmentNumber(src.usdKrwRate) || base.usdKrwRate,
   };
 }

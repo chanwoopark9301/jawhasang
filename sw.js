@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v63'; // Context hub includes investment
+const CACHE_NAME = 'jip-v65'; // Investment module split and sync
 
 const STATIC_ASSETS = [
   '/style.css',
@@ -25,11 +25,14 @@ const STATIC_ASSETS = [
   '/js/panels.js',
   '/js/chat.js',
   '/js/investment-rules.js',
+  '/js/investment-format.js',
+  '/js/investment-portfolio.js',
   '/js/investment-api.js',
   '/js/market-data.js',
   '/js/render-sidebar.js',
   '/js/render-calendar.js',
   '/js/render-investment.js',
+  '/js/investment-actions.js',
   '/js/verbatim-editor.js',
   '/js/render-aipanel.js',
   '/js/render-main.js',

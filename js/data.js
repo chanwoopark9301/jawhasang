@@ -12,8 +12,8 @@
 
 async function loadData() {
   logger.info('데이터 로드 시작');
+  const startedAt = performance.now();
 
-  // 1단계: localStorage 캐시로 즉시 렌더 (체감 속도 개선)
   const cached = _loadFromLocalCache();
   if (cached) {
     state.students  = cached.students  || [];
@@ -25,50 +25,115 @@ async function loadData() {
   } else {
     _useSampleData();
   }
-  render(); // 초기 상태가 이미 welcome이므로 홈 화면이 그대로 표시됨
-  _hideSplash(); // 첫 render() 완료 후 스플래시 제거
 
-  // 2단계: 서버에서 최신 데이터 백그라운드 수신 후 재렌더
+  const beforeServerSignature = _dataSignature();
+  render();
+  _hideSplash();
+
   try {
-    const res = await fetch('/api/data', {
-      headers: { 'Accept': 'application/json' },
-      credentials: 'same-origin',
-    });
+    const res = await _fetchDataFromServer();
     if (res.ok) {
       let data;
       try {
-        if (!_isJSONResponse(res)) throw new Error('non-json response');
-        data = await res.json();
+        data = await _readDataResponse(res);
       } catch (parseErr) {
-        logger.warn('서버 데이터 응답이 JSON이 아님 — 로컬 캐시 유지', parseErr);
+        logger.warn('서버 데이터 응답이 JSON이 아님 → 로컬 캐시 유지', parseErr);
         return;
       }
 
       const isNew = !data.students || !data.students.length;
-      state.students  = data.students  && data.students.length  ? data.students  : SAMPLE_STUDENTS;
-      state.sessions  = data.sessions  && data.sessions.length  ? data.sessions  : SAMPLE_SESSIONS;
-      state.myTopics  = data.my_topics  && data.my_topics.length  ? data.my_topics  : SAMPLE_TOPICS;
-      state.myRecords = data.my_records && data.my_records.length ? data.my_records : SAMPLE_RECORDS;
-      state.investment = normalizeInvestmentState(data.investment);
-
+      _applyServerData(data);
       logger.info('서버 데이터 수신 완료 (학생 %d명, 회기 %d건)', state.students.length, state.sessions.length);
       _saveToLocalCache();
 
       if (isNew) {
-        logger.info('신규 사용자 — 샘플 데이터 저장');
+        logger.info('신규 사용자 샘플 데이터 저장');
         saveData();
       }
-      render(); // 최신 데이터로 재렌더
+      if (beforeServerSignature !== _dataSignature()) render();
     } else {
       logger.warn('서버 데이터 수신 생략: HTTP %d', res.status);
     }
   } catch (e) {
-    logger.warn('서버 연결 실패 — 캐시 데이터 유지', e);
+    logger.warn('서버 연결 실패 → 캐시 데이터 유지', e);
     if (!cached) _useSampleData();
+  } finally {
+    logger.info('초기 데이터 로드 완료: %dms', Math.round(performance.now() - startedAt));
   }
 }
 
 const _CACHE_KEY = 'jip_data_cache';
+let _lastSyncAt = 0;
+let _syncInFlight = false;
+
+async function refreshDataFromServer(options = {}) {
+  const minInterval = Number.isFinite(options.minInterval) ? options.minInterval : 5000;
+  const now = Date.now();
+  if (_syncInFlight) return false;
+  if (!options.force && now - _lastSyncAt < minInterval) return false;
+  _syncInFlight = true;
+  _lastSyncAt = now;
+
+  try {
+    const before = _dataSignature();
+    const res = await _fetchDataFromServer();
+    if (!res.ok) {
+      logger.warn('서버 동기화 생략: HTTP %d', res.status);
+      return false;
+    }
+    const data = await _readDataResponse(res);
+    _applyServerData(data);
+    _saveToLocalCache();
+    const changed = before !== _dataSignature();
+    if (changed && options.render !== false) render();
+    if (changed) logger.info('서버 최신 데이터로 동기화 완료');
+    return changed;
+  } catch (e) {
+    logger.warn('서버 동기화 실패', e);
+    return false;
+  } finally {
+    _syncInFlight = false;
+  }
+}
+
+function setupDataAutoSync() {
+  const sync = () => refreshDataFromServer({ minInterval: 15000 }).catch(() => {});
+  window.addEventListener('focus', sync);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) sync();
+  });
+}
+
+function _fetchDataFromServer() {
+  return fetch('/api/data', {
+    headers: { 'Accept': 'application/json' },
+    credentials: 'same-origin',
+    cache: 'no-store',
+  });
+}
+
+async function _readDataResponse(res) {
+  if (!_isJSONResponse(res)) throw new Error('non-json response');
+  return res.json();
+}
+
+function _applyServerData(data) {
+  state.students  = data.students  && data.students.length  ? data.students  : SAMPLE_STUDENTS;
+  state.sessions  = data.sessions  && data.sessions.length  ? data.sessions  : SAMPLE_SESSIONS;
+  state.myTopics  = data.my_topics  && data.my_topics.length  ? data.my_topics  : SAMPLE_TOPICS;
+  state.myRecords = data.my_records && data.my_records.length ? data.my_records : SAMPLE_RECORDS;
+  state.investment = normalizeInvestmentState(data.investment);
+}
+
+function _dataSignature() {
+  return JSON.stringify({
+    students: state.students,
+    sessions: state.sessions,
+    myTopics: state.myTopics,
+    myRecords: state.myRecords,
+    investment: state.investment,
+  });
+}
 
 function _loadFromLocalCache() {
   try {
