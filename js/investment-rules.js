@@ -3,12 +3,27 @@
    의존성: state.js
    ============================================= */
 
+function parseInvestmentNumber(value) {
+  if (value == null || value === '') return 0;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  const cleaned = String(value).trim().replace(/,/g, '');
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function investmentPositionValue(position, priceKey = 'currentPrice') {
+  const shares = parseInvestmentNumber(position?.shares);
+  const price = parseInvestmentNumber(position?.[priceKey]);
+  return shares * price;
+}
+
 function investmentTotals(positions) {
   const list = Array.isArray(positions) ? positions : [];
-  const totalValue = list.reduce((sum, p) => {
-    return sum + (Number(p.shares) || 0) * (Number(p.currentPrice) || 0);
-  }, 0);
-  return { totalValue };
+  const totalValue = list.reduce((sum, p) => sum + investmentPositionValue(p, 'currentPrice'), 0);
+  const totalCost = list.reduce((sum, p) => sum + investmentPositionValue(p, 'avgPrice'), 0);
+  const totalGain = totalValue - totalCost;
+  const totalGainPercent = totalCost ? (totalGain / totalCost) * 100 : 0;
+  return { totalValue, totalCost, totalGain, totalGainPercent };
 }
 
 function buildInvestmentRiskAlerts(positions, rules) {
@@ -19,11 +34,11 @@ function buildInvestmentRiskAlerts(positions, rules) {
 
   list.forEach(p => {
     const symbol = p.symbol || '종목';
-    const price = Number(p.currentPrice) || 0;
-    const target = Number(p.targetPrice) || 0;
-    const stop = Number(p.stopPrice) || 0;
-    const change = Number(p.changePercent) || 0;
-    const value = (Number(p.shares) || 0) * price;
+    const price = parseInvestmentNumber(p.currentPrice);
+    const target = parseInvestmentNumber(p.targetPrice);
+    const stop = parseInvestmentNumber(p.stopPrice);
+    const change = parseInvestmentNumber(p.changePercent);
+    const value = investmentPositionValue(p, 'currentPrice');
     const weight = totals.totalValue ? (value / totals.totalValue) * 100 : 0;
 
     if (target > 0 && price >= target * 0.97) {
@@ -98,9 +113,9 @@ function evaluateInvestmentDecision({ position, rules, totals, action, context, 
   const findings = [];
   let score = 0;
 
-  const avg = Number(p.avgPrice) || 0;
-  const cur = Number(p.currentPrice) || 0;
-  const shares = Number(p.shares) || 0;
+  const avg = parseInvestmentNumber(p.avgPrice);
+  const cur = parseInvestmentNumber(p.currentPrice);
+  const shares = parseInvestmentNumber(p.shares);
   const ret = avg > 0 ? ((cur - avg) / avg) * 100 : 0;
   const value = shares * cur;
   const weight = t.totalValue ? (value / t.totalValue) * 100 : 0;

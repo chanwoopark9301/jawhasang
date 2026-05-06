@@ -94,9 +94,9 @@ function renderInvestmentPositions(positions, totals) {
   }
   return `<div class="investment-position-list">
     ${positions.map(p => {
-      const value = (Number(p.shares) || 0) * (Number(p.currentPrice) || 0);
+      const value = investmentPositionValue(p, 'currentPrice');
       const weight = totals.totalValue ? (value / totals.totalValue) * 100 : 0;
-      const hasPrice = p.currentPrice != null && Number(p.currentPrice) > 0;
+      const hasPrice = p.currentPrice != null && parseInvestmentNumber(p.currentPrice) > 0;
       return `<div class="investment-position">
         <div>
           <strong>${esc(p.symbol || '-')}</strong>
@@ -115,7 +115,11 @@ function getInvestmentPortfolioSlices(positions) {
   const rows = (Array.isArray(positions) ? positions : [])
     .map((p, index) => ({
       ...p,
-      value: (Number(p.shares) || 0) * (Number(p.currentPrice) || 0),
+      shares: parseInvestmentNumber(p.shares),
+      avgPrice: parseInvestmentNumber(p.avgPrice),
+      currentPrice: parseInvestmentNumber(p.currentPrice),
+      cost: investmentPositionValue(p, 'avgPrice'),
+      value: investmentPositionValue(p, 'currentPrice'),
       color: investmentSliceColor(index),
     }))
     .filter(p => p.value > 0);
@@ -126,10 +130,11 @@ function getInvestmentPortfolioSlices(positions) {
 function renderModalInvestmentPortfolio() {
   const inv = state.investment = normalizeInvestmentState(state.investment);
   const slices = getInvestmentPortfolioSlices(inv.positions);
-  const total = slices.reduce((sum, p) => sum + p.value, 0);
+  const totals = investmentTotals(inv.positions);
+  const total = totals.totalValue;
   if (!slices.length) {
     return `
-      <button class="modal-close" onclick="closeModal()">×</button>
+      <button class="modal-close" onclick="closeModal()">x</button>
       <div class="modal-title">포트폴리오</div>
       <div class="investment-empty">현재가와 수량이 있는 종목을 등록하면 원형 차트로 비중을 볼 수 있어요.</div>`;
   }
@@ -143,31 +148,43 @@ function renderModalInvestmentPortfolio() {
   }).join(', ');
 
   return `
-    <button class="modal-close" onclick="closeModal()">×</button>
+    <button class="modal-close" onclick="closeModal()">x</button>
     <div class="modal-title">포트폴리오</div>
     <div class="investment-portfolio-modal" id="investment-portfolio-modal">
+      <div class="investment-portfolio-overview">
+        <div><span>총 평가액</span><strong>${formatMoney(totals.totalValue)}</strong></div>
+        <div><span>총 매입금</span><strong>${formatMoney(totals.totalCost)}</strong></div>
+        <div><span>평가손익</span><strong class="${totals.totalGain >= 0 ? 'up' : 'down'}">${formatMoneySigned(totals.totalGain)}</strong></div>
+        <div><span>수익률</span><strong class="${totals.totalGain >= 0 ? 'up' : 'down'}">${formatPercent(totals.totalGainPercent)}</strong></div>
+      </div>
       <div class="investment-pie-wrap">
         <div class="investment-pie-chart" style="background: conic-gradient(${gradient});">
           <div>
             <span>총 평가액</span>
             <strong>${formatMoney(total)}</strong>
+            <small>${slices.length}개 종목</small>
           </div>
         </div>
       </div>
       <div class="investment-portfolio-list">
-        ${slices.map(p => `<div class="investment-portfolio-row">
-          <span class="investment-dot" style="background:${p.color}"></span>
-          <div>
-            <strong>${esc(p.symbol || p.name || '종목')}</strong>
-            <small>${esc(p.name || '')}</small>
-          </div>
-          <em>${p.weight.toFixed(1)}%</em>
-          <b>${formatMoney(p.value)}</b>
-        </div>`).join('')}
+        ${slices.map(p => {
+          const gain = p.value - p.cost;
+          const gainPercent = p.cost ? (gain / p.cost) * 100 : 0;
+          return `<div class="investment-portfolio-row">
+            <span class="investment-dot" style="background:${p.color}"></span>
+            <div class="investment-portfolio-name">
+              <strong>${esc(p.symbol || p.name || '종목')}</strong>
+              <small>${esc(p.name || '')}</small>
+            </div>
+            <em>${p.weight.toFixed(1)}%</em>
+            <b>${formatMoney(p.value)}</b>
+            <small class="investment-portfolio-detail">수량 ${formatShares(p.shares)} · 평단 ${formatMoney(p.avgPrice)} · 현재 ${formatMoney(p.currentPrice)}</small>
+            <small class="investment-portfolio-detail ${gain >= 0 ? 'up' : 'down'}">손익 ${formatMoneySigned(gain)} · ${formatPercent(gainPercent)}</small>
+          </div>`;
+        }).join('')}
       </div>
     </div>`;
 }
-
 function renderInvestmentPositionForm() {
   return `<form class="investment-form" id="investment-position-form" onsubmit="addInvestmentPositionFromForm(event)">
     <div class="investment-form-row">
@@ -175,7 +192,7 @@ function renderInvestmentPositionForm() {
       <input class="form-input" id="ip-name" placeholder="종목명" autocomplete="off">
     </div>
     <div class="investment-form-row">
-      <input class="form-input" id="ip-shares" type="number" min="0" step="0.0001" placeholder="수량">
+      <input class="form-input" id="ip-shares" type="text" inputmode="decimal" placeholder="수량">
       <input class="form-input" id="ip-avg" type="number" min="0" step="0.01" placeholder="평균 단가">
     </div>
     <div class="investment-form-row">
@@ -321,12 +338,12 @@ async function addInvestmentPositionFromForm(event) {
     id: 'ip' + (state.investment.positions.length + 1),
     symbol,
     name: document.getElementById('ip-name')?.value.trim() || symbol,
-    shares: Number(document.getElementById('ip-shares')?.value) || 0,
-    avgPrice: Number(document.getElementById('ip-avg')?.value) || 0,
+    shares: parseInvestmentNumber(document.getElementById('ip-shares')?.value),
+    avgPrice: parseInvestmentNumber(document.getElementById('ip-avg')?.value),
     currentPrice: null,
     manualPrice: false,
-    targetPrice: Number(document.getElementById('ip-target')?.value) || 0,
-    stopPrice: Number(document.getElementById('ip-stop')?.value) || 0,
+    targetPrice: parseInvestmentNumber(document.getElementById('ip-target')?.value),
+    stopPrice: parseInvestmentNumber(document.getElementById('ip-stop')?.value),
     longTerm: !!document.getElementById('ip-longterm')?.checked,
     thesis: document.getElementById('ip-thesis')?.value.trim() || '',
     addRule: document.getElementById('ip-add-rule')?.value.trim() || '',
@@ -456,13 +473,24 @@ async function addInvestmentNewsFromForm(event) {
 }
 
 function formatMoney(value) {
-  const n = Number(value) || 0;
+  const n = parseInvestmentNumber(value);
   return '$' + n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+function formatMoneySigned(value) {
+  const n = parseInvestmentNumber(value);
+  const sign = n > 0 ? '+' : n < 0 ? '-' : '';
+  return sign + '$' + Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+function formatShares(value) {
+  const n = parseInvestmentNumber(value);
+  return n.toLocaleString(undefined, { maximumFractionDigits: 4 });
 }
 
 function formatPercent(value) {
   if (value == null || Number.isNaN(Number(value))) return '-';
-  const n = Number(value);
+  const n = parseInvestmentNumber(value);
   return `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
 }
 

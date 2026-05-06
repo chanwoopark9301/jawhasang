@@ -19,7 +19,7 @@ def normalize_position(raw, symbol_re):
             position[field] = None if field in nullable_fields else 0
             continue
         try:
-            position[field] = float(position[field])
+            position[field] = float(str(position[field]).replace(',', '').strip())
         except (TypeError, ValueError):
             position[field] = None if field in nullable_fields else 0
     return position

@@ -3643,9 +3643,40 @@ body { height: var(--app-height, 100dvh); }
 
 .investment-portfolio-modal {
   display: grid;
-  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
   gap: 22px;
   align-items: center;
+}
+
+.modal-box.modal-investment-portfolio {
+  width: min(900px, 94vw);
+  padding: 26px;
+}
+
+.investment-portfolio-overview {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.investment-portfolio-overview > div {
+  border: 0.5px solid var(--color-border);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(37, 99, 235, 0.035);
+}
+
+.investment-portfolio-overview span {
+  display: block;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  margin-bottom: 5px;
+}
+
+.investment-portfolio-overview strong {
+  font-size: 16px;
+  color: var(--color-text-primary);
 }
 
 .investment-pie-wrap {
@@ -3654,7 +3685,7 @@ body { height: var(--app-height, 100dvh); }
 }
 
 .investment-pie-chart {
-  width: min(220px, 58vw);
+  width: min(280px, 62vw);
   aspect-ratio: 1;
   border-radius: 50%;
   display: grid;
@@ -3686,6 +3717,11 @@ body { height: var(--app-height, 100dvh); }
   color: var(--color-text-primary);
 }
 
+.investment-pie-chart small {
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+}
+
 .investment-portfolio-list {
   display: grid;
   gap: 8px;
@@ -3693,11 +3729,26 @@ body { height: var(--app-height, 100dvh); }
 
 .investment-portfolio-row {
   display: grid;
-  grid-template-columns: 10px minmax(0, 1fr) auto auto;
+  grid-template-columns: 10px minmax(110px, 1fr) auto auto;
   gap: 10px;
   align-items: center;
   padding: 9px 0;
   border-bottom: 0.5px solid var(--color-border);
+}
+
+.investment-portfolio-row .investment-portfolio-detail {
+  grid-column: 2 / -1;
+  min-height: 0;
+}
+
+.investment-portfolio-row .up,
+.investment-portfolio-overview .up {
+  color: #DC2626;
+}
+
+.investment-portfolio-row .down,
+.investment-portfolio-overview .down {
+  color: #2563EB;
 }
 
 .investment-portfolio-row strong {
@@ -3824,11 +3875,19 @@ body { height: var(--app-height, 100dvh); }
     grid-template-columns: 1fr;
   }
 
+  .investment-portfolio-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .investment-portfolio-row {
     grid-template-columns: 10px minmax(0, 1fr) auto;
   }
 
   .investment-portfolio-row b {
+    grid-column: 2 / 4;
+  }
+
+  .investment-portfolio-row .investment-portfolio-detail {
     grid-column: 2 / 4;
   }
 }

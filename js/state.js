@@ -97,8 +97,18 @@ function defaultInvestmentState() {
 function normalizeInvestmentState(investment) {
   const base = defaultInvestmentState();
   const src = investment && typeof investment === 'object' ? investment : {};
+  const positions = Array.isArray(src.positions) ? src.positions.map(p => ({
+    ...p,
+    shares: parseInvestmentNumber(p.shares),
+    avgPrice: parseInvestmentNumber(p.avgPrice),
+    currentPrice: p.currentPrice == null ? null : parseInvestmentNumber(p.currentPrice),
+    targetPrice: parseInvestmentNumber(p.targetPrice),
+    stopPrice: parseInvestmentNumber(p.stopPrice),
+    previousClose: p.previousClose == null ? null : parseInvestmentNumber(p.previousClose),
+    changePercent: p.changePercent == null ? null : parseInvestmentNumber(p.changePercent),
+  })) : [];
   return {
-    positions: Array.isArray(src.positions) ? src.positions : [],
+    positions,
     rules: { ...base.rules, ...(src.rules && typeof src.rules === 'object' ? src.rules : {}) },
     journal: Array.isArray(src.journal) ? src.journal : [],
     events: Array.isArray(src.events) ? src.events : [],

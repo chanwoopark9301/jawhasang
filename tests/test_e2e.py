@@ -278,7 +278,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260506-01');
+            const res = await fetch('/js/data.js?v=20260506-02');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -648,15 +648,17 @@ class TestInvestmentPartner:
         logged_in_page.evaluate("""() => {
             state.investment.positions = [{
                 id: 'ip-chart-1',
-                symbol: 'NVDA',
-                name: 'NVIDIA',
-                shares: 2,
-                currentPrice: 100,
+                symbol: 'IREN',
+                name: 'Iris Energy',
+                shares: '1,700',
+                avgPrice: '46.06',
+                currentPrice: 58,
             }, {
                 id: 'ip-chart-2',
                 symbol: 'AAPL',
                 name: 'Apple',
                 shares: 1,
+                avgPrice: 40,
                 currentPrice: 50,
             }];
             render();
@@ -665,8 +667,12 @@ class TestInvestmentPartner:
         logged_in_page.locator('#investment-menu-portfolio').click()
         logged_in_page.wait_for_selector('#investment-portfolio-modal', timeout=8_000)
         assert logged_in_page.locator('.investment-pie-chart').is_visible()
-        assert 'NVDA' in logged_in_page.locator('#modal-box').inner_text()
-        assert '80.0%' in logged_in_page.locator('#modal-box').inner_text()
+        modal_text = logged_in_page.locator('#modal-box').inner_text()
+        assert 'IREN' in modal_text
+        assert '$98,600' in modal_text
+        assert '$78,342' in modal_text
+        assert '1,700' in modal_text
+        assert '99.9%' in modal_text
         logged_in_page.locator('.modal-close').click()
 
         logged_in_page.locator('#investment-menu-positions').click()

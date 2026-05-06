@@ -64,8 +64,8 @@ class TestDataAPI:
                 'id': 'ip-iren',
                 'symbol': 'iren',
                 'name': 'Iris Energy',
-                'shares': 2,
-                'avgPrice': 40,
+                'shares': '1,700',
+                'avgPrice': '46.06',
                 'currentPrice': 46.06,
             }
         }
@@ -81,6 +81,8 @@ class TestDataAPI:
         loaded = client.get('/api/data').get_json()
         pos = loaded['investment']['positions'][0]
         assert pos['symbol'] == 'IREN'
+        assert pos['shares'] == 1700
+        assert pos['avgPrice'] == 46.06
         assert pos['currentPrice'] == 46.06
 
     def test_save_investment_position_endpoint_reports_request_id_on_bad_payload(self, client):

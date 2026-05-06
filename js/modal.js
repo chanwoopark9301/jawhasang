@@ -13,6 +13,7 @@ function openModal(id, data = {}) {
   if (id === 'report' && data.analysis) window._lastAnalysis = data.analysis;
   const box = document.getElementById('modal-box');
   if (!box) return;
+  box.className = `modal-box modal-${id}`;
   box.innerHTML = buildModalHTML(id, data);
   document.getElementById('modal-overlay').classList.add('open');
 }
@@ -21,7 +22,10 @@ function closeModal() {
   state.activeModal = null;
   document.getElementById('modal-overlay').classList.remove('open');
   const box = document.getElementById('modal-box');
-  if (box) box.innerHTML = '';
+  if (box) {
+    box.innerHTML = '';
+    box.className = 'modal-box';
+  }
 }
 
 // 오버레이 클릭 시 모달 박스 외부 클릭만 닫기
