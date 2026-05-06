@@ -128,9 +128,37 @@ function getInvestmentPortfolioSlices(positions) {
   return rows.map(p => ({ ...p, weight: total ? (p.value / total) * 100 : 0, total }));
 }
 
+function getInvestmentUnpricedPositions(positions) {
+  return (Array.isArray(positions) ? positions : [])
+    .map(p => ({
+      ...p,
+      shares: parseInvestmentNumber(p.shares),
+      avgPrice: parseInvestmentNumber(p.avgPrice),
+      currentPrice: p.currentPrice == null ? null : parseInvestmentNumber(p.currentPrice),
+      cost: investmentPositionValue(p, 'avgPrice'),
+    }))
+    .filter(p => !isCashInvestmentPosition(p) && investmentPositionValue(p, 'currentPrice') <= 0);
+}
+
+function mergeInvestmentAfterPositionSave(currentInvestment, savedInvestment) {
+  const current = normalizeInvestmentState(currentInvestment);
+  const saved = normalizeInvestmentState(savedInvestment);
+  const merged = [...current.positions];
+  saved.positions.forEach(incoming => {
+    const idx = merged.findIndex(item =>
+      String(item.id || '') === String(incoming.id || '') ||
+      (item.symbol && incoming.symbol && String(item.symbol).toUpperCase() === String(incoming.symbol).toUpperCase())
+    );
+    if (idx >= 0) merged[idx] = { ...merged[idx], ...incoming };
+    else merged.push(incoming);
+  });
+  return normalizeInvestmentState({ ...current, ...saved, positions: merged });
+}
+
 function renderModalInvestmentPortfolio() {
   const inv = state.investment = normalizeInvestmentState(state.investment);
   const slices = getInvestmentPortfolioSlices(inv.positions).sort((a, b) => b.value - a.value);
+  const unpriced = getInvestmentUnpricedPositions(inv.positions);
   const totals = investmentTotals(inv.positions);
   const total = totals.totalValue;
   if (!slices.length) {
@@ -213,18 +241,34 @@ function renderModalInvestmentPortfolio() {
           const gain = p.value - p.cost;
           const gainPercent = p.cost ? (gain / p.cost) * 100 : 0;
           const priceFresh = p.marketUpdatedAt || p.lastMarketUpdatedAt;
+          const isCash = isCashInvestmentPosition(p);
           return `<div class="investment-portfolio-row">
             <span class="investment-dot" style="background:${p.color}"></span>
             <div class="investment-portfolio-name">
               <strong>${esc(p.symbol || p.name || '종목')}</strong>
-              <small>${esc(p.name || '')}</small>
+              <small>${esc(p.name || '')}${isCash ? ' · 현금' : p.assetType === 'crypto' ? ' · 코인' : ''}</small>
             </div>
             <em>${p.weight.toFixed(1)}%</em>
             <b>${formatMoney(p.value)}</b>
-            <small class="investment-portfolio-detail">수량 ${formatShares(p.shares)} · 평단 ${formatMoney(p.avgPrice)} · 현재 ${formatMoney(p.currentPrice)} · 매입금 ${formatMoney(p.cost)}</small>
-            <small class="investment-portfolio-detail ${gain >= 0 ? 'up' : 'down'}">손익 ${formatMoneySigned(gain)} · ${formatPercent(gainPercent)} · ${priceFresh ? `갱신 ${formatDateTimeShort(priceFresh)}` : '현재가 갱신 필요'}</small>
+            <small class="investment-portfolio-detail">${isCash ? `보유 현금 ${formatMoney(p.value)}` : `수량 ${formatShares(p.shares)} · 평단 ${formatMoney(p.avgPrice)} · 현재 ${formatMoney(p.currentPrice)} · 매입금 ${formatMoney(p.cost)}`}</small>
+            <small class="investment-portfolio-detail ${gain >= 0 ? 'up' : 'down'}">${isCash ? '즉시 투입 가능한 대기 자금' : `손익 ${formatMoneySigned(gain)} · ${formatPercent(gainPercent)} · ${priceFresh ? `갱신 ${formatDateTimeShort(priceFresh)}` : '현재가 갱신 필요'}`}</small>
           </div>`;
         }).join('')}
+        ${unpriced.length ? `<div class="investment-portfolio-list-head investment-portfolio-subhead">
+          <strong>현재가 미조회 종목</strong>
+          <span>저장은 되었지만 평가액 계산에서 제외됨</span>
+        </div>
+        ${unpriced.map(p => `<div class="investment-portfolio-row investment-portfolio-row-muted">
+          <span class="investment-dot muted"></span>
+          <div class="investment-portfolio-name">
+            <strong>${esc(p.symbol || p.name || '종목')}</strong>
+            <small>${esc(p.name || '')}${p.assetType === 'crypto' ? ' · 코인' : ''}</small>
+          </div>
+          <em>-</em>
+          <b>현재가 필요</b>
+          <small class="investment-portfolio-detail">수량 ${formatShares(p.shares)} · 평단 ${formatMoney(p.avgPrice)} · 매입금 ${formatMoney(p.cost)}</small>
+          <small class="investment-portfolio-detail">현재가 갱신 또는 종목 코드를 확인해주세요.</small>
+        </div>`).join('')}` : ''}
       </div>
 
 
@@ -516,7 +560,7 @@ async function addInvestmentPositionFromForm(event) {
     render();
     return;
   }
-  if (saved.investment) state.investment = normalizeInvestmentState(saved.investment);
+  if (saved.investment) state.investment = mergeInvestmentAfterPositionSave(state.investment, saved.investment);
   showToast(assetType === 'cash' ? '현금 보유액을 포트폴리오에 반영했어요.' : hasQuote ? '보유 종목을 등록하고 현재가를 가져왔어요.' : '종목은 등록했지만 현재가를 찾지 못했어요. 티커를 확인해주세요.');
   if (state.activeModal === 'investment-portfolio') {
     openModal('investment-portfolio');

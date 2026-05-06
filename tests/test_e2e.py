@@ -278,7 +278,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260506-07');
+            const res = await fetch('/js/data.js?v=20260506-08');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -1019,6 +1019,70 @@ class TestInvestmentPartner:
         logged_in_page.locator('#investment-add-position').click()
         logged_in_page.wait_for_function("() => window.__saveAttempts() === 3", timeout=8_000)
         logged_in_page.wait_for_selector('#investment-portfolio-manage', timeout=8_000)
+
+    def test_position_save_response_does_not_drop_existing_positions(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.investment.positions = [{
+                id: 'ip-old-1',
+                symbol: 'OLD1',
+                name: 'Old One',
+                shares: 2,
+                avgPrice: 10,
+                currentPrice: 12,
+            }, {
+                id: 'ip-old-2',
+                symbol: 'OLD2',
+                name: 'Old Two',
+                shares: 3,
+                avgPrice: 20,
+                currentPrice: null,
+            }];
+            render();
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = (url, opts) => {
+                if (String(url).includes('/api/market/quote')) {
+                    return Promise.resolve(new Response(JSON.stringify({
+                        quotes: [{ symbol: 'NEW1', price: 30, changePercent: 0.2, previousClose: 29.94, name: 'New One' }],
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                if (String(url).includes('/api/investment/positions') && opts?.method === 'POST') {
+                    const position = JSON.parse(opts.body).position;
+                    return Promise.resolve(new Response(JSON.stringify({
+                        ok: true,
+                        position,
+                        investment: {
+                            positions: [position],
+                            rules: state.investment.rules,
+                            journal: [],
+                            events: [],
+                            decisions: [],
+                            chat: [],
+                            market: { indexes: [], fetchedAt: null, source: '' },
+                            alerts: [],
+                        },
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                return originalFetch(url, opts);
+            };
+        }""")
+
+        logged_in_page.locator('#investment-menu-positions').click()
+        logged_in_page.locator('#investment-manage-tools summary').click()
+        logged_in_page.locator('#ip-symbol').fill('NEW1')
+        logged_in_page.locator('#ip-name').fill('New One')
+        logged_in_page.locator('#ip-shares').fill('4')
+        logged_in_page.locator('#investment-add-position').click()
+        logged_in_page.wait_for_function(
+            "() => state.investment.positions.length === 3 && state.investment.positions.some(p => p.symbol === 'OLD1') && state.investment.positions.some(p => p.symbol === 'OLD2') && state.investment.positions.some(p => p.symbol === 'NEW1')",
+            timeout=8_000,
+        )
+
+        modal_text = logged_in_page.locator('#modal-box').inner_text()
+        assert 'OLD1' in modal_text
+        assert 'OLD2' in modal_text
+        assert 'NEW1' in modal_text
+        assert '현재가 미조회 종목' in modal_text
 
     def test_investment_chat_records_news_when_requested(self, logged_in_page):
         self._open_investment(logged_in_page)

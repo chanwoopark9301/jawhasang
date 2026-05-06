@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v56'; // Collapsed portfolio management refresh
+const CACHE_NAME = 'jip-v57'; // Stable portfolio merge and unpriced rows
 
 const STATIC_ASSETS = [
   '/style.css',

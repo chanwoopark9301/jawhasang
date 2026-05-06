@@ -3907,6 +3907,20 @@ body { height: var(--app-height, 100dvh); }
   border-color: rgba(185, 28, 28, 0.28);
 }
 
+.investment-portfolio-subhead {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 0.5px solid var(--color-border);
+}
+
+.investment-portfolio-row-muted {
+  opacity: .88;
+}
+
+.investment-dot.muted {
+  background: var(--color-text-tertiary) !important;
+}
+
 .investment-portfolio-status {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
