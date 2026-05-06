@@ -5,12 +5,17 @@
 
 const INVESTMENT_INDEX_SYMBOLS = ['^IXIC', '^GSPC'];
 const INVESTMENT_SYMBOL_ALIASES = {
+  CIRCLE: 'CRCL',
+  CRCL: 'CRCL',
   ETH: 'ETH-USD',
   ETHEREUM: 'ETH-USD',
   '이더리움': 'ETH-USD',
   BTC: 'BTC-USD',
   BITCOIN: 'BTC-USD',
   '비트코인': 'BTC-USD',
+  SOL: 'SOL-USD',
+  SOLANA: 'SOL-USD',
+  XRP: 'XRP-USD',
 };
 
 function normalizeInvestmentMarketSymbol(symbol) {

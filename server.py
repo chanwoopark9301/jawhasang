@@ -526,15 +526,34 @@ def save_investment_position_route():
 _MARKET_SYMBOL_RE = re.compile(r'^[A-Za-z0-9.\-^=]{1,16}$')
 _NEWS_QUERY_RE = re.compile(r'^[^<>]{2,160}$')
 _MARKET_SYMBOL_ALIASES = {
+    'CIRCLE': 'CRCL',
+    'CIRCLEINTERNETGROUP': 'CRCL',
+    '써클': 'CRCL',
+    '써클인터넷그룹': 'CRCL',
+    'CRCL': 'CRCL',
     'ETH': 'ETH-USD',
     'ETHEREUM': 'ETH-USD',
+    '이더리움': 'ETH-USD',
     'BTC': 'BTC-USD',
     'BITCOIN': 'BTC-USD',
+    '비트코인': 'BTC-USD',
+    'SOL': 'SOL-USD',
+    'SOLANA': 'SOL-USD',
+    'XRP': 'XRP-USD',
+}
+_COINGECKO_IDS = {
+    'BTC-USD': 'bitcoin',
+    'ETH-USD': 'ethereum',
+    'SOL-USD': 'solana',
+    'XRP-USD': 'ripple',
+    'DOGE-USD': 'dogecoin',
+    'ADA-USD': 'cardano',
 }
 
 def _canonical_market_symbol(symbol: str) -> str:
-    sym = str(symbol or '').strip().upper()
-    return _MARKET_SYMBOL_ALIASES.get(sym, sym)
+    raw = str(symbol or '').strip()
+    sym = re.sub(r'\s+', '', raw).upper()
+    return _MARKET_SYMBOL_ALIASES.get(sym, _MARKET_SYMBOL_ALIASES.get(raw, sym))
 
 def _parse_market_symbols(raw: str):
     symbols = []
@@ -610,26 +629,113 @@ def _normalize_yahoo_chart(symbol: str, body: dict):
 def _fetch_yahoo_chart_quotes(symbols):
     quotes = []
     for symbol in symbols:
+        for host in ('query1.finance.yahoo.com', 'query2.finance.yahoo.com'):
+            try:
+                resp = requests.get(
+                    f'https://{host}/v8/finance/chart/{symbol}',
+                    params={'range': '1d', 'interval': '1d'},
+                    headers={'User-Agent': 'Mozilla/5.0 jip-investment-partner'},
+                    timeout=10,
+                )
+            except requests.RequestException as e:
+                log.warning('Yahoo chart 조회 실패(%s, %s): %s', host, symbol, e)
+                continue
+            if not resp.ok:
+                log.warning('Yahoo chart 오류 응답(%s, %s): HTTP %d', host, symbol, resp.status_code)
+                continue
+            try:
+                quote = _normalize_yahoo_chart(symbol, resp.json())
+            except ValueError:
+                log.warning('Yahoo chart 응답 파싱 실패(%s, %s)', host, symbol)
+                continue
+            if quote and quote.get('symbol') and quote.get('price') is not None:
+                quotes.append(quote)
+                break
+    return quotes
+
+def _fetch_yahoo_search_quotes(symbols):
+    quotes = []
+    for symbol in symbols:
         try:
             resp = requests.get(
-                f'https://query1.finance.yahoo.com/v8/finance/chart/{symbol}',
-                params={'range': '1d', 'interval': '1d'},
+                'https://query1.finance.yahoo.com/v1/finance/search',
+                params={'q': symbol, 'quotesCount': 6, 'newsCount': 0, 'lang': 'en-US', 'region': 'US'},
                 headers={'User-Agent': 'Mozilla/5.0 jip-investment-partner'},
                 timeout=10,
             )
         except requests.RequestException as e:
-            log.warning('Yahoo chart 조회 실패(%s): %s', symbol, e)
+            log.warning('Yahoo search 조회 실패(%s): %s', symbol, e)
             continue
         if not resp.ok:
-            log.warning('Yahoo chart 오류 응답(%s): HTTP %d', symbol, resp.status_code)
+            log.warning('Yahoo search 오류 응답(%s): HTTP %d', symbol, resp.status_code)
             continue
         try:
-            quote = _normalize_yahoo_chart(symbol, resp.json())
+            items = resp.json().get('quotes') or []
         except ValueError:
-            log.warning('Yahoo chart 응답 파싱 실패(%s)', symbol)
             continue
-        if quote and quote.get('symbol') and quote.get('price') is not None:
+        match = None
+        for item in items:
+            item_symbol = str(item.get('symbol') or '').upper()
+            if item_symbol == symbol or item_symbol.replace('.', '-') == symbol:
+                match = item
+                break
+        if not match:
+            continue
+        quote = _normalize_yahoo_quote(match)
+        if quote.get('price') is not None:
+            quote['symbol'] = symbol
             quotes.append(quote)
+            continue
+        chart_quotes = _fetch_yahoo_chart_quotes([match.get('symbol') or symbol])
+        if chart_quotes:
+            chart_quotes[0]['symbol'] = symbol
+            quotes.append(chart_quotes[0])
+    return quotes
+
+def _fetch_coingecko_crypto_quotes(symbols):
+    crypto_symbols = [sym for sym in symbols if sym in _COINGECKO_IDS]
+    if not crypto_symbols:
+        return []
+    ids = [_COINGECKO_IDS[sym] for sym in crypto_symbols]
+    try:
+        resp = requests.get(
+            'https://api.coingecko.com/api/v3/simple/price',
+            params={
+                'ids': ','.join(ids),
+                'vs_currencies': 'usd',
+                'include_24hr_change': 'true',
+            },
+            headers={'User-Agent': 'Mozilla/5.0 jip-investment-partner'},
+            timeout=10,
+        )
+    except requests.RequestException as e:
+        log.warning('CoinGecko quote 조회 실패: %s', e)
+        return []
+    if not resp.ok:
+        log.warning('CoinGecko quote 오류 응답: HTTP %d', resp.status_code)
+        return []
+    try:
+        data = resp.json()
+    except ValueError:
+        return []
+    quotes = []
+    reverse = {v: k for k, v in _COINGECKO_IDS.items()}
+    for coin_id, row in data.items():
+        symbol = reverse.get(coin_id)
+        price = row.get('usd')
+        if not symbol or price is None:
+            continue
+        quotes.append({
+            'symbol': symbol,
+            'name': symbol.replace('-USD', ''),
+            'price': price,
+            'change': None,
+            'changePercent': row.get('usd_24h_change'),
+            'previousClose': None,
+            'currency': 'USD',
+            'marketState': 'CRYPTO',
+            'marketTime': None,
+        })
     return quotes
 
 def _stooq_symbol(symbol: str) -> str:
@@ -731,6 +837,22 @@ def market_quote():
         if fallback_quotes:
             source = 'yahoo-chart' if not quotes else 'yahoo-finance+chart'
             quotes.extend(fallback_quotes)
+            found = {str(q.get('symbol', '')).upper() for q in quotes}
+            missing = [sym for sym in symbols if sym not in found]
+
+    if missing:
+        search_quotes = _fetch_yahoo_search_quotes(missing)
+        if search_quotes:
+            source = 'yahoo-search' if not quotes else f'{source}+search'
+            quotes.extend(search_quotes)
+            found = {str(q.get('symbol', '')).upper() for q in quotes}
+            missing = [sym for sym in symbols if sym not in found]
+
+    if missing:
+        crypto_quotes = _fetch_coingecko_crypto_quotes(missing)
+        if crypto_quotes:
+            source = 'coingecko' if not quotes else f'{source}+coingecko'
+            quotes.extend(crypto_quotes)
             found = {str(q.get('symbol', '')).upper() for q in quotes}
             missing = [sym for sym in symbols if sym not in found]
 

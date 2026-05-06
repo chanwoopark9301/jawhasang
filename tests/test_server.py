@@ -324,6 +324,123 @@ class TestDataAPI:
         assert data['quotes'][0]['symbol'] == 'ETH-USD'
         assert data['quotes'][0]['price'] == 3100.25
 
+    def test_market_quote_endpoint_falls_back_to_coingecko_for_crypto(self, client, monkeypatch):
+        import server
+
+        class EmptyYahooResp:
+            ok = True
+            status_code = 200
+
+            def json(self):
+                if 'chart' in getattr(self, 'kind', ''):
+                    return {'chart': {'result': []}}
+                return {'quoteResponse': {'result': []}, 'quotes': []}
+
+        class CoinGeckoResp:
+            ok = True
+            status_code = 200
+
+            def json(self):
+                return {'ethereum': {'usd': 3200.5, 'usd_24h_change': 2.25}}
+
+        calls = []
+
+        def fake_get(url, params=None, headers=None, timeout=None):
+            calls.append((url, params))
+            if 'coingecko.com' in url:
+                assert params['ids'] == 'ethereum'
+                return CoinGeckoResp()
+            resp = EmptyYahooResp()
+            if 'v8/finance/chart' in url:
+                resp.kind = 'chart'
+            return resp
+
+        monkeypatch.setattr(server.requests, 'get', fake_get)
+        r = client.get('/api/market/quote?symbols=ETH')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['source'] == 'coingecko'
+        assert data['quotes'][0]['symbol'] == 'ETH-USD'
+        assert data['quotes'][0]['price'] == 3200.5
+        assert data['quotes'][0]['changePercent'] == 2.25
+
+    def test_market_quote_endpoint_normalizes_circle_korean_alias(self, client, monkeypatch):
+        import server
+
+        class FakeResp:
+            ok = True
+            status_code = 200
+
+            def json(self):
+                return {
+                    'quoteResponse': {
+                        'result': [{
+                            'symbol': 'CRCL',
+                            'shortName': 'Circle Internet Group',
+                            'regularMarketPrice': 77.7,
+                            'regularMarketChangePercent': -1.2,
+                        }]
+                    }
+                }
+
+        def fake_get(url, params=None, headers=None, timeout=None):
+            assert params['symbols'] == 'CRCL'
+            return FakeResp()
+
+        monkeypatch.setattr(server.requests, 'get', fake_get)
+        r = client.get('/api/market/quote?symbols=%EC%8D%A8%ED%81%B4')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['requested'] == ['CRCL']
+        assert data['quotes'][0]['symbol'] == 'CRCL'
+        assert data['quotes'][0]['price'] == 77.7
+
+    def test_market_quote_endpoint_falls_back_to_yahoo_search_for_circle(self, client, monkeypatch):
+        import server
+
+        class EmptyYahooResp:
+            ok = True
+            status_code = 200
+
+            def json(self):
+                if 'chart' in getattr(self, 'kind', ''):
+                    return {'chart': {'result': []}}
+                return {'quoteResponse': {'result': []}}
+
+        class SearchResp:
+            ok = True
+            status_code = 200
+
+            def json(self):
+                return {
+                    'quotes': [{
+                        'symbol': 'CRCL',
+                        'shortName': 'Circle Internet Group',
+                        'regularMarketPrice': 88.8,
+                        'regularMarketChangePercent': 3.4,
+                    }]
+                }
+
+        def fake_get(url, params=None, headers=None, timeout=None):
+            if 'v1/finance/search' in url:
+                assert params['q'] == 'CRCL'
+                return SearchResp()
+            resp = EmptyYahooResp()
+            if 'v8/finance/chart' in url:
+                resp.kind = 'chart'
+            return resp
+
+        monkeypatch.setattr(server.requests, 'get', fake_get)
+        r = client.get('/api/market/quote?symbols=CRCL')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['source'] == 'yahoo-search'
+        assert data['quotes'][0]['symbol'] == 'CRCL'
+        assert data['quotes'][0]['price'] == 88.8
+
     def test_market_quote_endpoint_rejects_invalid_symbols(self, client):
         r = client.get('/api/market/quote?symbols=NVDA;DROP')
         assert r.status_code == 400
