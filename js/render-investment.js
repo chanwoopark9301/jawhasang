@@ -321,6 +321,33 @@ function renderPortfolioManagementPanel() {
   </section>`;
 }
 
+function renderInvestmentRulesSummary(rules) {
+  const chips = [
+    `하루 손실 ${rules.dailyLossLimit}%`,
+    `종목 비중 ${rules.maxPositionWeight}%`,
+    `쿨다운 ${rules.cooldownMinutes}분`,
+    `추격 ${rules.chaseLimit}%`,
+    `거래 리스크 ${rules.riskPerTrade ?? 1}%`,
+    `손익비 ${rules.minRiskReward ?? 2}:1`,
+  ];
+  const blocks = [
+    ['핵심 원칙', rules.coreRules],
+    ['진입 체크리스트', rules.entryChecklist],
+    ['청산 기준', rules.exitChecklist],
+    ['금지 셋업', rules.bannedSetups],
+    ['복기 루틴', rules.reviewRoutine],
+  ];
+  return `<section class="investment-rules-overview">
+    <div class="investment-rules-chip-row">
+      ${chips.map(chip => `<span>${esc(chip)}</span>`).join('')}
+    </div>
+    ${blocks.map(([label, body]) => `<article class="investment-rule-card">
+      <h4>${esc(label)}</h4>
+      <div class="chat-markdown">${renderMarkdownBasic(body || '아직 설정된 내용이 없습니다. 대화창에서 정한 뒤 저장하거나 수동 편집을 열어 입력할 수 있습니다.')}</div>
+    </article>`).join('')}
+  </section>`;
+}
+
 function renderInvestmentRulesForm(rules) {
   return `<form class="investment-form" onsubmit="saveInvestmentRulesFromForm(event)">
     <section class="investment-trader-panel">
@@ -383,8 +410,15 @@ function renderModalInvestmentRules() {
   return `
     <button class="modal-close" onclick="closeModal()">×</button>
     <div class="modal-title">트레이딩 플랜</div>
-    <div class="investment-modal-note">매수/매도 의견을 적는 곳이 아니라, 실제 주문 전에 나를 멈춰 세우는 기준입니다. 대화창에서 정한 원칙도 여기에 정리해두면 AI가 판단 기준으로 사용합니다.</div>
-    ${renderInvestmentRulesForm(state.investment.rules)}`;
+    <div class="investment-modal-note">대화창에서 정한 원칙을 읽고 확인하는 화면입니다. 숫자와 문장을 직접 고쳐야 할 때만 수동 편집을 열어주세요.</div>
+    ${renderInvestmentRulesSummary(state.investment.rules)}
+    <details class="investment-manage-tools investment-manual-tools" id="investment-rules-edit-tools">
+      <summary>
+        <span>수동 편집</span>
+        <small>숫자와 원칙을 직접 수정</small>
+      </summary>
+      ${renderInvestmentRulesForm(state.investment.rules)}
+    </details>`;
 }
 
 function renderInvestmentGateForm(positions) {
@@ -483,10 +517,16 @@ function renderModalInvestmentDecisions() {
   return `
     <button class="modal-close" onclick="closeModal()">×</button>
     <div class="modal-title">매매 저널</div>
-    <div class="investment-modal-note">거래를 실행하기 전에 셋업, 손익비, 무효화 조건을 먼저 남깁니다. 이 화면은 매매 버튼이 아니라 충동을 느리게 만드는 주문 전 게이트입니다.</div>
-    ${renderInvestmentGateForm(state.investment.positions)}
     <div id="investment-result">${state.investment.decisions.length ? renderInvestmentVerdict(state.investment.decisions.at(-1)) : ''}</div>
-    ${renderInvestmentDecisionList(state.investment.decisions)}`;
+    ${renderInvestmentDecisionList(state.investment.decisions)}
+    <details class="investment-manage-tools investment-manual-tools" id="investment-gate-tools">
+      <summary>
+        <span>수동 매매 점검</span>
+        <small>대화 대신 직접 주문 전 게이트 작성</small>
+      </summary>
+      <div class="investment-modal-note">거래를 실행하기 전에 셋업, 손익비, 무효화 조건을 먼저 남깁니다. 기본 흐름은 대화창에서 결정하고, 필요한 경우에만 이 폼을 사용하세요.</div>
+      ${renderInvestmentGateForm(state.investment.positions)}
+    </details>`;
 }
 
 function renderModalInvestmentNews() {
@@ -511,16 +551,6 @@ function renderModalInvestmentNews() {
         <p>저장된 내용은 마크다운으로 렌더링되므로 제목, 목록, 원문 링크를 그대로 보관할 수 있습니다.</p>
       </section>
 
-      <form class="investment-form investment-news-form" id="investment-news-form" onsubmit="addInvestmentNewsFromForm(event)">
-        <div class="investment-form-row">
-          <input class="form-input" id="in-symbol" placeholder="종목/이슈" autocomplete="off">
-          <input class="form-input" id="in-title" placeholder="뉴스 제목" autocomplete="off">
-          <input class="form-input" id="in-date" type="date" value="${new Date().toISOString().split('T')[0]}">
-        </div>
-        <textarea class="form-input investment-textarea investment-news-textarea" id="in-body" placeholder="뉴스 내용과 나의 해석을 마크다운으로 기록"></textarea>
-        <button class="btn-primary investment-primary" type="submit">뉴스 저장</button>
-      </form>
-
       <section class="investment-news-list">
         ${news.length ? news.map(e => `<article class="investment-news-card">
           <header>
@@ -533,6 +563,22 @@ function renderModalInvestmentNews() {
           <div class="investment-news-body chat-markdown">${renderMarkdownBasic(e.body || '')}</div>
         </article>`).join('') : '<div class="investment-empty">저장된 뉴스 동향이 없습니다.</div>'}
       </section>
+
+      <details class="investment-manage-tools investment-manual-tools" id="investment-news-edit-tools">
+        <summary>
+          <span>수동 뉴스 추가</span>
+          <small>직접 붙여넣어 저장</small>
+        </summary>
+        <form class="investment-form investment-news-form" id="investment-news-form" onsubmit="addInvestmentNewsFromForm(event)">
+          <div class="investment-form-row">
+            <input class="form-input" id="in-symbol" placeholder="종목/이슈" autocomplete="off">
+            <input class="form-input" id="in-title" placeholder="뉴스 제목" autocomplete="off">
+            <input class="form-input" id="in-date" type="date" value="${new Date().toISOString().split('T')[0]}">
+          </div>
+          <textarea class="form-input investment-textarea investment-news-textarea" id="in-body" placeholder="뉴스 내용과 나의 해석을 마크다운으로 기록"></textarea>
+          <button class="btn-primary investment-primary" type="submit">뉴스 저장</button>
+        </form>
+      </details>
     </div>`;
 }
 

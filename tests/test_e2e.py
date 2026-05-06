@@ -310,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260506-20');
+            const res = await fetch('/js/data.js?v=20260506-21');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -763,8 +763,10 @@ class TestInvestmentPartner:
         logged_in_page.locator('.modal-close').click()
 
         logged_in_page.locator('#investment-menu-news').click()
-        logged_in_page.wait_for_selector('#investment-news-form', timeout=8_000)
+        logged_in_page.wait_for_selector('#investment-news-form', state='attached', timeout=8_000)
         assert '뉴스 동향' in logged_in_page.locator('#modal-box').inner_text()
+        assert logged_in_page.locator('#investment-news-edit-tools').evaluate("(el) => !el.open")
+        logged_in_page.locator('#investment-news-edit-tools summary').click()
         logged_in_page.locator('#in-symbol').fill('IREN')
         logged_in_page.locator('#in-title').fill('Clarity Act update')
         logged_in_page.locator('#in-body').fill('## 핵심 요약\n- 규제 불확실성 완화\n[원문](https://example.com/news)')
@@ -782,9 +784,15 @@ class TestInvestmentPartner:
         logged_in_page.locator('.modal-close').click()
 
         logged_in_page.locator('#investment-menu-rules').click()
-        logged_in_page.wait_for_selector('#investment-save-rules', timeout=8_000)
+        logged_in_page.wait_for_selector('#investment-save-rules', state='attached', timeout=8_000)
         rules_text = logged_in_page.locator('#modal-box').inner_text()
         assert '트레이딩 플랜' in rules_text
+        assert '하루 손실' in rules_text
+        assert '핵심 원칙' in rules_text
+        assert logged_in_page.locator('.investment-rules-overview').is_visible()
+        assert logged_in_page.locator('#investment-rules-edit-tools').evaluate("(el) => !el.open")
+        logged_in_page.locator('#investment-rules-edit-tools summary').click()
+        rules_text = logged_in_page.locator('#modal-box').inner_text()
         assert '리스크 한도' in rules_text
         assert '진입 / 청산 체크리스트' in rules_text
         logged_in_page.locator('#ir-risk-trade').fill('0.8')
@@ -793,9 +801,12 @@ class TestInvestmentPartner:
         logged_in_page.wait_for_function("() => state.investment.rules.riskPerTrade === 0.8", timeout=8_000)
 
         logged_in_page.locator('#investment-menu-decisions').click()
-        logged_in_page.wait_for_selector('#investment-gate-form', timeout=8_000)
+        logged_in_page.wait_for_selector('#investment-gate-form', state='attached', timeout=8_000)
         journal_text = logged_in_page.locator('#modal-box').inner_text()
         assert '매매 저널' in journal_text
+        assert logged_in_page.locator('#investment-gate-tools').evaluate("(el) => !el.open")
+        logged_in_page.locator('#investment-gate-tools summary').click()
+        journal_text = logged_in_page.locator('#modal-box').inner_text()
         assert '거래 개요' in journal_text
         assert '주문 계획' in journal_text
         assert '주문 전 확인' in journal_text

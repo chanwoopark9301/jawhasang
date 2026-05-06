@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v70'; // Default investment guardrails
+const CACHE_NAME = 'jip-v71'; // Hide manual investment forms
 
 const STATIC_ASSETS = [
   '/style.css',

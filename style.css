@@ -4103,6 +4103,49 @@ body { height: var(--app-height, 100dvh); }
   margin-top: 10px;
 }
 
+.investment-manual-tools {
+  border: 0.5px solid var(--color-border);
+  border-radius: 8px;
+  padding: 10px 13px;
+  background: var(--color-bg-secondary);
+}
+
+.investment-rules-overview {
+  display: grid;
+  gap: 10px;
+}
+
+.investment-rules-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.investment-rules-chip-row span {
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 11px;
+  color: #1D4ED8;
+  background: rgba(37, 99, 235, .08);
+}
+
+.investment-rule-card {
+  border: 0.5px solid var(--color-border);
+  border-radius: 8px;
+  padding: 13px;
+  background: var(--color-bg);
+}
+
+.investment-rule-card h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.investment-rule-card .chat-markdown {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
 .investment-manage-list {
   display: grid;
   gap: 8px;
