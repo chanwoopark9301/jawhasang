@@ -27,6 +27,7 @@ function renderMarkdownBasic(text) {
   const lines = safe.split(/\r?\n/);
   let html = '';
   let inList = false;
+  const sectionTitleRe = /^(핵심 흐름 요약|무슨 일이 있었나|왜 중요한가|내 원칙상 확인할 점|원칙상 확인할 점|원문 링크|IREN 관점 해석|보유주 관점 해석|리스크 체크|시장 영향|확인된 사실|해석과 추론|클래리티 법안.*동향|Crypto Market Structure.*동향)$/;
 
   const inline = (s) => s
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
@@ -41,11 +42,21 @@ function renderMarkdownBasic(text) {
       html += '<br>';
       continue;
     }
+    if (/^[-*_]{3,}$/.test(line)) {
+      if (inList) { html += '</ul>'; inList = false; }
+      html += '<hr>';
+      continue;
+    }
     const heading = line.match(/^(#{1,3})\s+(.+)$/);
     if (heading) {
       if (inList) { html += '</ul>'; inList = false; }
       const level = heading[1].length + 3;
       html += `<h${level}>${inline(heading[2])}</h${level}>`;
+      continue;
+    }
+    if (!/^[-*]\s+/.test(line) && (sectionTitleRe.test(line) || (/^[^.!?。！？]{2,32}$/.test(line) && /요약|해석|중요|확인|링크|리스크|동향|영향|사실|추론/.test(line)))) {
+      if (inList) { html += '</ul>'; inList = false; }
+      html += `<h4>${inline(line)}</h4>`;
       continue;
     }
     const bullet = line.match(/^[-*]\s+(.+)$/);

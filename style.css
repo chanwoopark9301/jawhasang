@@ -744,6 +744,18 @@ body {
   font-weight: 650;
 }
 
+.chat-markdown h4:first-child,
+.chat-markdown h5:first-child,
+.chat-markdown h6:first-child {
+  margin-top: 0;
+}
+
+.chat-markdown hr {
+  border: 0;
+  border-top: 1px solid rgba(86, 72, 58, 0.16);
+  margin: 10px 0;
+}
+
 .chat-markdown ul {
   margin: 4px 0 8px 18px;
   padding: 0;

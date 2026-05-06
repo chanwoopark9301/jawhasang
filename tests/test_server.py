@@ -323,7 +323,7 @@ class TestDataAPI:
             content = b'''<?xml version="1.0" encoding="UTF-8"?>
             <rss version="2.0"><channel>
               <item>
-                <title>Crypto market structure clarity bill advances</title>
+                <title>Crypto market structure clarity bill advances - CNBC</title>
                 <link>https://example.com/clarity-act</link>
                 <pubDate>Tue, 05 May 2026 10:00:00 GMT</pubDate>
                 <description>Lawmakers advanced a crypto market structure bill.</description>
@@ -346,6 +346,7 @@ class TestDataAPI:
         assert data['news'][0]['topic'] == 'crypto market structure clarity act'
         assert data['news'][0]['kind'] == 'general-news'
         assert data['news'][0]['title'] == 'Crypto market structure clarity bill advances'
+        assert data['news'][0]['publisher'] == 'CNBC'
 
     def test_unauthorized_api_returns_json_401(self, app):
         with app.test_client() as c:

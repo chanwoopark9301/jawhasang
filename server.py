@@ -685,7 +685,7 @@ _NEWS_SOURCE_RANK = {
     'google-news-rss': 52,
 }
 
-def _news_item(symbol, title, link='', published='', summary='', source='unknown', kind='news', sentiment=None):
+def _news_item(symbol, title, link='', published='', summary='', source='unknown', kind='news', sentiment=None, publisher=None):
     title = (title or '').strip()
     if not title:
         return None
@@ -696,6 +696,7 @@ def _news_item(symbol, title, link='', published='', summary='', source='unknown
         'published': (published or '').strip(),
         'summary': re.sub(r'<[^>]+>', '', summary or '').strip(),
         'source': source,
+        'publisher': (publisher or '').strip(),
         'kind': kind,
         'sentiment': sentiment,
         'rank': _NEWS_SOURCE_RANK.get(source, 40),
@@ -718,13 +719,22 @@ def _normalize_rss_item(item, symbol: str, source: str):
         found = item.find(tag)
         return (found.text or '').strip() if found is not None else ''
 
+    title = text('title')
+    publisher = ''
+    if source == 'google-news-rss':
+        match = re.match(r'(.+?)\s+-\s+([^-]+)$', title)
+        if match:
+            title = match.group(1).strip()
+            publisher = match.group(2).strip()
+
     return _news_item(
         symbol=symbol,
-        title=text('title'),
+        title=title,
         link=text('link'),
         published=text('pubDate'),
         summary=text('description'),
         source=source,
+        publisher=publisher,
         kind='news',
     )
 

@@ -278,7 +278,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260505-02');
+            const res = await fetch('/js/data.js?v=20260506-01');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -296,11 +296,14 @@ class TestChatDialogue:
         logged_in_page.evaluate("""() => {
             state.currentChatMessages = [{
                 role: 'ai',
-                text: '**핵심**\\n- 리스크 확인\\n[원문](https://example.com)'
+                text: '핵심 흐름 요약\\n---\\n**핵심**\\n- 리스크 확인\\n[원문](https://example.com)'
             }];
             renderChatView();
         }""")
+        logged_in_page.wait_for_selector('.chat-markdown h4', timeout=5_000)
         logged_in_page.wait_for_selector('.chat-markdown strong', timeout=5_000)
+        assert logged_in_page.locator('.chat-markdown h4').inner_text() == '핵심 흐름 요약'
+        assert logged_in_page.locator('.chat-markdown hr').count() == 1
         assert logged_in_page.locator('.chat-markdown strong').inner_text() == '핵심'
         assert logged_in_page.locator('.chat-markdown li').inner_text() == '리스크 확인'
         assert logged_in_page.locator('.chat-markdown a').get_attribute('href') == 'https://example.com'
@@ -942,11 +945,14 @@ class TestInvestmentPartner:
         news_url = logged_in_page.evaluate("() => window.__newsUrls[0]")
         assert 'symbols=IREN' in news_url
         assert 'query=crypto+market+structure+clarity+act' in news_url
+        assert 'Digital+Asset+Market+Structure+Clarity+Act' in news_url
         system_prompt = logged_in_page.evaluate("() => window.__analyzePayloads[0].system[0].text")
         assert '투자 뉴스/공시 조회 결과' in system_prompt
         assert 'IREN expands AI cloud capacity' in system_prompt
         assert 'Clarity Act crypto market structure bill advances' in system_prompt
         assert 'crypto market structure clarity act' in system_prompt
+        assert '링크 URL을 중간에서 자르지 말고' in system_prompt
+        assert '무슨 일이 있었나 / 시장 영향 / 내 보유 종목과의 연결 / 내 원칙상 확인할 점' in system_prompt
         assert 'https://finance.yahoo.com/news/iren-test' in system_prompt
         assert 'https://example.com/clarity-act' in system_prompt
         assert logged_in_page.locator('.chat-bubble-ai').count() == 1

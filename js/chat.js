@@ -215,15 +215,17 @@ function inferInvestmentNewsQueries(text) {
 
   if (/\uD074\uB798\uB9AC\uD2F0|clarity|fit21|market structure|\uC2DC\uC7A5\s*\uAD6C\uC870/.test(lower)) {
     add('crypto market structure clarity act');
+    add('Digital Asset Market Structure Clarity Act');
   }
   if (/genius|\uC9C0\uB2C8\uC5B4\uC2A4|\uC2A4\uD14C\uC774\uBE14|stablecoin/.test(lower)) {
     add('GENIUS Act stablecoin bill');
   }
   if (/\uC554\uD638\uD654\uD3D0|\uAC00\uC0C1\uC790\uC0B0|\uB514\uC9C0\uD138\uC790\uC0B0|crypto|\uBC95\uC548|\uADDC\uC81C/.test(lower) && !queries.length) {
     add('US crypto legislation news');
+    add('US crypto market structure bill');
   }
 
-  return queries.slice(0, 4);
+  return queries.slice(0, 5);
 }
 async function fetchInvestmentNewsContext(text) {
   if (!shouldFetchInvestmentNews(text)) return '';
@@ -232,7 +234,7 @@ async function fetchInvestmentNewsContext(text) {
   if (!symbols.length && !queries.length) return '';
   const today = new Date().toISOString().split('T')[0];
   try {
-    const data = await apiFetchInvestmentNews(symbols, 5, queries);
+    const data = await apiFetchInvestmentNews(symbols, 7, queries);
     const items = Array.isArray(data.news) ? data.news : [];
     const targetLines = [
       symbols.length ? `- 조회 종목: ${symbols.join(', ')}` : '',
@@ -244,11 +246,12 @@ async function fetchInvestmentNewsContext(text) {
     const sourceLines = items.map((item, idx) => [
       `${idx + 1}. ${item.topic || item.symbol || symbols[0] || queries[0]} | ${item.title || '제목 없음'}`,
       `   - 발행/공시일: ${item.published || '미상'}`,
-      `   - 출처: ${item.source || '미상'}${item.kind ? ` (${item.kind})` : ''}`,
+      `   - 출처: ${item.publisher || item.source || '미상'}${item.kind ? ` (${item.kind})` : ''}`,
+      item.source && item.publisher ? `   - 수집 경로: ${item.source}` : '',
       `   - 요약 원문: ${item.summary || '제공된 요약 없음'}`,
       `   - 링크: ${item.link || '없음'}`,
-    ].join('\n')).join('\n');
-    return `\n\n[투자 뉴스/공시 조회 결과]\n조회 기준일: ${today}\n${targetLines}\n\n${sourceLines}\n\n뉴스 응답 규칙:\n- 위 자료를 그대로 링크 목록으로만 내보내지 말고, 먼저 3~5문장으로 핵심 흐름을 요약한다.\n- SEC EDGAR는 공식 원천 자료로 취급하되, '뉴스 흐름'이 아니라 공시 원문으로 해석한다.\n- 종목 뉴스와 법안/규제/매크로 이슈가 같이 있으면 각 주제를 별도 섹션으로 나누어 답한다.\n- 비티커 이슈는 특정 종목 공시에 직접 언급이 없음으로 처리하지 말고, 별도 검색 결과로 거시 해석한다.\n- 발행/공시일을 조회 기준일과 혼동하지 않는다. 조회 기준일은 ${today}이지만 자료 발행일은 별도로 말한다.\n- 사용자가 보유주 관점으로 물으면 '무슨 일이 있었나 → 왜 중요한가 → 내 원칙상 확인할 점' 순서로 답한다.\n- 마크다운을 정상 사용한다. 제목, 굵은 글씨, 짧은 목록, 링크를 읽기 좋게 배치한다.\n- 링크는 마지막 '원문 링크' 섹션에만 모으고 본문은 해석과 리스크 체크 중심으로 둔다.\n- "실시간 인터넷 검색 기능이 없다"거나 사용자가 직접 검색하라고 말하지 않는다.\n- 특정 종목 매수/매도 추천이나 수익률 예측은 하지 않는다.`;
+    ].filter(Boolean).join('\n')).join('\n');
+    return `\n\n[투자 뉴스/공시 조회 결과]\n조회 기준일: ${today}\n${targetLines}\n\n${sourceLines}\n\n뉴스 응답 규칙:\n- 위 자료를 그대로 링크 목록으로만 내보내지 말고, 먼저 확인된 사실을 3~5문장으로 요약한다.\n- RSS 제목/요약만 있는 자료는 단정하지 말고 "확인된 범위에서는"이라고 표시한다.\n- SEC EDGAR는 공식 원천 자료로 취급하되, '뉴스 흐름'이 아니라 공시 원문으로 해석한다.\n- 종목 뉴스와 법안/규제/매크로 이슈가 같이 있으면 각 주제를 별도 섹션으로 나누어 답한다.\n- 비티커 이슈는 특정 종목 공시에 직접 언급이 없음으로 처리하지 말고, 별도 검색 결과로 거시 해석한다.\n- 법안/규제 뉴스는 "무슨 일이 있었나 / 시장 영향 / 내 보유 종목과의 연결 / 내 원칙상 확인할 점" 구조로 답한다.\n- 발행/공시일을 조회 기준일과 혼동하지 않는다. 조회 기준일은 ${today}이지만 자료 발행일은 별도로 말한다.\n- 사용자가 보유주 관점으로 물으면 '무슨 일이 있었나 → 왜 중요한가 → 내 원칙상 확인할 점' 순서로 답한다.\n- 마크다운을 정상 사용한다. 섹션 제목은 반드시 ## 또는 ### 로 시작하고, 굵은 글씨와 짧은 목록을 사용한다.\n- 링크는 마지막 '## 원문 링크' 섹션에만 모으고 본문은 해석과 리스크 체크 중심으로 둔다.\n- 링크 URL을 중간에서 자르지 말고, 완전한 마크다운 링크 형식 [제목](URL)로 쓴다.\n- "실시간 인터넷 검색 기능이 없다"거나 사용자가 직접 검색하라고 말하지 않는다.\n- 특정 종목 매수/매도 추천이나 수익률 예측은 하지 않는다.`;
   } catch (e) {
     logger.warn('투자 뉴스 검색 실패', e);
     return `\n\n[투자 뉴스 조회 결과]\n- 조회 기준일: ${today}\n- 뉴스 조회가 실패했습니다. 실패 사실을 짧게 알리고 기존 기록과 투자 원칙으로만 답하세요.`;
