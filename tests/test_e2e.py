@@ -278,7 +278,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260506-06');
+            const res = await fetch('/js/data.js?v=20260506-07');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -685,7 +685,8 @@ class TestInvestmentPartner:
         logged_in_page.locator('.modal-close').click()
 
         logged_in_page.locator('#investment-menu-positions').click()
-        logged_in_page.wait_for_selector('#investment-position-form', timeout=8_000)
+        logged_in_page.wait_for_selector('#investment-position-form', state='attached', timeout=8_000)
+        assert logged_in_page.locator('#investment-manage-tools').evaluate("(el) => !el.open")
         assert '종목 관리' in logged_in_page.locator('#modal-box').inner_text()
         assert logged_in_page.locator('#ip-current').count() == 0
         logged_in_page.locator('.modal-close').click()
@@ -756,6 +757,7 @@ class TestInvestmentPartner:
             };
         }""")
 
+        logged_in_page.locator('#investment-manage-tools summary').click()
         logged_in_page.locator('#ip-symbol').fill('NVDA')
         logged_in_page.locator('#ip-name').fill('NVIDIA')
         logged_in_page.locator('#ip-shares').fill('10')
@@ -889,6 +891,7 @@ class TestInvestmentPartner:
             };
         }""")
 
+        logged_in_page.locator('#investment-manage-tools summary').click()
         logged_in_page.locator('#ip-asset-type').select_option('crypto')
         logged_in_page.locator('#ip-symbol').fill('이더리움')
         logged_in_page.locator('#ip-shares').fill('2')
@@ -899,6 +902,7 @@ class TestInvestmentPartner:
             timeout=8_000,
         )
 
+        logged_in_page.locator('#investment-manage-tools summary').click()
         logged_in_page.locator('#ip-asset-type').select_option('cash')
         logged_in_page.locator('#ip-shares').fill('1000')
         logged_in_page.locator('#investment-add-position').click()
@@ -947,6 +951,7 @@ class TestInvestmentPartner:
         }""")
         logged_in_page.locator('#investment-menu-positions').click()
 
+        logged_in_page.locator('#investment-manage-tools summary').click()
         logged_in_page.locator('#ip-symbol').fill('QQQ')
         logged_in_page.locator('#ip-name').fill('Invesco QQQ')
         logged_in_page.locator('#ip-shares').fill('3')
@@ -957,6 +962,10 @@ class TestInvestmentPartner:
                 const d = await res.json();
                 return d.investment.positions.some(p => p.symbol === 'QQQ' && p.currentPrice === 46.06);
             }""",
+            timeout=8_000,
+        )
+        logged_in_page.wait_for_function(
+            "() => document.querySelector('#modal-box')?.innerText.includes('$138.18')",
             timeout=8_000,
         )
 
@@ -1004,6 +1013,7 @@ class TestInvestmentPartner:
             window.__saveAttempts = () => saveAttempts;
         }""")
 
+        logged_in_page.locator('#investment-manage-tools summary').click()
         logged_in_page.locator('#ip-symbol').fill('MSFT')
         logged_in_page.locator('#ip-shares').fill('1')
         logged_in_page.locator('#investment-add-position').click()

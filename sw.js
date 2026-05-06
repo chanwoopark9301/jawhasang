@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v55'; // Stock crypto cash portfolio support
+const CACHE_NAME = 'jip-v56'; // Collapsed portfolio management refresh
 
 const STATIC_ASSETS = [
   '/style.css',

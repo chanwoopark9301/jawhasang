@@ -274,9 +274,15 @@ function renderPortfolioManagementPanel() {
   return `<section class="investment-portfolio-manage" id="investment-portfolio-manage">
     <div class="investment-portfolio-list-head">
       <strong>종목 관리</strong>
-      <span>포트폴리오 안에서 추가, 수정, 삭제</span>
+      <span>추가·수정은 필요할 때만 열어서 사용</span>
     </div>
-    ${renderInvestmentPositionForm()}
+    <details class="investment-manage-tools" id="investment-manage-tools">
+      <summary>
+        <span>종목 추가 / 수정</span>
+        <small>주식, 코인, 현금 등록</small>
+      </summary>
+      ${renderInvestmentPositionForm()}
+    </details>
     <div class="investment-manage-list">
       ${positions.length ? positions.map(p => `<div class="investment-manage-row">
         <div>
@@ -494,8 +500,9 @@ async function addInvestmentPositionFromForm(event) {
   } catch (e) {
     logger.warn('종목 등록 현재가 조회 실패', e);
   }
+  const latestPosition = state.investment.positions.find(p => String(p.id) === String(position.id)) || position;
   if (button) button.textContent = 'DB 저장 중';
-  const saved = await apiSaveInvestmentPosition(position, 3);
+  const saved = await apiSaveInvestmentPosition(latestPosition, 3);
   if (!saved?.ok) {
     state.investment.positions = existing
       ? state.investment.positions.map(p => String(p.id) === String(existing.id) ? existing : p)
@@ -556,6 +563,8 @@ function editInvestmentPosition(id) {
   const btn = document.getElementById('investment-add-position');
   if (btn) btn.textContent = '종목 수정 저장';
   syncInvestmentPositionAssetType();
+  const tools = document.getElementById('investment-manage-tools');
+  if (tools) tools.open = true;
   document.getElementById('investment-position-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
