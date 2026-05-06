@@ -126,13 +126,28 @@ function _applyServerData(data) {
 }
 
 function _dataSignature() {
-  return JSON.stringify({
-    students: state.students,
-    sessions: state.sessions,
-    myTopics: state.myTopics,
-    myRecords: state.myRecords,
-    investment: state.investment,
-  });
+  const lastOf = (arr, pick) => {
+    const list = Array.isArray(arr) ? arr : [];
+    if (!list.length) return '';
+    return pick(list[list.length - 1]);
+  };
+  const inv = state.investment || {};
+  return [
+    state.students.length,
+    state.sessions.length,
+    state.myTopics.length,
+    state.myRecords.length,
+    inv.positions?.length || 0,
+    inv.events?.length || 0,
+    inv.decisions?.length || 0,
+    lastOf(state.students, s => s.id || s.createdAt || ''),
+    lastOf(state.sessions, s => s.id || s.date || ''),
+    lastOf(state.myTopics, t => t.id || t.createdAt || ''),
+    lastOf(state.myRecords, r => r.id || r.date || ''),
+    lastOf(inv.positions, p => `${p.id || ''}:${p.symbol || ''}:${p.shares || ''}:${p.currentPrice || ''}`),
+    lastOf(inv.events, e => e.id || e.date || ''),
+    lastOf(inv.decisions, d => d.id || d.createdAt || ''),
+  ].join('|');
 }
 
 function _loadFromLocalCache() {
@@ -223,6 +238,10 @@ function _isJSONResponse(res) {
 
 // FOUC 방지 스플래시 제거 — render() 호출 직후 실행
 function _hideSplash() {
+  if (typeof window.__hideBootSplash === 'function') {
+    window.__hideBootSplash();
+    return;
+  }
   const el = document.getElementById('app-splash');
   if (!el) return;
   el.classList.add('hiding');
