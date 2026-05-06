@@ -20,7 +20,10 @@ function renderInvestmentView() {
       <div class="investment-total">
         <span>포트폴리오</span>
         <strong>${formatMoney(totals.totalValue)}</strong>
-        <button class="investment-refresh-btn" id="investment-refresh-market" onclick="refreshInvestmentMarketData()">현재가 갱신</button>
+        <div class="investment-action-row">
+          <button class="investment-refresh-btn" id="investment-refresh-market" onclick="refreshInvestmentMarketData()">현재가 갱신</button>
+          ${renderInvestmentCurrencyToggle('investment-currency-toggle-main')}
+        </div>
       </div>
     </section>
 
@@ -112,6 +115,13 @@ function renderInvestmentPositions(positions, totals) {
   </div>`;
 }
 
+function renderInvestmentCurrencyToggle(id) {
+  const currency = investmentDisplayCurrency();
+  return `<button class="investment-currency-toggle" id="${esc(id)}" type="button" onclick="toggleInvestmentCurrency()" title="원/달러 보기 전환">
+    ${currency === 'KRW' ? '₩ 원화' : '$ 달러'}
+  </button>`;
+}
+
 function getInvestmentPortfolioSlices(positions) {
   const rows = (Array.isArray(positions) ? positions : [])
     .map((p, index) => ({
@@ -166,7 +176,10 @@ function renderModalInvestmentPortfolio() {
       <button class="modal-close" onclick="closeModal()">x</button>
       <div class="investment-modal-titlebar">
         <div class="modal-title">포트폴리오</div>
-        <button class="investment-refresh-btn investment-modal-refresh-btn" id="investment-modal-refresh-market" onclick="refreshInvestmentMarketData()">현재가 갱신</button>
+        <div class="investment-action-row">
+          ${renderInvestmentCurrencyToggle('investment-currency-toggle-modal-empty')}
+          <button class="investment-refresh-btn investment-modal-refresh-btn" id="investment-modal-refresh-market" onclick="refreshInvestmentMarketData()">현재가 갱신</button>
+        </div>
       </div>
       <div class="investment-empty">현재가와 수량이 있는 종목을 등록하면 포트폴리오 리포트로 상태를 볼 수 있어요.</div>
       ${renderPortfolioManagementPanel()}`;
@@ -195,7 +208,10 @@ function renderModalInvestmentPortfolio() {
     <button class="modal-close" onclick="closeModal()">x</button>
     <div class="investment-modal-titlebar">
       <div class="modal-title">포트폴리오 리포트</div>
-      <button class="investment-refresh-btn investment-modal-refresh-btn" id="investment-modal-refresh-market" onclick="refreshInvestmentMarketData()">현재가 갱신</button>
+      <div class="investment-action-row">
+        ${renderInvestmentCurrencyToggle('investment-currency-toggle-modal')}
+        <button class="investment-refresh-btn investment-modal-refresh-btn" id="investment-modal-refresh-market" onclick="refreshInvestmentMarketData()">현재가 갱신</button>
+      </div>
     </div>
     <div class="investment-portfolio-modal" id="investment-portfolio-modal">
       <div class="investment-portfolio-overview">
@@ -287,7 +303,13 @@ function renderModalInvestmentPortfolio() {
     </div>`;
 }
 function renderInvestmentPositionForm() {
+  const currency = investmentDisplayCurrency();
+  const unit = investmentMoneyUnitLabel();
   return `<form class="investment-form" id="investment-position-form" onsubmit="addInvestmentPositionFromForm(event)">
+    <div class="investment-form-toolbar">
+      <span>입력 기준: ${currency === 'KRW' ? '원화' : '달러'}</span>
+      ${renderInvestmentCurrencyToggle('investment-currency-toggle-form')}
+    </div>
     <div class="investment-form-row">
       <select class="form-input" id="ip-asset-type" onchange="syncInvestmentPositionAssetType()">
         <option value="stock">주식/ETF</option>
@@ -303,11 +325,11 @@ function renderInvestmentPositionForm() {
     </div>
     <div class="investment-form-row">
       <input class="form-input" id="ip-shares" type="text" inputmode="decimal" placeholder="수량">
-      <input class="form-input" id="ip-avg" type="number" min="0" step="0.01" placeholder="평균 단가">
+      <input class="form-input" id="ip-avg" type="number" min="0" step="${currency === 'KRW' ? '1' : '0.01'}" placeholder="평균 단가 (${unit})">
     </div>
     <div class="investment-form-row">
-      <input class="form-input" id="ip-target" type="number" min="0" step="0.01" placeholder="목표가">
-      <input class="form-input" id="ip-stop" type="number" min="0" step="0.01" placeholder="손절가">
+      <input class="form-input" id="ip-target" type="number" min="0" step="${currency === 'KRW' ? '1' : '0.01'}" placeholder="목표가 (${unit})">
+      <input class="form-input" id="ip-stop" type="number" min="0" step="${currency === 'KRW' ? '1' : '0.01'}" placeholder="손절가 (${unit})">
       <label class="investment-check"><input id="ip-longterm" type="checkbox"> 장기보유</label>
     </div>
     <textarea class="form-input investment-textarea" id="ip-thesis" placeholder="투자 논리"></textarea>
@@ -381,7 +403,12 @@ function renderModalInvestmentRules() {
 
 function renderInvestmentGateForm(positions) {
   const tradable = (positions || []).filter(p => !isCashInvestmentPosition(p));
+  const unit = investmentMoneyUnitLabel();
   return `<form class="investment-form" id="investment-gate-form" onsubmit="runInvestmentGateFromForm(event)">
+    <div class="investment-form-toolbar">
+      <span>체결가 입력 기준: ${investmentDisplayCurrency() === 'KRW' ? '원화' : '달러'}</span>
+      ${renderInvestmentCurrencyToggle('investment-currency-toggle-gate')}
+    </div>
     <select class="form-input" id="ig-position" ${tradable.length ? '' : 'disabled'}>
       ${tradable.length
         ? tradable.map(p => `<option value="${esc(p.id)}">${esc(p.symbol || p.name || p.id)}</option>`).join('')
@@ -404,7 +431,7 @@ function renderInvestmentGateForm(positions) {
     </div>
     <div class="investment-form-row">
       <input class="form-input" id="ig-shares" type="text" inputmode="decimal" placeholder="체결 수량">
-      <input class="form-input" id="ig-price" type="number" min="0" step="0.01" placeholder="체결가">
+      <input class="form-input" id="ig-price" type="number" min="0" step="${investmentDisplayCurrency() === 'KRW' ? '1' : '0.01'}" placeholder="체결가 (${unit})">
       <div class="investment-form-hint">허용된 매매만 포트폴리오에 자동 반영됩니다.</div>
     </div>
     <textarea class="form-input investment-textarea" id="ig-reason" placeholder="지금 이 행동을 하려는 이유"></textarea>
@@ -514,18 +541,18 @@ async function addInvestmentPositionFromForm(event) {
     symbol,
     name: document.getElementById('ip-name')?.value.trim() || (assetType === 'cash' ? '현금' : symbol),
     shares: parseInvestmentNumber(document.getElementById('ip-shares')?.value),
-    avgPrice: parseInvestmentNumber(document.getElementById('ip-avg')?.value),
+    avgPrice: parseInvestmentMoneyInput(document.getElementById('ip-avg')?.value),
     currentPrice: existing?.currentPrice ?? null,
     manualPrice: existing?.manualPrice || false,
-    targetPrice: parseInvestmentNumber(document.getElementById('ip-target')?.value),
-    stopPrice: parseInvestmentNumber(document.getElementById('ip-stop')?.value),
+    targetPrice: parseInvestmentMoneyInput(document.getElementById('ip-target')?.value),
+    stopPrice: parseInvestmentMoneyInput(document.getElementById('ip-stop')?.value),
     longTerm: !!document.getElementById('ip-longterm')?.checked,
     thesis: document.getElementById('ip-thesis')?.value.trim() || '',
     addRule: document.getElementById('ip-add-rule')?.value.trim() || '',
     marketSource: '',
   };
   if (assetType === 'cash') {
-    position.shares = parseInvestmentNumber(document.getElementById('ip-shares')?.value);
+    position.shares = parseInvestmentMoneyInput(document.getElementById('ip-shares')?.value);
     position.avgPrice = 1;
     position.currentPrice = 1;
     position.cashAmount = position.shares;
@@ -602,10 +629,10 @@ function editInvestmentPosition(id) {
   set('ip-id', p.id);
   set('ip-symbol', p.symbol || '');
   set('ip-name', p.name || '');
-  set('ip-shares', isCashInvestmentPosition(p) ? (p.cashAmount ?? p.shares ?? '') : (p.shares || ''));
-  set('ip-avg', p.avgPrice || '');
-  set('ip-target', p.targetPrice || '');
-  set('ip-stop', p.stopPrice || '');
+  set('ip-shares', isCashInvestmentPosition(p) ? formatInvestmentMoneyInputValue(p.cashAmount ?? p.shares ?? '') : (p.shares || ''));
+  set('ip-avg', formatInvestmentMoneyInputValue(p.avgPrice || ''));
+  set('ip-target', formatInvestmentMoneyInputValue(p.targetPrice || ''));
+  set('ip-stop', formatInvestmentMoneyInputValue(p.stopPrice || ''));
   set('ip-thesis', p.thesis || '');
   set('ip-add-rule', p.addRule || '');
   const longTerm = document.getElementById('ip-longterm');
@@ -636,9 +663,9 @@ function syncInvestmentPositionAssetType() {
     name.placeholder = type === 'cash' ? '현금' : '종목명';
     if (type === 'cash' && !name.value) name.value = '현금';
   }
-  if (shares) shares.placeholder = type === 'cash' ? '현금 보유액' : '수량';
+  if (shares) shares.placeholder = type === 'cash' ? `현금 보유액 (${investmentMoneyUnitLabel()})` : '수량';
   if (avg) {
-    avg.placeholder = type === 'cash' ? '자동 1달러' : '평균 단가';
+    avg.placeholder = type === 'cash' ? `자동 ${investmentDisplayCurrency() === 'KRW' ? '환산' : '1달러'}` : `평균 단가 (${investmentMoneyUnitLabel()})`;
     avg.disabled = type === 'cash';
     if (type === 'cash') avg.value = '1';
   }
@@ -687,7 +714,7 @@ async function runInvestmentGateFromForm(event) {
   const context = document.getElementById('ig-context')?.value || 'normal';
   const reason = document.getElementById('ig-reason')?.value.trim() || '';
   const tradeShares = parseInvestmentNumber(document.getElementById('ig-shares')?.value);
-  const tradePrice = parseInvestmentNumber(document.getElementById('ig-price')?.value);
+  const tradePrice = parseInvestmentMoneyInput(document.getElementById('ig-price')?.value);
   const verdict = evaluateInvestmentDecision({
     position,
     rules: state.investment.rules,
@@ -793,13 +820,53 @@ async function addInvestmentNewsFromForm(event) {
 
 function formatMoney(value) {
   const n = parseInvestmentNumber(value);
+  if (investmentDisplayCurrency() === 'KRW') {
+    return '₩' + Math.round(n * investmentUsdKrwRate()).toLocaleString('ko-KR');
+  }
   return '$' + n.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
 function formatMoneySigned(value) {
   const n = parseInvestmentNumber(value);
   const sign = n > 0 ? '+' : n < 0 ? '-' : '';
+  if (investmentDisplayCurrency() === 'KRW') {
+    return sign + '₩' + Math.round(Math.abs(n) * investmentUsdKrwRate()).toLocaleString('ko-KR');
+  }
   return sign + '$' + Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+function investmentDisplayCurrency() {
+  const inv = state.investment = normalizeInvestmentState(state.investment);
+  return inv.displayCurrency === 'KRW' ? 'KRW' : 'USD';
+}
+
+function investmentUsdKrwRate() {
+  const inv = state.investment = normalizeInvestmentState(state.investment);
+  return parseInvestmentNumber(inv.usdKrwRate) || 1350;
+}
+
+function investmentMoneyUnitLabel() {
+  return investmentDisplayCurrency() === 'KRW' ? '원' : '달러';
+}
+
+function parseInvestmentMoneyInput(value) {
+  const n = parseInvestmentNumber(value);
+  return investmentDisplayCurrency() === 'KRW' ? n / investmentUsdKrwRate() : n;
+}
+
+function formatInvestmentMoneyInputValue(value) {
+  const n = parseInvestmentNumber(value);
+  if (!n) return '';
+  if (investmentDisplayCurrency() === 'KRW') return String(Math.round(n * investmentUsdKrwRate()));
+  return String(Math.round(n * 100) / 100);
+}
+
+async function toggleInvestmentCurrency() {
+  const inv = state.investment = normalizeInvestmentState(state.investment);
+  inv.displayCurrency = inv.displayCurrency === 'KRW' ? 'USD' : 'KRW';
+  await saveData({ retries: 0 });
+  if (state.activeModal) openModal(state.activeModal);
+  render();
 }
 
 function formatShares(value) {

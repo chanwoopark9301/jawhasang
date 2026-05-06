@@ -46,7 +46,7 @@ async function fetchMarketQuoteData(symbols) {
 
 async function refreshInvestmentMarketData() {
   const inv = state.investment = normalizeInvestmentState(state.investment);
-  const buttons = document.querySelectorAll('#investment-refresh-market, #investment-menu-refresh, #investment-modal-refresh-market');
+  const buttons = document.querySelectorAll('#investment-refresh-market, #investment-modal-refresh-market');
   buttons.forEach(btn => {
     btn.disabled = true;
     btn.dataset.originalText = btn.dataset.originalText || btn.textContent;

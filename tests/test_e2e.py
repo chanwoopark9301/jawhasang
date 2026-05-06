@@ -278,7 +278,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260506-10');
+            const res = await fetch('/js/data.js?v=20260506-11');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -682,9 +682,11 @@ class TestInvestmentPartner:
         assert '고집중' in modal_text
         assert '위험 신호' in modal_text
         assert '현재가 갱신 필요' in modal_text
+        assert logged_in_page.locator('#investment-menu-refresh').count() == 0
+        assert logged_in_page.locator('#investment-menu-positions').count() == 0
         logged_in_page.locator('.modal-close').click()
 
-        logged_in_page.locator('#investment-menu-positions').click()
+        logged_in_page.locator('#investment-menu-portfolio').click()
         logged_in_page.wait_for_selector('#investment-position-form', state='attached', timeout=8_000)
         assert logged_in_page.locator('#investment-manage-tools').evaluate("(el) => !el.open")
         assert '종목 관리' in logged_in_page.locator('#modal-box').inner_text()
@@ -708,6 +710,61 @@ class TestInvestmentPartner:
         assert logged_in_page.locator('.investment-news-card .chat-markdown h5').inner_text() == '핵심 요약'
         assert logged_in_page.locator('.investment-news-card .chat-markdown li').inner_text() == '규제 불확실성 완화'
         assert logged_in_page.locator('.investment-news-card .chat-markdown a').get_attribute('href') == 'https://example.com/news'
+
+    def test_investment_currency_toggle_changes_display_and_position_input(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.investment.positions = [{
+                id: 'ip-currency',
+                symbol: 'NVDA',
+                name: 'NVIDIA',
+                shares: 2,
+                avgPrice: 100,
+                currentPrice: 120,
+            }];
+            state.investment.displayCurrency = 'USD';
+            state.investment.usdKrwRate = 1300;
+            window.apiSaveInvestmentPosition = async (position) => ({
+                ok: true,
+                position,
+                investment: { ...state.investment, positions: state.investment.positions },
+            });
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = (url, opts) => {
+                if (String(url).includes('/api/market/quote')) {
+                    return Promise.resolve(new Response(JSON.stringify({ quotes: [] }), {
+                        status: 200,
+                        headers: { 'Content-Type': 'application/json' },
+                    }));
+                }
+                return originalFetch(url, opts);
+            };
+            render();
+        }""")
+
+        logged_in_page.locator('#investment-menu-portfolio').click()
+        logged_in_page.wait_for_selector('#investment-portfolio-modal', timeout=8_000)
+        assert '$240' in logged_in_page.locator('#modal-box').inner_text()
+
+        logged_in_page.locator('#investment-currency-toggle-modal').click()
+        logged_in_page.wait_for_function("() => state.investment.displayCurrency === 'KRW'", timeout=8_000)
+        logged_in_page.wait_for_function(
+            "() => document.getElementById('modal-box')?.innerText.includes('₩312,000')",
+            timeout=8_000,
+        )
+        assert '₩312,000' in logged_in_page.locator('#modal-box').inner_text()
+        assert '평균 단가 (원)' in logged_in_page.locator('#ip-avg').get_attribute('placeholder')
+
+        logged_in_page.locator('#investment-manage-tools summary').click()
+        logged_in_page.locator('#ip-symbol').fill('KRW1')
+        logged_in_page.locator('#ip-name').fill('Krw Test')
+        logged_in_page.locator('#ip-shares').fill('3')
+        logged_in_page.locator('#ip-avg').fill('13000')
+        logged_in_page.locator('#investment-add-position').click()
+        logged_in_page.wait_for_function(
+            "() => Math.round(state.investment.positions.at(-1).avgPrice * 100) / 100 === 10",
+            timeout=8_000,
+        )
 
     def test_rule_engine_blocks_overweight_add(self, logged_in_page):
         logged_in_page.wait_for_load_state('networkidle')
@@ -737,7 +794,7 @@ class TestInvestmentPartner:
 
     def test_gate_saves_decision_and_calendar_event(self, logged_in_page):
         self._open_investment(logged_in_page)
-        logged_in_page.locator('#investment-menu-positions').click()
+        logged_in_page.locator('#investment-menu-portfolio').click()
         logged_in_page.evaluate("""() => {
             state.investment.positions = [];
             state.investment.decisions = [];
@@ -854,7 +911,7 @@ class TestInvestmentPartner:
             render();
         }""")
 
-        logged_in_page.locator('#investment-menu-positions').click()
+        logged_in_page.locator('#investment-menu-portfolio').click()
         logged_in_page.locator('.investment-manage-row button').first.click()
         assert logged_in_page.locator('#ip-id').input_value() == 'ip-edit'
         logged_in_page.locator('#ip-shares').fill('4')
@@ -873,7 +930,7 @@ class TestInvestmentPartner:
 
     def test_portfolio_registers_crypto_alias_and_cash(self, logged_in_page):
         self._open_investment(logged_in_page)
-        logged_in_page.locator('#investment-menu-positions').click()
+        logged_in_page.locator('#investment-menu-portfolio').click()
         logged_in_page.evaluate("""() => {
             state.investment.positions = [];
             window.apiSaveInvestmentPosition = async () => ({
@@ -949,7 +1006,7 @@ class TestInvestmentPartner:
                 return originalFetch(url, opts);
             };
         }""")
-        logged_in_page.locator('#investment-menu-positions').click()
+        logged_in_page.locator('#investment-menu-portfolio').click()
 
         logged_in_page.locator('#investment-manage-tools summary').click()
         logged_in_page.locator('#ip-symbol').fill('QQQ')
@@ -971,7 +1028,7 @@ class TestInvestmentPartner:
 
     def test_position_register_retries_transient_server_save_failure(self, logged_in_page):
         self._open_investment(logged_in_page)
-        logged_in_page.locator('#investment-menu-positions').click()
+        logged_in_page.locator('#investment-menu-portfolio').click()
         logged_in_page.evaluate("""() => {
             let saveAttempts = 0;
             const originalFetch = window.fetch.bind(window);
@@ -1067,7 +1124,7 @@ class TestInvestmentPartner:
             };
         }""")
 
-        logged_in_page.locator('#investment-menu-positions').click()
+        logged_in_page.locator('#investment-menu-portfolio').click()
         logged_in_page.locator('#investment-manage-tools summary').click()
         logged_in_page.locator('#ip-symbol').fill('NEW1')
         logged_in_page.locator('#ip-name').fill('New One')

@@ -136,8 +136,6 @@ function _updateRpContent() {
       <div class="ctx-meta">${inv.positions.length}개 종목 · ${inv.decisions.length}개 판단</div>
       <div class="investment-side-menu">
         <button id="investment-menu-portfolio" onclick="openModal('investment-portfolio')">포트폴리오</button>
-        <button id="investment-menu-refresh" onclick="refreshInvestmentMarketData()">현재가 갱신</button>
-        <button id="investment-menu-positions" onclick="openModal('investment-portfolio')">종목 관리</button>
         <button id="investment-menu-rules" onclick="openModal('investment-rules')">투자 원칙</button>
         <button id="investment-menu-decisions" onclick="openModal('investment-decisions')">매매 기록</button>
         <button id="investment-menu-news" onclick="openModal('investment-news')">뉴스 동향</button>
