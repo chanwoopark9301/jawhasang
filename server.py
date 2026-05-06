@@ -19,6 +19,7 @@ import xml.etree.ElementTree as ET
 from functools import wraps
 from investment_backend import upsert_position
 from investment_broker import build_order_intent
+from kis_broker import sync_kis_account
 from flask import (
     Flask, request, jsonify, send_from_directory,
     session, redirect, render_template_string,
@@ -605,6 +606,29 @@ def investment_order_intent_route():
     except Exception as e:
         log.error('POST /api/investment/order-intent failed: %s', e, exc_info=True)
         return jsonify({'ok': False, 'error': 'order intent failed'}), 500
+
+@app.route('/api/investment/broker/sync', methods=['POST'])
+@require_auth
+def investment_broker_sync_route():
+    payload = request.get_json(silent=True) or {}
+    days = payload.get('days', 30) if isinstance(payload, dict) else 30
+    try:
+        data = _normalize_data(read_data())
+        result = sync_kis_account(data.get('investment') or {}, days=days)
+        if not result.get('ok'):
+            return jsonify(result), 400
+        data['investment'] = _normalize_data({'investment': result['investment']})['investment']
+        write_data(data)
+        return jsonify({
+            'ok': True,
+            'investment': data['investment'],
+            'positionsSynced': result.get('positionsSynced', 0),
+            'tradesSynced': result.get('tradesSynced', 0),
+            'brokerReady': True,
+        })
+    except Exception as e:
+        log.error('POST /api/investment/broker/sync failed: %s', e, exc_info=True)
+        return jsonify({'ok': False, 'error': 'KIS sync failed', 'errorDetail': _safe_error_detail(e)}), 500
 _MARKET_SYMBOL_RE = re.compile(r'^[A-Za-z0-9.\-^=]{1,16}$')
 _NEWS_QUERY_RE = re.compile(r'^[^<>]{2,160}$')
 _MARKET_SYMBOL_ALIASES = {

@@ -310,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260506-22');
+            const res = await fetch('/js/data.js?v=20260506-23');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -1007,6 +1007,56 @@ class TestInvestmentPartner:
         assert '단계적 축소안' in prompt
         assert '현재 비중' in prompt
         assert '25%' in prompt
+
+    def test_kis_sync_button_merges_broker_positions(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = (url, opts) => {
+                if (String(url).includes('/api/investment/broker/sync')) {
+                    return Promise.resolve(new Response(JSON.stringify({
+                        ok: true,
+                        positionsSynced: 1,
+                        tradesSynced: 1,
+                        investment: {
+                            ...state.investment,
+                            positions: [{
+                                id: 'kis-us-IREN',
+                                symbol: 'IREN',
+                                name: 'Iris Energy',
+                                shares: 10,
+                                avgPrice: 40,
+                                currentPrice: 50,
+                                brokerSource: 'kis',
+                            }],
+                            decisions: [{
+                                id: 'kis-trade-1',
+                                type: 'trade',
+                                symbol: 'IREN',
+                                action: 'buy',
+                                tradeShares: 10,
+                                tradePrice: 40,
+                            }],
+                            broker: {
+                                status: 'connected',
+                                provider: 'kis',
+                                orderIntentOnly: true,
+                                lastSyncedAt: '2026-05-06T00:00:00Z',
+                            },
+                        },
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                return originalFetch(url, opts);
+            };
+            render();
+        }""")
+
+        logged_in_page.locator('#investment-sync-kis').click()
+        logged_in_page.wait_for_function(
+            "() => state.investment.positions.some(p => p.symbol === 'IREN' && p.brokerSource === 'kis')",
+            timeout=8_000,
+        )
+        assert 'IREN' in logged_in_page.locator('#investment-view').inner_text()
 
     def test_refresh_data_from_server_updates_investment_positions(self, logged_in_page):
         self._open_investment(logged_in_page)

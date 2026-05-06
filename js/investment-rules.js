@@ -17,11 +17,17 @@ function isCashInvestmentPosition(position) {
 
 function investmentPositionValue(position, priceKey = 'currentPrice') {
   if (isCashInvestmentPosition(position)) {
-    return parseInvestmentNumber(position?.cashAmount ?? position?.shares);
+    const cash = parseInvestmentNumber(position?.cashAmount ?? position?.shares);
+    return String(position?.currency || '').toUpperCase() === 'KRW'
+      ? cash / (parseInvestmentNumber(state?.investment?.usdKrwRate) || 1350)
+      : cash;
   }
   const shares = parseInvestmentNumber(position?.shares);
   const price = parseInvestmentNumber(position?.[priceKey]);
-  return shares * price;
+  const value = shares * price;
+  return String(position?.currency || '').toUpperCase() === 'KRW'
+    ? value / (parseInvestmentNumber(state?.investment?.usdKrwRate) || 1350)
+    : value;
 }
 
 function investmentTotals(positions) {

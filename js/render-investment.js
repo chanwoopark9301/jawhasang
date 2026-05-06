@@ -23,6 +23,7 @@ function renderInvestmentView() {
         ${formatKrwApprox(totals.totalValue)}
         <div class="investment-action-row">
           <button class="investment-refresh-btn" id="investment-refresh-market" onclick="refreshInvestmentMarketData()">현재가 갱신</button>
+          <button class="investment-refresh-btn" id="investment-sync-kis" onclick="syncKisBrokerData()">KIS 동기화</button>
         </div>
       </div>
     </section>
@@ -132,6 +133,7 @@ function renderModalInvestmentPortfolio() {
         <div class="modal-title">포트폴리오</div>
         <div class="investment-action-row">
           <button class="investment-refresh-btn investment-modal-refresh-btn" id="investment-modal-refresh-market" onclick="refreshInvestmentMarketData()">현재가 갱신</button>
+          <button class="investment-refresh-btn investment-modal-refresh-btn" id="investment-modal-sync-kis" onclick="syncKisBrokerData()">KIS 동기화</button>
         </div>
       </div>
       <div class="investment-empty">현재가와 수량이 있는 종목을 등록하면 포트폴리오 리포트로 상태를 볼 수 있어요.</div>
@@ -163,6 +165,7 @@ function renderModalInvestmentPortfolio() {
       <div class="modal-title">포트폴리오 리포트</div>
       <div class="investment-action-row">
         <button class="investment-refresh-btn investment-modal-refresh-btn" id="investment-modal-refresh-market" onclick="refreshInvestmentMarketData()">현재가 갱신</button>
+        <button class="investment-refresh-btn investment-modal-refresh-btn" id="investment-modal-sync-kis" onclick="syncKisBrokerData()">KIS 동기화</button>
       </div>
     </div>
     <div class="investment-portfolio-modal" id="investment-portfolio-modal">

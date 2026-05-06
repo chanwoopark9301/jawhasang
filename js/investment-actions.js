@@ -86,6 +86,30 @@ async function addInvestmentPositionFromForm(event) {
   }
 }
 
+async function syncKisBrokerData() {
+  const buttons = document.querySelectorAll('#investment-sync-kis, #investment-modal-sync-kis');
+  buttons.forEach(btn => {
+    btn.disabled = true;
+    btn.dataset.originalText = btn.dataset.originalText || btn.textContent;
+    btn.textContent = '동기화 중';
+  });
+  try {
+    const data = await apiSyncKisBroker(30);
+    if (data.investment) state.investment = normalizeInvestmentState(data.investment);
+    showToast(`KIS 잔고 ${data.positionsSynced || 0}개, 매매 기록 ${data.tradesSynced || 0}건을 동기화했어요.`);
+    render();
+    if (state.activeModal === 'investment-portfolio') openModal('investment-portfolio');
+  } catch (e) {
+    logger.warn('KIS 동기화 실패', e);
+    showToast(e.message || 'KIS 동기화에 실패했어요. API 키 설정을 확인해주세요.');
+  } finally {
+    buttons.forEach(btn => {
+      btn.disabled = false;
+      btn.textContent = btn.dataset.originalText || 'KIS 동기화';
+    });
+  }
+}
+
 function clearInvestmentPositionForm() {
   ['ip-id', 'ip-symbol', 'ip-name', 'ip-shares', 'ip-avg', 'ip-target', 'ip-stop', 'ip-thesis', 'ip-add-rule'].forEach(id => {
     const el = document.getElementById(id);

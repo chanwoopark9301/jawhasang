@@ -146,6 +146,69 @@ class TestDataAPI:
         assert loaded['investment']['orderIntents'][0]['symbol'] == 'IREN'
         assert loaded['investment']['broker']['status'] == 'not_connected'
 
+    def test_investment_broker_sync_requires_kis_credentials(self, client, monkeypatch):
+        monkeypatch.delenv('KIS_APP_KEY', raising=False)
+        monkeypatch.delenv('KIS_APP_SECRET', raising=False)
+        monkeypatch.delenv('KIS_CANO', raising=False)
+        monkeypatch.delenv('KIS_ACNT_PRDT_CD', raising=False)
+
+        r = client.post('/api/investment/broker/sync',
+                        data=json.dumps({'days': 30}),
+                        content_type='application/json')
+
+        assert r.status_code == 400
+        data = r.get_json()
+        assert data['ok'] is False
+        assert data['configured'] is False
+        assert 'KIS_APP_KEY' in data['missing']
+        assert 'KIS_CANO' in data['missing']
+
+    def test_investment_broker_sync_persists_synced_positions_and_trades(self, client, monkeypatch):
+        import server
+
+        def fake_sync(investment, days=30):
+            inv = dict(investment)
+            inv['positions'] = [{
+                'id': 'kis-us-IREN',
+                'symbol': 'IREN',
+                'name': 'Iris Energy',
+                'shares': 10,
+                'avgPrice': 40,
+                'currentPrice': 50,
+                'brokerSource': 'kis',
+            }]
+            inv['decisions'] = [{
+                'id': 'kis-trade-20260506-1-buy',
+                'type': 'trade',
+                'symbol': 'IREN',
+                'action': 'buy',
+                'tradeShares': 10,
+                'tradePrice': 40,
+            }]
+            inv['broker'] = {
+                'status': 'connected',
+                'provider': 'kis',
+                'orderIntentOnly': True,
+                'lastSyncedAt': '2026-05-06T00:00:00Z',
+            }
+            return {'ok': True, 'configured': True, 'investment': inv, 'positionsSynced': 1, 'tradesSynced': 1}
+
+        monkeypatch.setattr(server, 'sync_kis_account', fake_sync)
+
+        r = client.post('/api/investment/broker/sync',
+                        data=json.dumps({'days': 30}),
+                        content_type='application/json')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['ok'] is True
+        assert data['positionsSynced'] == 1
+        assert data['tradesSynced'] == 1
+        loaded = client.get('/api/data').get_json()
+        assert loaded['investment']['positions'][0]['symbol'] == 'IREN'
+        assert loaded['investment']['decisions'][0]['action'] == 'buy'
+        assert loaded['investment']['broker']['provider'] == 'kis'
+
     def test_investment_ai_compare_endpoint_calls_claude_and_openai(self, client, monkeypatch):
         import server
 
