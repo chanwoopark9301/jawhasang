@@ -278,7 +278,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260506-09');
+            const res = await fetch('/js/data.js?v=20260506-10');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -1260,6 +1260,54 @@ class TestInvestmentPartner:
         logged_in_page.wait_for_selector('.investment-alert', timeout=8_000)
         assert logged_in_page.locator('.investment-alert').count() >= 1
         assert '목표가' in logged_in_page.locator('#investment-view').inner_text()
+
+    def test_portfolio_modal_refresh_updates_modal_values(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.investment.positions = [{
+                id: 'ip-modal-market',
+                symbol: 'NVDA',
+                name: 'NVIDIA',
+                shares: 10,
+                avgPrice: 100,
+                currentPrice: 100,
+                targetPrice: 120,
+                stopPrice: 90,
+                longTerm: false,
+                thesis: '',
+                addRule: '',
+            }];
+            window.fetch = (url, opts) => {
+                if (String(url).includes('/api/market/quote')) {
+                    return Promise.resolve(new Response(JSON.stringify({
+                        quotes: [
+                            { symbol: 'NVDA', price: 119, changePercent: 6.4, previousClose: 111.8, name: 'NVIDIA' },
+                            { symbol: '^IXIC', price: 17000, changePercent: 1.2, name: 'NASDAQ Composite' },
+                            { symbol: '^GSPC', price: 5200, changePercent: 0.8, name: 'S&P 500' },
+                        ],
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                return Promise.resolve(new Response(JSON.stringify({ ok: true }), {
+                    status: 200,
+                    headers: { 'Content-Type': 'application/json' },
+                }));
+            };
+            render();
+        }""")
+
+        logged_in_page.locator('#investment-menu-portfolio').click()
+        logged_in_page.wait_for_selector('#investment-portfolio-modal', timeout=8_000)
+        assert logged_in_page.locator('#investment-modal-refresh-market').is_visible()
+
+        logged_in_page.locator('#investment-modal-refresh-market').click()
+        logged_in_page.wait_for_function(
+            "() => state.investment.positions[0].currentPrice === 119",
+            timeout=8_000,
+        )
+
+        modal_text = logged_in_page.locator('#investment-portfolio-modal').inner_text()
+        assert '$1,190' in modal_text
+        assert '현재 $119' in modal_text
 
 
 # ---------------------------------------------------------------------------

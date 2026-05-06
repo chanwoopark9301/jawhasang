@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v58'; // Crypto and CRCL quote fallbacks
+const CACHE_NAME = 'jip-v59'; // Portfolio modal market refresh
 
 const STATIC_ASSETS = [
   '/style.css',

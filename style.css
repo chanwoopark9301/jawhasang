@@ -3406,6 +3406,8 @@ body { height: var(--app-height, 100dvh); }
 
 .investment-refresh-btn {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   margin-top: 6px;
   padding: 6px 9px;
   border: 0.5px solid rgba(37, 99, 235, .28);
@@ -3415,6 +3417,30 @@ body { height: var(--app-height, 100dvh); }
   font-family: var(--font);
   font-size: 12px;
   cursor: pointer;
+}
+
+.investment-refresh-btn:disabled {
+  opacity: .62;
+  cursor: progress;
+}
+
+.investment-modal-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-right: 34px;
+  margin-bottom: 16px;
+}
+
+.investment-modal-titlebar .modal-title {
+  margin-bottom: 0;
+}
+
+.investment-modal-refresh-btn {
+  margin-top: 0;
+  min-width: 82px;
+  white-space: nowrap;
 }
 
 .investment-index-strip {

@@ -46,6 +46,12 @@ async function fetchMarketQuoteData(symbols) {
 
 async function refreshInvestmentMarketData() {
   const inv = state.investment = normalizeInvestmentState(state.investment);
+  const buttons = document.querySelectorAll('#investment-refresh-market, #investment-menu-refresh, #investment-modal-refresh-market');
+  buttons.forEach(btn => {
+    btn.disabled = true;
+    btn.dataset.originalText = btn.dataset.originalText || btn.textContent;
+    btn.textContent = '갱신 중';
+  });
   const positionSymbols = inv.positions
     .filter(p => !isCashInvestmentPosition(p))
     .map(p => p.symbol)
@@ -53,6 +59,10 @@ async function refreshInvestmentMarketData() {
   const symbols = [...positionSymbols, ...INVESTMENT_INDEX_SYMBOLS];
   if (!symbols.length) {
     showToast('조회할 종목이 없습니다.');
+    buttons.forEach(btn => {
+      btn.disabled = false;
+      btn.textContent = btn.dataset.originalText || '현재가 갱신';
+    });
     return;
   }
 
@@ -68,9 +78,15 @@ async function refreshInvestmentMarketData() {
       showToast('현재가와 위험 신호를 갱신했어요.');
     }
     render();
+    if (state.activeModal === 'investment-portfolio') openModal('investment-portfolio');
   } catch (e) {
     logger.warn('시장 데이터 갱신 실패', e);
     showToast('시장 데이터 갱신에 실패했어요.');
+  } finally {
+    buttons.forEach(btn => {
+      btn.disabled = false;
+      btn.textContent = btn.dataset.originalText || '현재가 갱신';
+    });
   }
 }
 

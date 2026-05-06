@@ -164,7 +164,10 @@ function renderModalInvestmentPortfolio() {
   if (!slices.length) {
     return `
       <button class="modal-close" onclick="closeModal()">x</button>
-      <div class="modal-title">포트폴리오</div>
+      <div class="investment-modal-titlebar">
+        <div class="modal-title">포트폴리오</div>
+        <button class="investment-refresh-btn investment-modal-refresh-btn" id="investment-modal-refresh-market" onclick="refreshInvestmentMarketData()">현재가 갱신</button>
+      </div>
       <div class="investment-empty">현재가와 수량이 있는 종목을 등록하면 포트폴리오 리포트로 상태를 볼 수 있어요.</div>
       ${renderPortfolioManagementPanel()}`;
   }
@@ -190,7 +193,10 @@ function renderModalInvestmentPortfolio() {
 
   return `
     <button class="modal-close" onclick="closeModal()">x</button>
-    <div class="modal-title">포트폴리오 리포트</div>
+    <div class="investment-modal-titlebar">
+      <div class="modal-title">포트폴리오 리포트</div>
+      <button class="investment-refresh-btn investment-modal-refresh-btn" id="investment-modal-refresh-market" onclick="refreshInvestmentMarketData()">현재가 갱신</button>
+    </div>
     <div class="investment-portfolio-modal" id="investment-portfolio-modal">
       <div class="investment-portfolio-overview">
         <div><span>총 평가액</span><strong>${formatMoney(totals.totalValue)}</strong></div>
