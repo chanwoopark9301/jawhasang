@@ -381,14 +381,58 @@ function renderModalInvestmentPositions() {
 
 function renderInvestmentRulesForm(rules) {
   return `<form class="investment-form" onsubmit="saveInvestmentRulesFromForm(event)">
-    <label>하루 손실 한도<input class="form-input" id="ir-daily-loss" type="number" step="0.1" value="${esc(rules.dailyLossLimit)}"></label>
-    <label>종목별 최대 비중<input class="form-input" id="ir-max-weight" type="number" step="0.1" value="${esc(rules.maxPositionWeight)}"></label>
-    <label>쿨다운 시간<input class="form-input" id="ir-cooldown" type="number" step="1" value="${esc(rules.cooldownMinutes)}"></label>
-    <label>추격매수 제한 기준<input class="form-input" id="ir-chase" type="number" step="0.1" value="${esc(rules.chaseLimit)}"></label>
-    <label class="investment-check"><input id="ir-strict" type="checkbox" ${rules.strictMode ? 'checked' : ''}> 엄격 모드</label>
-    <label class="investment-check"><input id="ir-longterm" type="checkbox" ${rules.longTermBias ? 'checked' : ''}> 장기보유 논리 우선</label>
-    <label class="investment-check"><input id="ir-anti-avg" type="checkbox" ${rules.antiAveraging ? 'checked' : ''}> 감정적 물타기 제한</label>
-    <textarea class="form-input investment-textarea" id="ir-core" placeholder="내 핵심 투자 원칙">${esc(rules.coreRules || '')}</textarea>
+    <section class="investment-trader-panel">
+      <div class="investment-panel-head">
+        <strong>리스크 한도</strong>
+        <span>주문 전에 숫자로 먼저 막는 기준</span>
+      </div>
+      <div class="investment-form-row">
+        <label>매매 스타일
+          <select class="form-input" id="ir-style">
+            ${[['day','데이/단기'], ['swing','스윙'], ['position','포지션'], ['long','장기']].map(([v, label]) => `<option value="${v}"${(rules.tradingStyle || 'swing') === v ? ' selected' : ''}>${label}</option>`).join('')}
+          </select>
+        </label>
+        <label>1회 거래 리스크 %<input class="form-input" id="ir-risk-trade" type="number" step="0.1" value="${esc(rules.riskPerTrade ?? 1)}"></label>
+      </div>
+      <div class="investment-form-row">
+        <label>하루 손실 한도 %<input class="form-input" id="ir-daily-loss" type="number" step="0.1" value="${esc(rules.dailyLossLimit)}"></label>
+        <label>하루 최대 거래 수<input class="form-input" id="ir-max-trades" type="number" step="1" value="${esc(rules.maxDailyTrades ?? 3)}"></label>
+      </div>
+      <div class="investment-form-row">
+        <label>종목별 최대 비중 %<input class="form-input" id="ir-max-weight" type="number" step="0.1" value="${esc(rules.maxPositionWeight)}"></label>
+        <label>최소 손익비<input class="form-input" id="ir-min-rr" type="number" step="0.1" value="${esc(rules.minRiskReward ?? 2)}"></label>
+      </div>
+      <div class="investment-form-row">
+        <label>쿨다운 시간<input class="form-input" id="ir-cooldown" type="number" step="1" value="${esc(rules.cooldownMinutes)}"></label>
+        <label>추격매수 제한 %<input class="form-input" id="ir-chase" type="number" step="0.1" value="${esc(rules.chaseLimit)}"></label>
+      </div>
+      <label class="investment-check"><input id="ir-no-loss" type="checkbox" ${rules.noTradeAfterLoss !== false ? 'checked' : ''}> 손실 직후 즉시 재진입 금지</label>
+    </section>
+
+    <section class="investment-trader-panel">
+      <div class="investment-panel-head">
+        <strong>진입 / 청산 체크리스트</strong>
+        <span>AI가 매매 전 판단할 때 기준으로 삼는 문장</span>
+      </div>
+      <textarea class="form-input investment-textarea" id="ir-entry" placeholder="진입 전 반드시 확인할 조건&#10;예: 추세가 살아있고, 손절 위치가 명확하며, 손익비 2:1 이상일 때만 진입">${esc(rules.entryChecklist || '')}</textarea>
+      <textarea class="form-input investment-textarea" id="ir-exit" placeholder="청산/보유 판단 기준&#10;예: 목표가 도달 시 절반 익절, 투자 논리 훼손 시 가격과 무관하게 정리">${esc(rules.exitChecklist || '')}</textarea>
+    </section>
+
+    <section class="investment-trader-panel">
+      <div class="investment-panel-head">
+        <strong>금지 셋업과 핵심 원칙</strong>
+        <span>내가 반복해서 망가지는 행동을 먼저 차단</span>
+      </div>
+      <textarea class="form-input investment-textarea" id="ir-banned" placeholder="금지 셋업&#10;예: 뉴스 보고 바로 시장가 매수, 손실 직후 물타기, 목표가 도달 후 근거 없이 홀딩">${esc(rules.bannedSetups || '')}</textarea>
+      <textarea class="form-input investment-textarea" id="ir-core" placeholder="내 핵심 투자 원칙">${esc(rules.coreRules || '')}</textarea>
+      <textarea class="form-input investment-textarea" id="ir-review" placeholder="복기 루틴&#10;예: 매주 일요일 보유 논리, 손절 회피, 추격매수 여부를 점검">${esc(rules.reviewRoutine || '')}</textarea>
+    </section>
+
+    <div class="investment-form-row">
+      <label class="investment-check"><input id="ir-strict" type="checkbox" ${rules.strictMode ? 'checked' : ''}> 엄격 모드</label>
+      <label class="investment-check"><input id="ir-longterm" type="checkbox" ${rules.longTermBias ? 'checked' : ''}> 장기보유 논리 우선</label>
+      <label class="investment-check"><input id="ir-anti-avg" type="checkbox" ${rules.antiAveraging ? 'checked' : ''}> 감정적 물타기 제한</label>
+    </div>
     <button class="btn-primary investment-primary" id="investment-save-rules" type="submit">원칙 저장</button>
   </form>`;
 }
@@ -396,8 +440,8 @@ function renderInvestmentRulesForm(rules) {
 function renderModalInvestmentRules() {
   return `
     <button class="modal-close" onclick="closeModal()">×</button>
-    <div class="modal-title">투자 원칙</div>
-    <div class="investment-modal-note">대화창에서 AI와 논의한 뒤 "이걸 투자 원칙으로 저장해줘"라고 말해도 반영됩니다.</div>
+    <div class="modal-title">트레이딩 플랜</div>
+    <div class="investment-modal-note">매수/매도 의견을 적는 곳이 아니라, 실제 주문 전에 나를 멈춰 세우는 기준입니다. 대화창에서 정한 원칙도 여기에 정리해두면 AI가 판단 기준으로 사용합니다.</div>
     ${renderInvestmentRulesForm(state.investment.rules)}`;
 }
 
@@ -409,6 +453,11 @@ function renderInvestmentGateForm(positions) {
       <span>체결가 입력 기준: ${investmentDisplayCurrency() === 'KRW' ? '원화' : '달러'}</span>
       ${renderInvestmentCurrencyToggle('investment-currency-toggle-gate')}
     </div>
+    <section class="investment-trader-panel">
+      <div class="investment-panel-head">
+        <strong>거래 개요</strong>
+        <span>무슨 셋업을 어떤 시간축에서 실행하는지 먼저 고정</span>
+      </div>
     <select class="form-input" id="ig-position" ${tradable.length ? '' : 'disabled'}>
       ${tradable.length
         ? tradable.map(p => `<option value="${esc(p.id)}">${esc(p.symbol || p.name || p.id)}</option>`).join('')
@@ -430,11 +479,61 @@ function renderInvestmentGateForm(positions) {
       </select>
     </div>
     <div class="investment-form-row">
+      <select class="form-input" id="ig-setup">
+        <option value="planned">계획된 셋업</option>
+        <option value="breakout">돌파</option>
+        <option value="pullback">눌림목</option>
+        <option value="earnings">실적/이벤트</option>
+        <option value="rebalance">리밸런싱</option>
+        <option value="impulse">충동 의심</option>
+      </select>
+      <select class="form-input" id="ig-timeframe">
+        <option value="intraday">당일</option>
+        <option value="swing">수일~수주</option>
+        <option value="position">수개월</option>
+        <option value="long">장기</option>
+      </select>
+    </div>
+    </section>
+
+    <section class="investment-trader-panel">
+      <div class="investment-panel-head">
+        <strong>주문 계획</strong>
+        <span>가격, 손절, 목표가가 비어 있으면 기록이 아니라 충동에 가깝습니다</span>
+      </div>
+      <div class="investment-form-row">
       <input class="form-input" id="ig-shares" type="text" inputmode="decimal" placeholder="체결 수량">
       <input class="form-input" id="ig-price" type="number" min="0" step="${investmentDisplayCurrency() === 'KRW' ? '1' : '0.01'}" placeholder="체결가 (${unit})">
-      <div class="investment-form-hint">허용된 매매만 포트폴리오에 자동 반영됩니다.</div>
-    </div>
-    <textarea class="form-input investment-textarea" id="ig-reason" placeholder="지금 이 행동을 하려는 이유"></textarea>
+      </div>
+      <div class="investment-form-row">
+        <input class="form-input" id="ig-stop" type="number" min="0" step="${investmentDisplayCurrency() === 'KRW' ? '1' : '0.01'}" placeholder="계획 손절가 (${unit})">
+        <input class="form-input" id="ig-target" type="number" min="0" step="${investmentDisplayCurrency() === 'KRW' ? '1' : '0.01'}" placeholder="계획 목표가 (${unit})">
+      </div>
+      <div class="investment-form-row">
+        <input class="form-input" id="ig-risk-reward" type="number" min="0" step="0.1" placeholder="손익비 예: 2">
+        <select class="form-input" id="ig-order-type">
+          <option value="limit">지정가</option>
+          <option value="market">시장가</option>
+          <option value="stop">스탑/조건부</option>
+        </select>
+      </div>
+      <div class="investment-form-hint">판단이 진행 가능이고 수량/체결가가 있으면 포트폴리오에 자동 반영됩니다.</div>
+    </section>
+
+    <section class="investment-trader-panel">
+      <div class="investment-panel-head">
+        <strong>주문 전 확인</strong>
+        <span>체크가 비어 있으면 AI가 보수적으로 봅니다</span>
+      </div>
+      <div class="investment-check-grid">
+        <label class="investment-check"><input id="ig-check-thesis" type="checkbox"> 투자 논리 유지</label>
+        <label class="investment-check"><input id="ig-check-risk" type="checkbox"> 손절 위치 명확</label>
+        <label class="investment-check"><input id="ig-check-size" type="checkbox"> 비중/수량 허용</label>
+        <label class="investment-check"><input id="ig-check-cooldown" type="checkbox"> 쿨다운 통과</label>
+      </div>
+      <textarea class="form-input investment-textarea" id="ig-invalidation" placeholder="무효화 조건: 어떤 일이 생기면 이 거래 아이디어가 틀린 것인가"></textarea>
+      <textarea class="form-input investment-textarea" id="ig-reason" placeholder="지금 이 행동을 하려는 이유와 사전 계획"></textarea>
+    </section>
     <button class="btn-primary investment-primary" id="investment-gate-run" type="submit" ${tradable.length ? '' : 'disabled'}>점검하기</button>
   </form>`;
 }
@@ -442,8 +541,8 @@ function renderInvestmentGateForm(positions) {
 function renderModalInvestmentDecisions() {
   return `
     <button class="modal-close" onclick="closeModal()">×</button>
-    <div class="modal-title">매매 기록</div>
-    <div class="investment-modal-note">매매 전 점검은 여기서 직접 실행하거나, 대화창에서 먼저 논의한 뒤 기록으로 남길 수 있어요.</div>
+    <div class="modal-title">매매 저널</div>
+    <div class="investment-modal-note">거래를 실행하기 전에 셋업, 손익비, 무효화 조건을 먼저 남깁니다. 이 화면은 매매 버튼이 아니라 충동을 느리게 만드는 주문 전 게이트입니다.</div>
     ${renderInvestmentGateForm(state.investment.positions)}
     <div id="investment-result">${state.investment.decisions.length ? renderInvestmentVerdict(state.investment.decisions.at(-1)) : ''}</div>
     ${renderInvestmentDecisionList(state.investment.decisions)}`;
@@ -508,16 +607,74 @@ function renderInvestmentVerdict(decision) {
   </div>`;
 }
 
+function enrichInvestmentVerdict(verdict, detail) {
+  const d = detail || {};
+  const checks = d.checklist || {};
+  const missingChecks = Object.values(checks).filter(v => !v).length;
+  const rules = d.rules || {};
+  const minRiskReward = parseInvestmentNumber(rules.minRiskReward) || 2;
+  if (d.setup === 'impulse') {
+    verdict.score += 3;
+    verdict.findings.push('셋업이 충동 의심으로 표시됐습니다. 주문보다 쿨다운과 기록이 우선입니다.');
+  }
+  if (d.riskReward > 0 && d.riskReward < minRiskReward) {
+    verdict.score += 3;
+    verdict.findings.push(`손익비 ${d.riskReward.toFixed(1)}이 최소 기준 ${minRiskReward.toFixed(1)}보다 낮습니다.`);
+  }
+  if (!d.plannedStop) {
+    verdict.score += 2;
+    verdict.findings.push('계획 손절가가 비어 있습니다. 손절 위치 없는 주문은 제한합니다.');
+  }
+  if (!d.plannedTarget) {
+    verdict.score += 1;
+    verdict.findings.push('계획 목표가가 비어 있습니다. 기대 보상 구간을 먼저 정하세요.');
+  }
+  if (missingChecks >= 2) {
+    verdict.score += 2;
+    verdict.findings.push('주문 전 확인 항목이 충분히 체크되지 않았습니다.');
+  }
+  verdict.status = verdict.score >= 6 ? 'block' : verdict.score >= 3 ? 'cooldown' : 'allow';
+  verdict.label = verdict.status === 'block' ? '차단 권고' : verdict.status === 'cooldown' ? '쿨다운 필요' : '진행 가능';
+  verdict.summary = verdict.findings[0] || verdict.summary;
+  verdict.nextSteps = getInvestmentNextSteps(verdict.status, rules);
+}
+
 function renderInvestmentDecisionList(decisions) {
   if (!decisions.length) return '<div class="investment-empty">아직 매매 전 점검 기록이 없습니다.</div>';
   return `<div class="investment-decision-list">
     ${decisions.slice().reverse().map(d => `<div class="investment-decision">
       <span class="investment-badge ${esc(d.verdict)}">${esc(d.label)}</span>
-      <strong>${esc(d.symbol)} · ${investmentActionLabel(d.action)}</strong>
+      <strong>${esc(d.symbol)} · ${investmentActionLabel(d.action)} · ${investmentSetupLabel(d.setup)}</strong>
+      <div class="investment-decision-metrics">
+        <span>${esc(investmentTimeframeLabel(d.timeframe))}</span>
+        <span>손익비 ${d.riskReward ? esc(d.riskReward) : '-'}</span>
+        <span>${esc(d.orderType === 'market' ? '시장가' : d.orderType === 'stop' ? '조건부' : '지정가')}</span>
+      </div>
       <p>${esc(d.summary || '')}</p>
+      ${d.invalidation ? `<p class="investment-decision-note">무효화: ${esc(d.invalidation)}</p>` : ''}
       <small>${esc((d.createdAt || '').slice(0, 16).replace('T', ' '))}</small>
     </div>`).join('')}
   </div>`;
+}
+
+function investmentSetupLabel(setup) {
+  return ({
+    planned: '계획 셋업',
+    breakout: '돌파',
+    pullback: '눌림목',
+    earnings: '실적/이벤트',
+    rebalance: '리밸런싱',
+    impulse: '충동 의심',
+  })[setup] || '셋업';
+}
+
+function investmentTimeframeLabel(timeframe) {
+  return ({
+    intraday: '당일',
+    swing: '수일~수주',
+    position: '수개월',
+    long: '장기',
+  })[timeframe] || '시간축';
 }
 
 async function addInvestmentPositionFromForm(event) {
@@ -688,14 +845,24 @@ async function deleteInvestmentPosition(id) {
 async function saveInvestmentRulesFromForm(event) {
   event.preventDefault();
   state.investment.rules = {
+    ...state.investment.rules,
+    tradingStyle: document.getElementById('ir-style')?.value || 'swing',
+    riskPerTrade: Number(document.getElementById('ir-risk-trade')?.value) || 1,
     dailyLossLimit: Number(document.getElementById('ir-daily-loss')?.value) || 3,
+    maxDailyTrades: Number(document.getElementById('ir-max-trades')?.value) || 3,
     maxPositionWeight: Number(document.getElementById('ir-max-weight')?.value) || 30,
+    minRiskReward: Number(document.getElementById('ir-min-rr')?.value) || 2,
     cooldownMinutes: Number(document.getElementById('ir-cooldown')?.value) || 30,
     chaseLimit: Number(document.getElementById('ir-chase')?.value) || 5,
+    noTradeAfterLoss: !!document.getElementById('ir-no-loss')?.checked,
     strictMode: !!document.getElementById('ir-strict')?.checked,
     longTermBias: !!document.getElementById('ir-longterm')?.checked,
     antiAveraging: !!document.getElementById('ir-anti-avg')?.checked,
+    entryChecklist: document.getElementById('ir-entry')?.value.trim() || '',
+    exitChecklist: document.getElementById('ir-exit')?.value.trim() || '',
+    bannedSetups: document.getElementById('ir-banned')?.value.trim() || '',
     coreRules: document.getElementById('ir-core')?.value.trim() || '',
+    reviewRoutine: document.getElementById('ir-review')?.value.trim() || '',
   };
   const persisted = await saveData();
   if (!persisted) return showToast('서버 저장에 실패했어요. 잠시 후 다시 저장해주세요.');
@@ -712,17 +879,31 @@ async function runInvestmentGateFromForm(event) {
 
   const action = document.getElementById('ig-action')?.value || 'buy';
   const context = document.getElementById('ig-context')?.value || 'normal';
+  const setup = document.getElementById('ig-setup')?.value || 'planned';
+  const timeframe = document.getElementById('ig-timeframe')?.value || 'swing';
   const reason = document.getElementById('ig-reason')?.value.trim() || '';
   const tradeShares = parseInvestmentNumber(document.getElementById('ig-shares')?.value);
   const tradePrice = parseInvestmentMoneyInput(document.getElementById('ig-price')?.value);
+  const plannedStop = parseInvestmentMoneyInput(document.getElementById('ig-stop')?.value);
+  const plannedTarget = parseInvestmentMoneyInput(document.getElementById('ig-target')?.value);
+  const riskReward = parseInvestmentNumber(document.getElementById('ig-risk-reward')?.value);
+  const orderType = document.getElementById('ig-order-type')?.value || 'limit';
+  const invalidation = document.getElementById('ig-invalidation')?.value.trim() || '';
+  const checklist = {
+    thesis: !!document.getElementById('ig-check-thesis')?.checked,
+    risk: !!document.getElementById('ig-check-risk')?.checked,
+    size: !!document.getElementById('ig-check-size')?.checked,
+    cooldown: !!document.getElementById('ig-check-cooldown')?.checked,
+  };
   const verdict = evaluateInvestmentDecision({
     position,
     rules: state.investment.rules,
     totals: investmentTotals(state.investment.positions),
     action,
     context,
-    reason,
+    reason: [reason, invalidation, setup === 'impulse' ? '충동 의심' : ''].filter(Boolean).join('\n'),
   });
+  enrichInvestmentVerdict(verdict, { setup, riskReward, plannedStop, plannedTarget, checklist, rules: state.investment.rules });
 
   const decision = {
     id: 'id' + Date.now(),
@@ -730,7 +911,15 @@ async function runInvestmentGateFromForm(event) {
     symbol: position.symbol,
     action,
     context,
+    setup,
+    timeframe,
     reason,
+    invalidation,
+    plannedStop,
+    plannedTarget,
+    riskReward,
+    orderType,
+    checklist,
     verdict: verdict.status,
     label: verdict.label,
     summary: verdict.summary,
@@ -864,9 +1053,12 @@ function formatInvestmentMoneyInputValue(value) {
 async function toggleInvestmentCurrency() {
   const inv = state.investment = normalizeInvestmentState(state.investment);
   inv.displayCurrency = inv.displayCurrency === 'KRW' ? 'USD' : 'KRW';
-  await saveData({ retries: 0 });
-  if (state.activeModal) openModal(state.activeModal);
+  const box = document.getElementById('modal-box');
+  if (state.activeModal && box) {
+    box.innerHTML = buildModalHTML(state.activeModal, {});
+  }
   render();
+  saveData({ retries: 0 }).catch(e => logger.warn('통화 표시 저장 실패', e));
 }
 
 function formatShares(value) {

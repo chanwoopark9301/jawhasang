@@ -3614,6 +3614,32 @@ body { height: var(--app-height, 100dvh); }
   padding: 10px 0 14px;
 }
 
+.investment-trader-panel {
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  border: 0.5px solid var(--color-border);
+  border-radius: 8px;
+  background: rgba(37, 99, 235, .035);
+}
+
+.investment-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.investment-panel-head strong {
+  font-size: 13px;
+}
+
+.investment-panel-head span {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  text-align: right;
+}
+
 .investment-section {
   padding: 14px 0;
   border-bottom: 0.5px solid var(--color-border);
@@ -3669,6 +3695,26 @@ body { height: var(--app-height, 100dvh); }
   color: var(--color-text-secondary);
 }
 
+.investment-decision-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 6px 0;
+}
+
+.investment-decision-metrics span {
+  font-size: 11px;
+  color: #1D4ED8;
+  background: rgba(37, 99, 235, .08);
+  border: 0.5px solid rgba(37, 99, 235, .16);
+  border-radius: 999px;
+  padding: 3px 7px;
+}
+
+.investment-decision-note {
+  color: var(--color-text-tertiary) !important;
+}
+
 .investment-position-meta {
   text-align: right;
   display: grid;
@@ -3719,6 +3765,12 @@ body { height: var(--app-height, 100dvh); }
   accent-color: #2563EB;
 }
 
+.investment-check-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 10px;
+}
+
 .investment-textarea {
   min-height: 72px;
   resize: vertical;
@@ -3739,6 +3791,12 @@ body { height: var(--app-height, 100dvh); }
 
 .modal-box.modal-investment-news {
   width: min(980px, 95vw);
+  padding: 26px;
+}
+
+.modal-box.modal-investment-rules,
+.modal-box.modal-investment-decisions {
+  width: min(900px, 95vw);
   padding: 26px;
 }
 

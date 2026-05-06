@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v61'; // CRCL label normalization
+const CACHE_NAME = 'jip-v62'; // Trader rules and journal workflow
 
 const STATIC_ASSETS = [
   '/style.css',

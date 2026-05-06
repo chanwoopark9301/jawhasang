@@ -278,7 +278,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260506-12');
+            const res = await fetch('/js/data.js?v=20260506-13');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -710,6 +710,27 @@ class TestInvestmentPartner:
         assert logged_in_page.locator('.investment-news-card .chat-markdown h5').inner_text() == '핵심 요약'
         assert logged_in_page.locator('.investment-news-card .chat-markdown li').inner_text() == '규제 불확실성 완화'
         assert logged_in_page.locator('.investment-news-card .chat-markdown a').get_attribute('href') == 'https://example.com/news'
+        logged_in_page.locator('.modal-close').click()
+
+        logged_in_page.locator('#investment-menu-rules').click()
+        logged_in_page.wait_for_selector('#investment-save-rules', timeout=8_000)
+        rules_text = logged_in_page.locator('#modal-box').inner_text()
+        assert '트레이딩 플랜' in rules_text
+        assert '리스크 한도' in rules_text
+        assert '진입 / 청산 체크리스트' in rules_text
+        logged_in_page.locator('#ir-risk-trade').fill('0.8')
+        logged_in_page.locator('#ir-entry').fill('손익비 2:1 이상일 때만 진입')
+        logged_in_page.locator('#investment-save-rules').click()
+        logged_in_page.wait_for_function("() => state.investment.rules.riskPerTrade === 0.8", timeout=8_000)
+
+        logged_in_page.locator('#investment-menu-decisions').click()
+        logged_in_page.wait_for_selector('#investment-gate-form', timeout=8_000)
+        journal_text = logged_in_page.locator('#modal-box').inner_text()
+        assert '매매 저널' in journal_text
+        assert '거래 개요' in journal_text
+        assert '주문 계획' in journal_text
+        assert '주문 전 확인' in journal_text
+        logged_in_page.locator('.modal-close').click()
 
     def test_investment_currency_toggle_changes_display_and_position_input(self, logged_in_page):
         self._open_investment(logged_in_page)
@@ -876,6 +897,14 @@ class TestInvestmentPartner:
         logged_in_page.locator('#ig-context').select_option('normal')
         logged_in_page.locator('#ig-shares').fill('5')
         logged_in_page.locator('#ig-price').fill('140')
+        logged_in_page.locator('#ig-stop').fill('120')
+        logged_in_page.locator('#ig-target').fill('190')
+        logged_in_page.locator('#ig-risk-reward').fill('2.5')
+        logged_in_page.locator('#ig-check-thesis').check()
+        logged_in_page.locator('#ig-check-risk').check()
+        logged_in_page.locator('#ig-check-size').check()
+        logged_in_page.locator('#ig-check-cooldown').check()
+        logged_in_page.locator('#ig-invalidation').fill('120 이탈')
         logged_in_page.locator('#ig-reason').fill('계획된 분할매수')
         logged_in_page.locator('#investment-gate-run').click()
         logged_in_page.wait_for_selector('.investment-verdict.allow', timeout=8_000)
