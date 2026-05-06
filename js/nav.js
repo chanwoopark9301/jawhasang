@@ -202,38 +202,61 @@ function openNewChatModal() {
   const modal   = document.getElementById('new-chat-modal');
   if (!modal) return;
 
-  modal.innerHTML = `
-    <div style="font-size:15px;font-weight:500;margin-bottom:16px;">대화 시작</div>
+  const investment = normalizeInvestmentState(state.investment);
+  const investRows = investment.positions.length
+    ? investment.positions.slice(0, 6).map(p => `
+      <div class="picker-sub-row">
+        <span>${esc(p.symbol || p.name || '종목')}</span>
+        <small>${esc(p.assetType === 'cash' ? '현금' : p.assetType === 'crypto' ? '코인' : '주식')}</small>
+      </div>`).join('')
+    : '<div class="picker-empty">등록된 종목 없음</div>';
 
-    <div style="font-size:11px;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">일상</div>
+  modal.innerHTML = `
+    <div class="picker-title">이동</div>
+
+    <div class="picker-section-label">기본</div>
+    <div class="picker-row" onclick="showHome();closeNewChatModal();">
+      <span style="color:#EF9F27;font-size:9px;">●</span>
+      <div><strong>캘린더</strong><small>일상 · 상담 · 투자 이벤트 허브</small></div>
+    </div>
+
+    <div class="picker-section-label">일상</div>
     ${state.myTopics.map(t => `
-      <div class="sub-item" style="font-size:13px;padding:8px 10px;margin-bottom:2px;"
+      <div class="picker-row"
         onclick="selectTopic('${t.id}');closeNewChatModal();">
-        <span style="color:#1D9E75;font-size:9px;">●</span> ${esc(t.title)}
+        <span style="color:#1D9E75;font-size:9px;">●</span>
+        <div><strong>${esc(t.title)}</strong><small>${state.myRecords.filter(r => r.topicId === t.id).length}개 기록</small></div>
       </div>
     `).join('')}
-    <div class="sub-item sub-item-add" style="font-size:13px;padding:8px 10px;"
+    <div class="picker-row picker-add"
       onclick="closeNewChatModal();openModal('new-topic');">
       + 새 주제 만들기
     </div>
 
-    <div style="border-top:0.5px solid var(--color-border);margin:12px 0;"></div>
-
-    <div style="font-size:11px;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">상담</div>
+    <div class="picker-section-label">상담</div>
     ${state.students.map(s => `
-      <div class="sub-item" style="font-size:13px;padding:8px 10px;margin-bottom:2px;"
+      <div class="picker-row"
         onclick="selectStudent('${s.id}');closeNewChatModal();">
-        <span style="color:#8B7EC8;font-size:9px;">●</span> ${esc(s.alias)}
+        <span style="color:#8B7EC8;font-size:9px;">●</span>
+        <div><strong>${esc(s.alias)}</strong><small>${state.sessions.filter(ss => ss.studentId === s.id).length}회기</small></div>
       </div>
     `).join('')}
-    <div class="sub-item sub-item-add" style="font-size:13px;padding:8px 10px;"
+    <div class="picker-row picker-add"
       onclick="closeNewChatModal();openModal('new-student');">
       + 새 내담자 추가
     </div>
 
-    <button onclick="closeNewChatModal()"
-      style="margin-top:16px;width:100%;padding:8px;border:0.5px solid var(--color-border);
-             border-radius:var(--radius-md);background:transparent;cursor:pointer;font-size:13px;font-family:inherit;">
+    <div class="picker-section-label">투자</div>
+    <div class="picker-row" onclick="setView('investment');closeNewChatModal();">
+      <span style="color:#2563EB;font-size:9px;">●</span>
+      <div><strong>투자 파트너</strong><small>${investment.positions.length}개 종목 · ${investment.decisions.length}개 판단</small></div>
+    </div>
+    <div class="picker-invest-list">${investRows}</div>
+    <div class="picker-row picker-add" onclick="setView('investment');closeNewChatModal();openModal('investment-portfolio');">
+      포트폴리오 / 종목 관리
+    </div>
+
+    <button class="picker-close" onclick="closeNewChatModal()">
       닫기
     </button>`;
 

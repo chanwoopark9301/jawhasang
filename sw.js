@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v62'; // Trader rules and journal workflow
+const CACHE_NAME = 'jip-v63'; // Context hub includes investment
 
 const STATIC_ASSETS = [
   '/style.css',

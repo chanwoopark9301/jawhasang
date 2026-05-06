@@ -370,15 +370,6 @@ function renderPortfolioManagementPanel() {
   </section>`;
 }
 
-function renderModalInvestmentPositions() {
-  const inv = state.investment;
-  return `
-    <button class="modal-close" onclick="closeModal()">×</button>
-    <div class="modal-title">종목 관리</div>
-    ${renderInvestmentPositions(inv.positions, investmentTotals(inv.positions))}
-    ${renderInvestmentPositionForm()}`;
-}
-
 function renderInvestmentRulesForm(rules) {
   return `<form class="investment-form" onsubmit="saveInvestmentRulesFromForm(event)">
     <section class="investment-trader-panel">

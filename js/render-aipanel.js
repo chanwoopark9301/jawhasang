@@ -25,6 +25,8 @@ function renderAIPanel() { renderRightPanel(); }
 function _updateRpTopic() {
   const el = document.getElementById('rp-topic');
   if (!el) return;
+  el.onclick = openTopicPicker;
+  el.title = '이동';
 
   if (state.view === 'myrecords' && state.selTopic) {
     const t = state.myTopics.find(t => t.id === state.selTopic);
@@ -35,6 +37,8 @@ function _updateRpTopic() {
   } else if (state.view === 'investment') {
     const inv = state.investment || defaultInvestmentState();
     el.textContent = `${inv.positions.length}개 종목`;
+    el.onclick = () => openModal('investment-portfolio');
+    el.title = '포트폴리오 / 종목 관리';
   } else {
     el.textContent = '선택 없음';
   }

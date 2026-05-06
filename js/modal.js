@@ -58,7 +58,6 @@ function buildModalHTML(id, data) {
     case 'chat-summary':  return renderModalChatSummary(data);
     case 'custom-role':   return renderModalCustomRole(data);
     case 'investment-portfolio': return renderModalInvestmentPortfolio();
-    case 'investment-positions': return renderModalInvestmentPositions();
     case 'investment-rules':     return renderModalInvestmentRules();
     case 'investment-decisions': return renderModalInvestmentDecisions();
     case 'investment-news':      return renderModalInvestmentNews();

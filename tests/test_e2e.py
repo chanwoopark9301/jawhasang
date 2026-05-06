@@ -119,6 +119,38 @@ class TestSidebar:
         assert '투자' in buttons_text
         assert '캘린더' not in buttons_text
 
+    def test_context_picker_includes_calendar_daily_counseling_and_investment(self, logged_in_page):
+        """상단 상태 버튼은 전체 앱 허브를 열어야 함."""
+        logged_in_page.evaluate("""() => {
+            state.myTopics = [{ id: 't-picker', title: '일기', aiPrompt: '', createdAt: '2026-05-06' }];
+            state.myRecords = [{ id: 'r-picker', topicId: 't-picker', date: '2026-05-06', recordNum: 1, content: 'x' }];
+            state.students = [{ id: 's-picker', alias: '별-01', grade: '중1', createdAt: '2026-05-06' }];
+            state.sessions = [{ id: 'ss-picker', studentId: 's-picker', date: '2026-05-06', sessionNum: 1, verbatim: '', memo: '' }];
+            state.investment.positions = [{ id: 'ip-picker', symbol: 'CRCL', name: 'Circle', shares: 2, avgPrice: 80, currentPrice: 90 }];
+            state.investment.decisions = [{ id: 'd-picker', label: '진행 가능' }];
+            render();
+        }""")
+
+        logged_in_page.locator('#ctx-topic').click()
+        logged_in_page.wait_for_selector('#new-chat-modal', timeout=8_000)
+        picker_text = logged_in_page.locator('#new-chat-modal').inner_text()
+        assert '캘린더' in picker_text
+        assert '일기' in picker_text
+        assert '별-01' in picker_text
+        assert '투자 파트너' in picker_text
+        assert 'CRCL' in picker_text
+
+    def test_investment_right_current_opens_portfolio_not_context_picker(self, logged_in_page):
+        logged_in_page.evaluate("""() => {
+            state.investment.positions = [{ id: 'ip-rp', symbol: 'CRCL', name: 'Circle', shares: 2, avgPrice: 80, currentPrice: 90 }];
+            setView('investment');
+        }""")
+
+        logged_in_page.locator('#rp-topic').click()
+        logged_in_page.wait_for_selector('#investment-portfolio-modal', timeout=8_000)
+        assert 'CRCL' in logged_in_page.locator('#modal-box').inner_text()
+        assert logged_in_page.locator('#new-chat-modal').is_hidden()
+
 
 # ---------------------------------------------------------------------------
 # 상담 기록 — 학생 등록
@@ -278,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260506-13');
+            const res = await fetch('/js/data.js?v=20260506-14');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
