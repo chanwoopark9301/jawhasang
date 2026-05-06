@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v71'; // Hide manual investment forms
+const CACHE_NAME = 'jip-v72'; // Investment role fallback prompt
 
 const STATIC_ASSETS = [
   '/style.css',

@@ -310,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260506-21');
+            const res = await fetch('/js/data.js?v=20260506-22');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -973,6 +973,40 @@ class TestInvestmentPartner:
             "() => state.investment.positions.find(p => p.symbol === 'CRCL')?.currentPrice === 131.25",
             timeout=8_000,
         )
+
+    def test_investment_rule_prompt_allows_default_guardrail_proposals(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.replyMode = 'invest-rules';
+            state.investment.rules.maxPositionWeight = 25;
+            state.investment.positions = [{
+                id: 'ip-iren-heavy',
+                symbol: 'IREN',
+                name: 'Iris Energy',
+                shares: 100,
+                avgPrice: 40,
+                currentPrice: 50,
+            }, {
+                id: 'ip-cash',
+                assetType: 'cash',
+                symbol: 'CASH',
+                name: 'USD Cash',
+                shares: 1000,
+                avgPrice: 1,
+                currentPrice: 1,
+                cashAmount: 1000,
+                manualPrice: true,
+            }];
+        }""")
+
+        prompt = logged_in_page.evaluate("() => _buildChatSysPrompt(false, null, null)")
+
+        assert '제 역할 밖' in prompt
+        assert '원칙 후보' in prompt
+        assert '보수적 기본안' in prompt
+        assert '단계적 축소안' in prompt
+        assert '현재 비중' in prompt
+        assert '25%' in prompt
 
     def test_refresh_data_from_server_updates_investment_positions(self, logged_in_page):
         self._open_investment(logged_in_page)
