@@ -3610,6 +3610,20 @@ body { height: var(--app-height, 100dvh); }
   gap: 8px;
 }
 
+.investment-form-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.investment-form-hint {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
 .investment-form-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3794,6 +3808,54 @@ body { height: var(--app-height, 100dvh); }
   grid-column: 1 / -1;
   display: grid;
   gap: 10px;
+}
+
+.investment-portfolio-manage {
+  grid-column: 1 / -1;
+  border: 0.5px solid var(--color-border);
+  border-radius: 8px;
+  padding: 13px;
+  background: var(--color-bg-secondary);
+  display: grid;
+  gap: 12px;
+}
+
+.investment-manage-list {
+  display: grid;
+  gap: 8px;
+}
+
+.investment-manage-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  border-top: 0.5px solid var(--color-border);
+}
+
+.investment-manage-row strong,
+.investment-manage-row small {
+  display: block;
+}
+
+.investment-manage-row small {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+.investment-manage-row button {
+  border: 0.5px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg);
+  padding: 5px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.investment-manage-row button.danger {
+  color: #B91C1C;
+  border-color: rgba(185, 28, 28, 0.28);
 }
 
 .investment-portfolio-status {

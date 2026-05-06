@@ -136,7 +136,8 @@ function renderModalInvestmentPortfolio() {
     return `
       <button class="modal-close" onclick="closeModal()">x</button>
       <div class="modal-title">포트폴리오</div>
-      <div class="investment-empty">현재가와 수량이 있는 종목을 등록하면 포트폴리오 리포트로 상태를 볼 수 있어요.</div>`;
+      <div class="investment-empty">현재가와 수량이 있는 종목을 등록하면 포트폴리오 리포트로 상태를 볼 수 있어요.</div>
+      ${renderPortfolioManagementPanel()}`;
   }
 
   let cursor = 0;
@@ -225,6 +226,9 @@ function renderModalInvestmentPortfolio() {
         }).join('')}
       </div>
 
+
+      ${renderPortfolioManagementPanel()}
+
       <section class="investment-portfolio-alerts">
         <h4>위험 신호</h4>
         ${alerts.length ? alerts.map(a => `<div class="investment-alert ${esc(a.severity || 'watch')}"><strong>${esc(a.title)}</strong><p>${esc(a.body)}</p></div>`).join('') : '<p>현재 등록된 목표가·손절가·비중 기준에서 즉시 표시할 위험 신호는 없습니다.</p>'}
@@ -234,6 +238,7 @@ function renderModalInvestmentPortfolio() {
 function renderInvestmentPositionForm() {
   return `<form class="investment-form" id="investment-position-form" onsubmit="addInvestmentPositionFromForm(event)">
     <div class="investment-form-row">
+    <input type="hidden" id="ip-id" value="">
       <input class="form-input" id="ip-symbol" placeholder="종목 코드" autocomplete="off">
       <input class="form-input" id="ip-name" placeholder="종목명" autocomplete="off">
     </div>
@@ -248,8 +253,34 @@ function renderInvestmentPositionForm() {
     </div>
     <textarea class="form-input investment-textarea" id="ip-thesis" placeholder="투자 논리"></textarea>
     <textarea class="form-input investment-textarea" id="ip-add-rule" placeholder="추가매수 조건"></textarea>
-    <button class="btn-primary investment-primary" id="investment-add-position" type="submit">종목 등록</button>
+    <div class="investment-form-actions">
+      <button class="btn-primary investment-primary" id="investment-add-position" type="submit">종목 저장</button>
+      <button class="btn-ghost" id="investment-cancel-edit" type="button" onclick="clearInvestmentPositionForm()">입력 초기화</button>
+    </div>
   </form>`;
+}
+
+function renderPortfolioManagementPanel() {
+  const positions = normalizeInvestmentState(state.investment).positions;
+  return `<section class="investment-portfolio-manage" id="investment-portfolio-manage">
+    <div class="investment-portfolio-list-head">
+      <strong>종목 관리</strong>
+      <span>포트폴리오 안에서 추가, 수정, 삭제</span>
+    </div>
+    ${renderInvestmentPositionForm()}
+    <div class="investment-manage-list">
+      ${positions.length ? positions.map(p => `<div class="investment-manage-row">
+        <div>
+          <strong>${esc(p.symbol || '-')}</strong>
+          <small>${esc(p.name || '')} · 수량 ${formatShares(p.shares)} · 평단 ${formatMoney(p.avgPrice)}</small>
+        </div>
+        <div>
+          <button type="button" onclick="editInvestmentPosition('${esc(p.id)}')">수정</button>
+          <button type="button" class="danger" onclick="deleteInvestmentPosition('${esc(p.id)}')">삭제</button>
+        </div>
+      </div>`).join('') : '<div class="investment-empty">아직 등록된 종목이 없습니다.</div>'}
+    </div>
+  </section>`;
 }
 
 function renderModalInvestmentPositions() {
@@ -304,6 +335,11 @@ function renderInvestmentGateForm(positions) {
         <option value="loss">손실 직후</option>
         <option value="target">목표가 근접</option>
       </select>
+    </div>
+    <div class="investment-form-row">
+      <input class="form-input" id="ig-shares" type="text" inputmode="decimal" placeholder="체결 수량">
+      <input class="form-input" id="ig-price" type="number" min="0" step="0.01" placeholder="체결가">
+      <div class="investment-form-hint">허용된 매매만 포트폴리오에 자동 반영됩니다.</div>
     </div>
     <textarea class="form-input investment-textarea" id="ig-reason" placeholder="지금 이 행동을 하려는 이유"></textarea>
     <button class="btn-primary investment-primary" id="investment-gate-run" type="submit" ${positions.length ? '' : 'disabled'}>점검하기</button>
@@ -401,14 +437,17 @@ async function addInvestmentPositionFromForm(event) {
     button.textContent = '현재가 조회 중';
   }
 
+  const editId = document.getElementById('ip-id')?.value || '';
+  const existing = editId ? state.investment.positions.find(p => String(p.id) === String(editId)) : null;
   const position = {
-    id: 'ip' + (state.investment.positions.length + 1),
+    ...(existing || {}),
+    id: editId || ('ip' + (state.investment.positions.length + 1)),
     symbol,
     name: document.getElementById('ip-name')?.value.trim() || symbol,
     shares: parseInvestmentNumber(document.getElementById('ip-shares')?.value),
     avgPrice: parseInvestmentNumber(document.getElementById('ip-avg')?.value),
-    currentPrice: null,
-    manualPrice: false,
+    currentPrice: existing?.currentPrice ?? null,
+    manualPrice: existing?.manualPrice || false,
     targetPrice: parseInvestmentNumber(document.getElementById('ip-target')?.value),
     stopPrice: parseInvestmentNumber(document.getElementById('ip-stop')?.value),
     longTerm: !!document.getElementById('ip-longterm')?.checked,
@@ -416,7 +455,11 @@ async function addInvestmentPositionFromForm(event) {
     addRule: document.getElementById('ip-add-rule')?.value.trim() || '',
     marketSource: '',
   };
-  state.investment.positions.push(position);
+  if (existing) {
+    state.investment.positions = state.investment.positions.map(p => String(p.id) === String(position.id) ? position : p);
+  } else {
+    state.investment.positions.push(position);
+  }
   state.selInvestmentPosition = position.id;
   let hasQuote = false;
   try {
@@ -429,7 +472,9 @@ async function addInvestmentPositionFromForm(event) {
   if (button) button.textContent = 'DB 저장 중';
   const saved = await apiSaveInvestmentPosition(position, 3);
   if (!saved?.ok) {
-    state.investment.positions = state.investment.positions.filter(p => p.id !== position.id);
+    state.investment.positions = existing
+      ? state.investment.positions.map(p => String(p.id) === String(existing.id) ? existing : p)
+      : state.investment.positions.filter(p => p.id !== position.id);
     logger.error('투자 종목 등록 실패', { symbol, error: saved?.error });
     showToast(saved?.error || '서버 저장에 실패했어요. 잠시 후 다시 저장해주세요.');
     if (button) {
@@ -441,8 +486,58 @@ async function addInvestmentPositionFromForm(event) {
   }
   if (saved.investment) state.investment = normalizeInvestmentState(saved.investment);
   showToast(hasQuote ? '보유 종목을 등록하고 현재가를 가져왔어요.' : '종목은 등록했지만 현재가를 찾지 못했어요. 티커를 확인해주세요.');
-  closeModal();
-  render();
+  if (state.activeModal === 'investment-portfolio') {
+    openModal('investment-portfolio');
+  } else {
+    closeModal();
+    render();
+  }
+}
+
+function clearInvestmentPositionForm() {
+  ['ip-id', 'ip-symbol', 'ip-name', 'ip-shares', 'ip-avg', 'ip-target', 'ip-stop', 'ip-thesis', 'ip-add-rule'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  const longTerm = document.getElementById('ip-longterm');
+  if (longTerm) longTerm.checked = false;
+  const btn = document.getElementById('investment-add-position');
+  if (btn) btn.textContent = '종목 저장';
+}
+
+function editInvestmentPosition(id) {
+  const p = normalizeInvestmentState(state.investment).positions.find(item => String(item.id) === String(id));
+  if (!p) return;
+  const set = (field, value) => {
+    const el = document.getElementById(field);
+    if (el) el.value = value ?? '';
+  };
+  set('ip-id', p.id);
+  set('ip-symbol', p.symbol || '');
+  set('ip-name', p.name || '');
+  set('ip-shares', p.shares || '');
+  set('ip-avg', p.avgPrice || '');
+  set('ip-target', p.targetPrice || '');
+  set('ip-stop', p.stopPrice || '');
+  set('ip-thesis', p.thesis || '');
+  set('ip-add-rule', p.addRule || '');
+  const longTerm = document.getElementById('ip-longterm');
+  if (longTerm) longTerm.checked = !!p.longTerm;
+  const btn = document.getElementById('investment-add-position');
+  if (btn) btn.textContent = '종목 수정 저장';
+  document.getElementById('investment-position-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function deleteInvestmentPosition(id) {
+  const p = state.investment.positions.find(item => String(item.id) === String(id));
+  if (!p) return;
+  if (!confirm(`${p.symbol || '종목'}을 포트폴리오에서 삭제할까요?`)) return;
+  state.investment.positions = state.investment.positions.filter(item => String(item.id) !== String(id));
+  state.investment.alerts = buildInvestmentRiskAlerts(state.investment.positions, state.investment.rules);
+  const persisted = await saveData();
+  if (!persisted) return showToast('서버 저장에 실패했어요. 잠시 후 다시 시도해주세요.');
+  showToast('종목을 삭제했어요.');
+  openModal('investment-portfolio');
 }
 
 async function saveInvestmentRulesFromForm(event) {
@@ -473,6 +568,8 @@ async function runInvestmentGateFromForm(event) {
   const action = document.getElementById('ig-action')?.value || 'buy';
   const context = document.getElementById('ig-context')?.value || 'normal';
   const reason = document.getElementById('ig-reason')?.value.trim() || '';
+  const tradeShares = parseInvestmentNumber(document.getElementById('ig-shares')?.value);
+  const tradePrice = parseInvestmentNumber(document.getElementById('ig-price')?.value);
   const verdict = evaluateInvestmentDecision({
     position,
     rules: state.investment.rules,
@@ -494,8 +591,14 @@ async function runInvestmentGateFromForm(event) {
     summary: verdict.summary,
     findings: verdict.findings,
     nextSteps: verdict.nextSteps,
+    tradeShares,
+    tradePrice,
   };
   state.investment.decisions.push(decision);
+  if (decision.verdict === 'allow' && tradeShares > 0 && tradePrice > 0) {
+    applyTradeToPortfolio(position.id, action, tradeShares, tradePrice);
+    decision.summary = `${decision.summary} 포트폴리오에 ${formatShares(tradeShares)}주 @ ${formatMoney(tradePrice)} 체결을 반영했습니다.`;
+  }
   state.investment.events.push({
     id: 'ie' + Date.now(),
     date: new Date().toISOString().split('T')[0],
@@ -512,6 +615,37 @@ async function runInvestmentGateFromForm(event) {
   showToast('판단 기록을 저장했어요.');
   closeModal();
   render();
+}
+
+function applyTradeToPortfolio(positionId, action, tradeShares, tradePrice) {
+  const idx = state.investment.positions.findIndex(p => String(p.id) === String(positionId));
+  if (idx < 0) return;
+  const p = state.investment.positions[idx];
+  const oldShares = parseInvestmentNumber(p.shares);
+  const oldAvg = parseInvestmentNumber(p.avgPrice);
+  const oldCost = oldShares * oldAvg;
+  let nextShares = oldShares;
+  let nextAvg = oldAvg;
+
+  if (action === 'buy' || action === 'add') {
+    nextShares = oldShares + tradeShares;
+    nextAvg = nextShares ? (oldCost + tradeShares * tradePrice) / nextShares : tradePrice;
+  } else if (action === 'sell') {
+    nextShares = Math.max(0, oldShares - tradeShares);
+    nextAvg = nextShares > 0 ? oldAvg : 0;
+  } else {
+    return;
+  }
+
+  state.investment.positions[idx] = {
+    ...p,
+    shares: nextShares,
+    avgPrice: nextAvg,
+    currentPrice: tradePrice,
+    manualPrice: true,
+    marketUpdatedAt: new Date().toISOString(),
+  };
+  state.investment.alerts = buildInvestmentRiskAlerts(state.investment.positions, state.investment.rules);
 }
 
 async function addInvestmentNewsFromForm(event) {

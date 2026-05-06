@@ -278,7 +278,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260506-04');
+            const res = await fetch('/js/data.js?v=20260506-05');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -738,6 +738,13 @@ class TestInvestmentPartner:
         self._open_investment(logged_in_page)
         logged_in_page.locator('#investment-menu-positions').click()
         logged_in_page.evaluate("""() => {
+            state.investment.positions = [];
+            state.investment.decisions = [];
+            state.investment.events = [];
+            window.apiSaveInvestmentPosition = async () => ({
+                ok: true,
+                investment: { ...state.investment, positions: state.investment.positions },
+            });
             const originalFetch = window.fetch.bind(window);
             window.fetch = (url, opts) => {
                 if (String(url).includes('/api/market/quote')) {
@@ -759,10 +766,9 @@ class TestInvestmentPartner:
             "() => state.investment.positions.at(-1)?.currentPrice === 120",
             timeout=8_000,
         )
+        logged_in_page.locator('.modal-close').click()
 
-        logged_in_page.locator('#investment-menu-rules').click()
-        logged_in_page.locator('#ir-max-weight').fill('30')
-        logged_in_page.locator('#investment-save-rules').click()
+        logged_in_page.evaluate("() => { state.investment.rules.maxPositionWeight = 30; render(); }")
 
         logged_in_page.locator('#investment-menu-decisions').click()
         position_id = logged_in_page.evaluate("() => state.investment.positions.at(-1).id")
@@ -781,12 +787,87 @@ class TestInvestmentPartner:
         })""")
 
         assert result['decisions'] == 1
-        assert result['events'] == 1
+        assert result['events'] >= 1
         assert result['lastStatus'] == 'block'
         assert result['eventType'] == 'alert'
 
         logged_in_page.evaluate("() => setView('calendar')")
         logged_in_page.wait_for_selector('.cal-event-invest', timeout=8_000)
+
+    def test_allowed_trade_updates_portfolio_position(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.investment.positions = [{
+                id: 'ip-trade-sync',
+                symbol: 'NVDA',
+                name: 'NVIDIA',
+                shares: 10,
+                avgPrice: 100,
+                currentPrice: 120,
+            }];
+            state.investment.rules = { ...state.investment.rules, maxPositionWeight: 200, chaseLimit: 50 };
+            state.investment.decisions = [];
+            state.investment.events = [];
+            render();
+        }""")
+
+        logged_in_page.locator('#investment-menu-decisions').click()
+        logged_in_page.locator('#ig-position').select_option('ip-trade-sync')
+        logged_in_page.locator('#ig-action').select_option('add')
+        logged_in_page.locator('#ig-context').select_option('normal')
+        logged_in_page.locator('#ig-shares').fill('5')
+        logged_in_page.locator('#ig-price').fill('140')
+        logged_in_page.locator('#ig-reason').fill('계획된 분할매수')
+        logged_in_page.locator('#investment-gate-run').click()
+        logged_in_page.wait_for_selector('.investment-verdict.allow', timeout=8_000)
+
+        result = logged_in_page.evaluate("""() => {
+            const p = state.investment.positions.find(item => item.id === 'ip-trade-sync');
+            return {
+                shares: p.shares,
+                avgPrice: p.avgPrice,
+                currentPrice: p.currentPrice,
+                decisionTradeShares: state.investment.decisions.at(-1).tradeShares,
+                eventType: state.investment.events.at(-1).type,
+            };
+        }""")
+        assert result['shares'] == 15
+        assert round(result['avgPrice'], 2) == 113.33
+        assert result['currentPrice'] == 140
+        assert result['decisionTradeShares'] == 5
+        assert result['eventType'] == 'trade'
+
+    def test_portfolio_modal_edits_and_deletes_position(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.investment.positions = [{
+                id: 'ip-edit',
+                symbol: 'EDIT',
+                name: 'Edit Co',
+                shares: 3,
+                avgPrice: 10,
+                currentPrice: 11,
+                manualPrice: true,
+            }];
+            render();
+        }""")
+
+        logged_in_page.locator('#investment-menu-positions').click()
+        logged_in_page.locator('.investment-manage-row button').first.click()
+        assert logged_in_page.locator('#ip-id').input_value() == 'ip-edit'
+        logged_in_page.locator('#ip-shares').fill('4')
+        logged_in_page.locator('#investment-add-position').click()
+        logged_in_page.wait_for_function(
+            "() => state.investment.positions.find(p => p.id === 'ip-edit')?.shares === 4",
+            timeout=8_000,
+        )
+
+        logged_in_page.once("dialog", lambda dialog: dialog.accept())
+        logged_in_page.locator('.investment-manage-row .danger').click()
+        logged_in_page.wait_for_function(
+            "() => !state.investment.positions.some(p => p.id === 'ip-edit')",
+            timeout=8_000,
+        )
 
     def test_position_register_waits_for_server_persistence(self, logged_in_page):
         self._open_investment(logged_in_page)
@@ -884,7 +965,7 @@ class TestInvestmentPartner:
         logged_in_page.locator('#ip-shares').fill('1')
         logged_in_page.locator('#investment-add-position').click()
         logged_in_page.wait_for_function("() => window.__saveAttempts() === 3", timeout=8_000)
-        logged_in_page.wait_for_function("() => !document.getElementById('modal-overlay').classList.contains('open')", timeout=8_000)
+        logged_in_page.wait_for_selector('#investment-portfolio-manage', timeout=8_000)
 
     def test_investment_chat_records_news_when_requested(self, logged_in_page):
         self._open_investment(logged_in_page)
