@@ -27,6 +27,11 @@ class TestDataAPI:
         assert 'events' in data['investment']
         assert 'decisions' in data['investment']
         assert 'chat' in data['investment']
+        assert 'orderIntents' in data['investment']
+        assert data['investment']['rules']['dailyLossLimit'] == 2
+        assert data['investment']['rules']['maxPositionWeight'] == 25
+        assert '계획 없이 매수하지 않는다' in data['investment']['rules']['coreRules']
+        assert data['investment']['broker']['orderIntentOnly'] is True
 
     def test_save_and_load_data(self, client, sample_student, sample_session_short):
         payload = {
@@ -137,6 +142,9 @@ class TestDataAPI:
         assert data['brokerReady'] is False
         assert data['intent']['symbol'] == 'IREN'
         assert data['intent']['status'] == 'draft'
+        loaded = client.get('/api/data').get_json()
+        assert loaded['investment']['orderIntents'][0]['symbol'] == 'IREN'
+        assert loaded['investment']['broker']['status'] == 'not_connected'
 
     def test_investment_ai_compare_endpoint_calls_claude_and_openai(self, client, monkeypatch):
         import server

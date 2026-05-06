@@ -310,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260506-19');
+            const res = await fetch('/js/data.js?v=20260506-20');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -684,6 +684,19 @@ class TestInvestmentPartner:
         assert '대화를 시작해보세요' in logged_in_page.locator('#main-content').inner_text()
         assert logged_in_page.locator('#investment-position-form').count() == 0
         assert logged_in_page.locator('#investment-gate-form').count() == 0
+
+    def test_investment_has_default_guardrail_rules(self, logged_in_page):
+        self._open_investment(logged_in_page)
+
+        rules = logged_in_page.evaluate("""() => state.investment.rules""")
+        assert rules['dailyLossLimit'] == 2
+        assert rules['maxPositionWeight'] == 25
+        assert rules['cooldownMinutes'] == 45
+        assert rules['chaseLimit'] == 3
+        assert '계획 없이 매수하지 않는다' in rules['coreRules']
+        assert '손실 직후 물타기' in rules['coreRules']
+        assert '뉴스 제목만 보고 즉시 시장가 매수' in rules['bannedSetups']
+        assert '주문 연동' in logged_in_page.locator('#main-content').inner_text()
 
     def test_investment_plus_menu_defaults_to_investment_modes(self, logged_in_page):
         self._open_investment(logged_in_page)

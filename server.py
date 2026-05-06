@@ -126,18 +126,56 @@ def _empty_investment():
     return {
         'positions': [],
         'rules': {
-            'dailyLossLimit': 3,
-            'maxPositionWeight': 30,
-            'cooldownMinutes': 30,
-            'chaseLimit': 5,
+            'dailyLossLimit': 2,
+            'maxPositionWeight': 25,
+            'cooldownMinutes': 45,
+            'chaseLimit': 3,
             'strictMode': True,
             'longTermBias': True,
             'antiAveraging': True,
-            'coreRules': '',
+            'coreRules': (
+                '1. 계획 없이 매수하지 않는다. 매수 전에는 종목, 이유, 수량, 손절가, 목표가를 먼저 적는다.\n'
+                '2. 급등 뉴스를 본 직후에는 최소 45분을 기다린다. 기다리는 동안 현재가, 평단, 비중, 손절가를 확인한다.\n'
+                '3. 손실 직후 물타기는 기본 금지다. 추가매수는 최초 투자 논리가 유지되고, 사전에 정한 분할매수 조건이 있을 때만 한다.\n'
+                '4. 한 종목 비중은 기본 25%를 넘기지 않는다. 넘기려면 왜 예외인지 기록한다.\n'
+                '5. 손절가를 정하지 못한 거래는 하지 않는다. 장기보유도 손절가 대신 투자 논리 훼손 조건을 적는다.\n'
+                '6. 목표가에 근접하면 익절을 미루는 이유를 기록한다. 근거가 없으면 일부 익절을 우선 검토한다.'
+            ),
+            'tradingStyle': 'swing',
+            'riskPerTrade': 0.5,
+            'maxDailyTrades': 2,
+            'minRiskReward': 2.5,
+            'noTradeAfterLoss': True,
+            'entryChecklist': (
+                '- 이 종목을 지금 사야 하는 이유가 가격 상승 기대 말고도 분명한가?\n'
+                '- 현재가가 최근 급등 후 추격매수 구간은 아닌가?\n'
+                '- 손절가와 목표가를 적었고 최소 손익비 2.5:1을 만족하는가?\n'
+                '- 이 거래 후 종목 비중이 25%를 넘지 않는가?\n'
+                '- 오늘 이미 손실 직후 재진입하거나 충동 매매를 한 적은 없는가?'
+            ),
+            'exitChecklist': (
+                '- 손절가에 닿으면 변명하지 않고 정리한다.\n'
+                '- 투자 논리가 훼손되면 가격이 아쉬워도 정리한다.\n'
+                '- 목표가 90% 이상에 접근하면 일부 익절 또는 손절가 상향을 검토한다.\n'
+                '- 장기보유 종목은 가격 하락과 투자 논리 훼손을 구분해서 기록한다.'
+            ),
+            'bannedSetups': (
+                '- 뉴스 제목만 보고 즉시 시장가 매수\n'
+                '- 손실 직후 만회 목적의 추가매수\n'
+                '- 손절가 없는 진입\n'
+                '- 목표가 도달 후 근거 없이 더 버티기\n'
+                '- 한 종목 비중 25% 초과를 기록 없이 방치'
+            ),
+            'reviewRoutine': (
+                '- 매일: 보유 종목 현재가, 손절가, 목표가 근접 여부 확인\n'
+                '- 매주: 가장 큰 비중 종목의 투자 논리 재점검\n'
+                '- 매월: 반복 실수 1개와 다음 달 금지 행동 1개 정리'
+            ),
         },
         'journal': [],
         'events': [],
         'decisions': [],
+        'orderIntents': [],
         'chat': [],
         'market': {
             'indexes': [],
@@ -145,6 +183,13 @@ def _empty_investment():
             'source': '',
         },
         'alerts': [],
+        'usdKrwRate': 1350,
+        'broker': {
+            'status': 'not_connected',
+            'provider': 'manual',
+            'orderIntentOnly': True,
+            'lastSyncedAt': None,
+        },
     }
 
 EMPTY = lambda: {
@@ -176,9 +221,12 @@ def _normalize_data(data: dict) -> dict:
             'journal': inv.get('journal') if isinstance(inv.get('journal'), list) else [],
             'events': inv.get('events') if isinstance(inv.get('events'), list) else [],
             'decisions': inv.get('decisions') if isinstance(inv.get('decisions'), list) else [],
+            'orderIntents': inv.get('orderIntents') if isinstance(inv.get('orderIntents'), list) else [],
             'chat': inv.get('chat') if isinstance(inv.get('chat'), list) else [],
             'market': inv.get('market') if isinstance(inv.get('market'), dict) else base['market'],
             'alerts': inv.get('alerts') if isinstance(inv.get('alerts'), list) else [],
+            'usdKrwRate': inv.get('usdKrwRate') or base['usdKrwRate'],
+            'broker': {**base['broker'], **(inv.get('broker') if isinstance(inv.get('broker'), dict) else {})},
         }
     data['investment'] = inv
     return data
@@ -532,9 +580,23 @@ def investment_order_intent_route():
     payload = request.get_json(silent=True)
     try:
         intent = build_order_intent(payload or {})
+        data = read_data()
+        data = _normalize_data(data)
+        inv = data['investment']
+        inv.setdefault('orderIntents', [])
+        inv['orderIntents'].append(intent)
+        inv['broker'] = {
+            **_empty_investment()['broker'],
+            **(inv.get('broker') if isinstance(inv.get('broker'), dict) else {}),
+            'status': 'not_connected',
+            'orderIntentOnly': True,
+        }
+        data['investment'] = inv
+        write_data(data)
         return jsonify({
             'ok': True,
             'intent': intent,
+            'investment': inv,
             'brokerReady': False,
             'message': 'order intent only; broker execution adapter is not connected',
         })

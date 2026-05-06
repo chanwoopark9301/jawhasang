@@ -258,6 +258,26 @@ async function runInvestmentGateFromForm(event) {
   if (decision.verdict === 'allow' && tradeShares > 0 && tradePrice > 0) {
     applyTradeToPortfolio(position.id, action, tradeShares, tradePrice);
     decision.summary = `${decision.summary} 포트폴리오에 ${formatShares(tradeShares)}주 @ ${formatMoney(tradePrice)} 체결을 반영했습니다.`;
+    try {
+      const intentRes = await apiCreateInvestmentOrderIntent({
+        symbol: position.symbol,
+        action,
+        quantity: tradeShares,
+        orderType,
+        price: tradePrice,
+        source: 'investment-gate',
+        reason,
+      });
+      if (intentRes.intent) {
+        state.investment.orderIntents = [...(state.investment.orderIntents || []), intentRes.intent];
+        decision.orderIntentId = intentRes.intent.id;
+        decision.summary += ' 주문 연동용 초안도 생성했습니다.';
+      }
+      if (intentRes.investment) state.investment = normalizeInvestmentState({ ...state.investment, ...intentRes.investment });
+    } catch (e) {
+      logger.warn('주문 의도 초안 생성 실패', e);
+      decision.summary += ' 주문 초안 생성은 실패했지만 매매 기록은 저장합니다.';
+    }
   }
   state.investment.events.push({
     id: 'ie' + Date.now(),

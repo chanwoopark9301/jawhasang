@@ -50,6 +50,10 @@ function renderInvestmentView() {
         <span>위험 신호</span>
         <strong>${alerts.length}</strong>
       </div>
+      <div class="investment-summary-card">
+        <span>주문 연동</span>
+        <strong>${inv.broker?.orderIntentOnly ? `초안 ${inv.orderIntents?.length || 0}` : '연결됨'}</strong>
+      </div>
     </section>
 
     ${renderInvestmentAlerts(alerts)}
