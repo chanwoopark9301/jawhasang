@@ -232,7 +232,7 @@ class TestDataAPI:
             inv['events'] = [
                 {'id': 'earnings-iren-2026-05-07', 'date': '2026-05-07', 'type': 'earnings', 'symbol': 'IREN', 'title': 'IREN 실적 발표'},
                 {'id': 'macro-cpi-2026-05-12', 'date': '2026-05-12', 'type': 'macro', 'symbol': 'MACRO', 'title': 'CPI'},
-                {'id': 'analyst-iren-target', 'date': '2026-05-07', 'type': 'analyst', 'symbol': 'IREN', 'title': 'IREN 목표주가 컨센서스'},
+                {'id': 'analyst-iren-target', 'date': '2026-05-07', 'type': 'analyst', 'symbol': 'IREN', 'title': 'IREN 목표주가 컨센서스', 'consensus': {'targetConsensus': 70}},
             ]
             inv['calendar'] = {'lastSyncedAt': '2026-05-07T00:00:00Z', 'lookaheadDays': days, 'eventsSynced': 3}
             return {'ok': True, 'investment': inv, 'eventsSynced': 3, 'missingProviders': []}
@@ -251,6 +251,8 @@ class TestDataAPI:
         titles = [e['title'] for e in loaded['investment']['events']]
         assert 'IREN 실적 발표' in titles
         assert 'CPI' in titles
+        analyst = next(e for e in loaded['investment']['events'] if e['type'] == 'analyst')
+        assert analyst['consensus']['targetConsensus'] == 70
         assert loaded['investment']['calendar']['eventsSynced'] == 3
 
     def test_investment_calendar_skips_invalid_earnings_dates(self, monkeypatch):

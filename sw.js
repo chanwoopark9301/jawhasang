@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v76'; // Investment calendar fallback
+const CACHE_NAME = 'jip-v77'; // Earnings thesis analysis prompt
 
 const STATIC_ASSETS = [
   '/style.css',

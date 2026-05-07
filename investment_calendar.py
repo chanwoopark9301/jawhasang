@@ -303,6 +303,10 @@ def fetch_analyst_events(symbols):
                         'title': f'{symbol} 애널리스트 실적 컨센서스',
                         'body': f"FMP analyst estimates 기준. 예상 매출: {revenue or '미제공'} / 예상 EPS: {eps or '미제공'}. 컨센서스 변화 시 실적 전 계획 재점검.",
                         'source': 'fmp-analyst-estimates',
+                        'consensus': {
+                            'estimatedRevenueAvg': revenue,
+                            'estimatedEpsAvg': eps,
+                        },
                         'estimateDate': first.get('date') or '',
                         'estimatedRevenueAvg': revenue,
                         'estimatedEpsAvg': eps,
@@ -329,6 +333,9 @@ def fetch_analyst_events(symbols):
                         'title': f'{symbol} 목표주가 컨센서스',
                         'body': f"FMP price target consensus 기준. 목표주가 컨센서스: {target}. 목표가 변화는 매수 근거가 아니라 기존 투자 논리 점검 신호로 사용.",
                         'source': 'fmp-price-target-consensus',
+                        'consensus': {
+                            'targetConsensus': target,
+                        },
                         'targetConsensus': target,
                     })
         except Exception:

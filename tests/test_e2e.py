@@ -310,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260507-03');
+            const res = await fetch('/js/data.js?v=20260507-04');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -1044,6 +1044,11 @@ class TestInvestmentPartner:
         assert '최종 액션 플랜' in prompt
         assert '다가오는 투자 일정' in prompt
         assert 'IREN 실적 발표' in prompt
+        assert '컨센서스가 빗나갈 수 있는 지점' in prompt
+        assert '옵션 기대 변동폭' in prompt
+        assert 'AI Cloud revenue' in prompt
+        assert 'ATM/유상증자' in prompt
+        assert '루머 해소 실패' in prompt
 
     def test_kis_sync_button_merges_broker_positions(self, logged_in_page):
         self._open_investment(logged_in_page)
