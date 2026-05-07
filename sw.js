@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v73'; // KIS broker sync
+const CACHE_NAME = 'jip-v74'; // Investment analyst action plan prompt
 
 const STATIC_ASSETS = [
   '/style.css',

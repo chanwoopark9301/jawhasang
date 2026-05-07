@@ -446,9 +446,17 @@ function _buildChatSysPrompt(isMyRecords, topic, student, extraContext = '') {
   const modePrompt = _replyModePrompt(state.replyMode || 'dictation');
   if (state.view === 'investment') {
     const inv = state.investment || defaultInvestmentState();
+    const totals = typeof investmentTotals === 'function'
+      ? investmentTotals(inv.positions || [])
+      : { totalValue: 0, totalCost: 0, totalGain: 0, totalGainPercent: 0 };
     const positions = inv.positions.map(p =>
       `- ${p.symbol || '?'}: 수량 ${p.shares || 0}, 평균 ${p.avgPrice || 0}, 현재 ${p.currentPrice || 0}, 목표 ${p.targetPrice || '-'}, 손절 ${p.stopPrice || '-'}, 논리 ${p.thesis || '없음'}`
     ).join('\n') || '- 등록된 보유 종목 없음';
+    const portfolioSnapshot = [
+      `- 총 평가액: ${totals.totalValue.toFixed(2)}`,
+      `- 총 매입금: ${totals.totalCost.toFixed(2)}`,
+      `- 평가손익: ${totals.totalGain.toFixed(2)} (${totals.totalGainPercent.toFixed(2)}%)`,
+    ].join('\n');
     const recentNews = inv.events
       .filter(e => e.type === 'news')
       .slice(-5)
@@ -469,6 +477,10 @@ function _buildChatSysPrompt(isMyRecords, topic, student, extraContext = '') {
 매매 기록에 필요한 최소 항목은 종목, 매수/매도/보유, 이유입니다. 가능하면 수량, 가격, 손절가, 목표가도 확인합니다.
 투자 원칙은 사용자의 말에서 원칙 문장을 만들되, 기준이 애매하면 "어느 조건에서 적용할지"를 먼저 물어봅니다.
 포트폴리오 비중이 원칙을 크게 초과한 경우에는 사용자가 숫자를 직접 정하지 않아도 기본 원칙(${inv.rules.maxPositionWeight}%)과 현재 비중을 근거로 1차 목표 비중, 단계적 축소안, 예외 조건을 제안합니다.
+사용자가 실제 투자금, 평단, 익절 비율, 실현익을 말하면 반드시 대략 계산을 먼저 합니다. 남은 원가, 남은 평가액, 남은 미실현 손익, 현재 총 이익, 세금 예비금, 남은 포지션의 변동폭을 "추정"으로 분리해 보여줍니다.
+실적 발표, 어닝콜, 공시, 인수, 규제처럼 날짜가 있는 이벤트를 물으면 먼저 이벤트 시간과 현재가/평단/비중을 확인하고, 주가 예측 단정 대신 상승/중립/하락 시나리오별 행동 규칙을 제시합니다.
+좋은 답변은 애널리스트 보고서가 아니라 "내 계좌에 바로 적용할 수 있는 행동 계획"이어야 합니다. 핵심 구조는 결론 → 내 포지션 계산 → 지금 하지 말 것 → 시나리오별 행동표 → 확인할 체크포인트 → 최종 액션 플랜입니다.
+세금, 환율, 수수료는 정확한 세무 조언으로 단정하지 말고 "대략 예비금"으로 표시합니다. 해외주식 실현익이 언급되면 세금 예비금을 먼저 떼어두는 원칙을 제안합니다.
 
 투자 원칙:
 - 하루 손실 한도: ${inv.rules.dailyLossLimit}%
@@ -479,6 +491,9 @@ function _buildChatSysPrompt(isMyRecords, topic, student, extraContext = '') {
 
 보유 종목:
 ${positions}
+
+포트폴리오 스냅샷:
+${portfolioSnapshot}
 
 최근 뉴스 동향:
 ${recentNews}
@@ -557,6 +572,9 @@ function _replyModePrompt(mode) {
 - 물타기, 추격매수, 손절 회피, 익절 미루기 위험을 먼저 확인한다.
 - 사용자가 비중, 수량, 축소폭, 추가매수 구간을 물으면 현재 포트폴리오와 앱 기본 원칙을 기준으로 보수적 기본안을 제시한다.
 - "추천은 제 역할 밖입니다"라고 멈추지 말고, "조건부 매매 계획"으로 바꿔서 말한다.
+- 사용자가 실적 발표 전후 계획을 물으면 "예측"보다 "수익 방어/업사이드 참여" 프레임으로 답한다.
+- 큰 실현익이 있는 경우 남은 물량을 공짜 주식처럼 다루지 말고 현재 평가액이 걸린 새 포지션으로 계산한다.
+- 답변에는 가능하면 시나리오별 가격/비중/행동 표를 포함하고, 마지막에는 오늘 당장 할 행동 3~5개만 남긴다.
 - 결론은 허가/금지 단정이 아니라 "통과 조건 / 위반 가능성 / 지금 필요한 확인 하나"로 말한다.`;
   }
   if (mode === 'invest-summary') {

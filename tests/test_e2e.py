@@ -310,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260506-23');
+            const res = await fetch('/js/data.js?v=20260507-01');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -1007,6 +1007,33 @@ class TestInvestmentPartner:
         assert '단계적 축소안' in prompt
         assert '현재 비중' in prompt
         assert '25%' in prompt
+
+    def test_investment_trade_prompt_requires_analyst_action_plan_quality(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.replyMode = 'invest-trade';
+            state.investment.positions = [{
+                id: 'ip-iren-event',
+                symbol: 'IREN',
+                name: 'Iris Energy',
+                shares: 780,
+                avgPrice: 46.06,
+                currentPrice: 60.98,
+                targetPrice: 75,
+                stopPrice: 55,
+                thesis: 'AI cloud execution and earnings catalyst',
+            }];
+        }""")
+
+        prompt = logged_in_page.evaluate("() => _buildChatSysPrompt(false, null, null)")
+
+        assert '포트폴리오 스냅샷' in prompt
+        assert '남은 원가' in prompt
+        assert '세금 예비금' in prompt
+        assert '시나리오별 행동 규칙' in prompt
+        assert '수익 방어/업사이드 참여' in prompt
+        assert '공짜 주식' in prompt
+        assert '최종 액션 플랜' in prompt
 
     def test_kis_sync_button_merges_broker_positions(self, logged_in_page):
         self._open_investment(logged_in_page)
