@@ -248,10 +248,20 @@ function saveInvestmentChatArtifacts(userText, aiText) {
     };
     state.investment.decisions.push(decision);
     if (position && (action === 'buy' || action === 'add' || action === 'sell') && trade.shares > 0 && trade.price > 0) {
-      applyTradeToPortfolio(position.id, action, trade.shares, trade.price);
+      const tradeResult = applyTradeToPortfolio(position.id, action, trade.shares, trade.price);
       decision.portfolioApplied = true;
       decision.cashApplied = true;
+      decision.realizedGain = tradeResult.realizedGain || 0;
+      decision.cashDelta = tradeResult.cashDelta || 0;
+      decision.proceeds = tradeResult.proceeds || 0;
       decision.summary = `${decision.summary}\n\n---\n포트폴리오 반영: ${investmentActionLabel(action)} ${formatShares(trade.shares)}주 @ ${formatMoney(trade.price)}`;
+    }
+    if (decision.cashApplied) {
+      if (action === 'sell') {
+        decision.summary = `${decision.summary}\n예수금 +${formatMoney(decision.proceeds || decision.cashDelta || 0)} · 실현손익 ${formatMoneySigned(decision.realizedGain || 0)}`;
+      } else {
+        decision.summary = `${decision.summary}\n예수금 ${formatMoneySigned(decision.cashDelta || 0)}`;
+      }
     }
     state.investment.events.push({
       id: 'ie' + Date.now(),

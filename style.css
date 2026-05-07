@@ -3760,6 +3760,46 @@ body { height: var(--app-height, 100dvh); }
   color: #1D4ED8;
 }
 
+.investment-hub-modal {
+  display: grid;
+  gap: 14px;
+}
+
+.investment-hub-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.investment-hub-card {
+  display: grid;
+  gap: 6px;
+  min-height: 92px;
+  padding: 14px;
+  border: 0.5px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font);
+  text-align: left;
+  cursor: pointer;
+}
+
+.investment-hub-card:hover {
+  border-color: rgba(37, 99, 235, .35);
+  background: #F7FAFF;
+}
+
+.investment-hub-card strong {
+  font-size: 14px;
+}
+
+.investment-hub-card span {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .investment-modal-note {
   font-size: 12px;
   line-height: 1.6;
@@ -4589,6 +4629,7 @@ body { height: var(--app-height, 100dvh); }
   .investment-grid,
   .investment-form-row,
   .investment-summary-grid,
+  .investment-hub-grid,
   .investment-index-strip {
     grid-template-columns: 1fr;
   }

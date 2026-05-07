@@ -12,18 +12,11 @@ function renderRightPanel() {
   _updateRpRolePills();
   _updateRpPeriod();
   _updateRpContent();
-  _ensureInvestmentSignalMenu();
   _updateRpButtons();
 }
 
 function _ensureInvestmentSignalMenu() {
-  if (state.view !== 'investment') return;
-  const menu = document.querySelector('.investment-side-menu');
-  if (!menu || document.getElementById('investment-menu-signals')) return;
-  menu.insertAdjacentHTML(
-    'beforeend',
-    "<button id=\"investment-menu-signals\" onclick=\"openModal('investment-signals')\">Search signals</button>"
-  );
+  // Legacy no-op: investment signals now live under the research hub.
 }
 
 // 하위 호환 alias (setSessionTab, setMyTab, setMyPeriod 등에서 호출)
@@ -151,13 +144,9 @@ function _updateRpContent() {
       <div class="ctx-meta">${inv.positions.length}개 종목 · ${inv.decisions.length}개 판단</div>
       <div class="investment-side-menu">
         <button id="investment-menu-desk" onclick="openModal('investment-desk')">오늘의 데스크</button>
-        <button id="investment-menu-portfolio" onclick="openModal('investment-portfolio')">포트폴리오</button>
-        <button id="investment-menu-rules" onclick="openModal('investment-rules')">투자 원칙</button>
-        <button id="investment-menu-decisions" onclick="openModal('investment-decisions')">매매 기록</button>
-        <button id="investment-menu-news" onclick="openModal('investment-news')">뉴스 동향</button>
-        <button id="investment-menu-timeline" onclick="openModal('investment-timeline')">타임라인</button>
-        <button id="investment-menu-calendar-sync" onclick="syncInvestmentCalendarData()">일정 동기화</button>
-        <button id="investment-menu-ai-compare" onclick="openModal('investment-ai-compare')">AI 비교</button>
+        <button id="investment-menu-portfolio" onclick="openModal('investment-portfolio')">계좌·포트폴리오</button>
+        <button id="investment-menu-plan" onclick="openModal('investment-plan')">원칙·매매</button>
+        <button id="investment-menu-research" onclick="openModal('investment-research')">뉴스·일정</button>
       </div>
       <div class="ctx-block">
         <div class="ctx-lbl">역할</div>

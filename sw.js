@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v88'; // Reallocate trades within account total
+const CACHE_NAME = 'jip-v89'; // Investment account cash and menu consolidation
 
 const STATIC_ASSETS = [
   '/style.css',

@@ -510,6 +510,85 @@ function renderInvestmentRulesForm(rules) {
   </form>`;
 }
 
+function renderModalInvestmentPlan() {
+  const inv = state.investment = normalizeInvestmentState(state.investment);
+  const latestDecisions = (inv.decisions || []).slice(-5);
+  return `
+    <button class="modal-close" onclick="closeModal()">×</button>
+    <div class="modal-title">원칙·매매</div>
+    <div class="investment-hub-modal" id="investment-plan-modal">
+      <section class="investment-hub-grid">
+        <button class="investment-hub-card" id="investment-hub-rules" onclick="openModal('investment-rules')">
+          <strong>투자 원칙</strong>
+          <span>방향성, 비중 한도, 손절/익절 기준을 한곳에서 관리합니다.</span>
+        </button>
+        <button class="investment-hub-card" id="investment-hub-decisions" onclick="openModal('investment-decisions')">
+          <strong>매매 기록</strong>
+          <span>체결 기록, 예수금 변화, 실현손익을 계좌 장부처럼 봅니다.</span>
+        </button>
+      </section>
+      <section class="investment-news-overview">
+        <div><span>최대 비중</span><strong>${esc(inv.rules?.maxPositionWeight || 30)}%</strong></div>
+        <div><span>쿨다운</span><strong>${esc(inv.rules?.cooldownMinutes || 30)}분</strong></div>
+        <div><span>매매 기록</span><strong>${(inv.decisions || []).length}</strong></div>
+        <div><span>최근 판단</span><strong>${esc((inv.decisions || []).at(-1)?.label || '-')}</strong></div>
+      </section>
+      <section class="investment-news-list">
+        <div class="investment-portfolio-list-head">
+          <strong>최근 매매 판단</strong>
+          <span>대화에서 확정한 매매도 여기에 쌓입니다.</span>
+        </div>
+        ${renderInvestmentDecisionList(latestDecisions)}
+      </section>
+    </div>`;
+}
+
+function renderModalInvestmentResearch() {
+  const inv = state.investment = normalizeInvestmentState(state.investment);
+  const newsCount = (inv.events || []).filter(e => e.type === 'news').length;
+  const signalCount = (inv.events || []).filter(e => e.type === 'signal').length;
+  const timelineCount = (inv.events || []).length + (inv.decisions || []).length;
+  const upcomingCount = (inv.events || []).filter(e => e.type !== 'news' && e.type !== 'signal').length;
+  return `
+    <button class="modal-close" onclick="closeModal()">×</button>
+    <div class="investment-modal-titlebar">
+      <div class="modal-title">뉴스·일정</div>
+      <div class="investment-action-row">
+        <button class="investment-refresh-btn investment-modal-refresh-btn" id="investment-hub-calendar-sync" onclick="syncInvestmentCalendarData()">일정 동기화</button>
+      </div>
+    </div>
+    <div class="investment-hub-modal" id="investment-research-modal">
+      <section class="investment-hub-grid">
+        <button class="investment-hub-card" id="investment-hub-news" onclick="openModal('investment-news')">
+          <strong>뉴스 동향</strong>
+          <span>대화에서 저장한 뉴스와 공시 해석을 다시 봅니다.</span>
+        </button>
+        <button class="investment-hub-card" id="investment-hub-timeline" onclick="openModal('investment-timeline')">
+          <strong>타임라인</strong>
+          <span>뉴스, 일정, 판단, 매매를 시간순으로 묶습니다.</span>
+        </button>
+        <button class="investment-hub-card" id="investment-hub-signals" onclick="openModal('investment-signals')">
+          <strong>검색 신호</strong>
+          <span>중요 출처, X/웹 신호, 애널리스트 코멘트를 저장합니다.</span>
+        </button>
+        <button class="investment-hub-card" id="investment-hub-ai-compare" onclick="openModal('investment-ai-compare')">
+          <strong>AI 비교</strong>
+          <span>같은 질문을 Claude/OpenAI 관점으로 비교합니다.</span>
+        </button>
+      </section>
+      <section class="investment-news-overview">
+        <div><span>뉴스</span><strong>${newsCount}</strong></div>
+        <div><span>검색 신호</span><strong>${signalCount}</strong></div>
+        <div><span>일정</span><strong>${upcomingCount}</strong></div>
+        <div><span>타임라인</span><strong>${timelineCount}</strong></div>
+      </section>
+      <section class="investment-news-guide">
+        <h4>사용 방식</h4>
+        <p>평소에는 대화창에서 "IREN 최신 뉴스 찾아줘", "이걸 뉴스 동향에 저장해줘", "실적 발표 일정 추가해줘"처럼 말하고, 이 화면은 저장된 자료를 확인하는 데 씁니다.</p>
+      </section>
+    </div>`;
+}
+
 function renderModalInvestmentRules() {
   return `
     <button class="modal-close" onclick="closeModal()">×</button>

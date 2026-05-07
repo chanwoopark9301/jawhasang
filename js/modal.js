@@ -59,6 +59,8 @@ function buildModalHTML(id, data) {
     case 'custom-role':   return renderModalCustomRole(data);
     case 'investment-desk':      return renderModalInvestmentDesk();
     case 'investment-portfolio': return renderModalInvestmentPortfolio();
+    case 'investment-plan':      return renderModalInvestmentPlan();
+    case 'investment-research':  return renderModalInvestmentResearch();
     case 'investment-rules':     return renderModalInvestmentRules();
     case 'investment-decisions': return renderModalInvestmentDecisions();
     case 'investment-news':      return renderModalInvestmentNews();

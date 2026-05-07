@@ -310,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260507-15');
+            const res = await fetch('/js/data.js?v=20260507-16');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -762,7 +762,8 @@ class TestInvestmentPartner:
         assert logged_in_page.locator('#ip-current').count() == 0
         logged_in_page.locator('.modal-close').click()
 
-        logged_in_page.locator('#investment-menu-news').click()
+        logged_in_page.locator('#investment-menu-research').click()
+        logged_in_page.locator('#investment-hub-news').click()
         logged_in_page.wait_for_selector('#investment-news-form', state='attached', timeout=8_000)
         assert '뉴스 동향' in logged_in_page.locator('#modal-box').inner_text()
         assert logged_in_page.locator('#investment-news-edit-tools').evaluate("(el) => !el.open")
@@ -772,7 +773,8 @@ class TestInvestmentPartner:
         logged_in_page.locator('#in-body').fill('## 핵심 요약\n- 규제 불확실성 완화\n[원문](https://example.com/news)')
         logged_in_page.locator('#investment-news-form button[type="submit"]').click()
         logged_in_page.wait_for_function("() => !document.getElementById('modal-overlay').classList.contains('open')", timeout=8_000)
-        logged_in_page.locator('#investment-menu-news').click()
+        logged_in_page.locator('#investment-menu-research').click()
+        logged_in_page.locator('#investment-hub-news').click()
         logged_in_page.wait_for_selector('.investment-news-card .chat-markdown h5', timeout=8_000)
         news_text = logged_in_page.locator('#modal-box').inner_text()
         assert '뉴스 동향 리포트' in news_text
@@ -783,7 +785,8 @@ class TestInvestmentPartner:
         assert logged_in_page.locator('.investment-news-card .chat-markdown a').get_attribute('href') == 'https://example.com/news'
         logged_in_page.locator('.modal-close').click()
 
-        logged_in_page.locator('#investment-menu-rules').click()
+        logged_in_page.locator('#investment-menu-plan').click()
+        logged_in_page.locator('#investment-hub-rules').click()
         logged_in_page.wait_for_selector('#investment-save-rules', state='attached', timeout=8_000)
         rules_text = logged_in_page.locator('#modal-box').inner_text()
         assert '트레이딩 플랜' in rules_text
@@ -800,7 +803,8 @@ class TestInvestmentPartner:
         logged_in_page.locator('#investment-save-rules').click()
         logged_in_page.wait_for_function("() => state.investment.rules.riskPerTrade === 0.8", timeout=8_000)
 
-        logged_in_page.locator('#investment-menu-decisions').click()
+        logged_in_page.locator('#investment-menu-plan').click()
+        logged_in_page.locator('#investment-hub-decisions').click()
         logged_in_page.wait_for_selector('#investment-gate-form', state='attached', timeout=8_000)
         journal_text = logged_in_page.locator('#modal-box').inner_text()
         assert '매매 저널' in journal_text
@@ -996,7 +1000,8 @@ class TestInvestmentPartner:
             render();
         }""")
 
-        logged_in_page.locator('#investment-menu-timeline').click()
+        logged_in_page.locator('#investment-menu-research').click()
+        logged_in_page.locator('#investment-hub-timeline').click()
         logged_in_page.wait_for_selector('.investment-timeline', timeout=8_000)
         timeline_text = logged_in_page.locator('#modal-box').inner_text()
         assert 'CRCL' in timeline_text
@@ -1022,7 +1027,8 @@ class TestInvestmentPartner:
             window.fetchInvestmentNewsContext = async () => '';
         }""")
 
-        logged_in_page.locator('#investment-menu-ai-compare').click()
+        logged_in_page.locator('#investment-menu-research').click()
+        logged_in_page.locator('#investment-hub-ai-compare').click()
         logged_in_page.wait_for_selector('#investment-ai-compare-form', timeout=8_000)
         logged_in_page.locator('#iac-question').fill('IREN add?')
         logged_in_page.locator('#iac-run').click()
@@ -1036,7 +1042,8 @@ class TestInvestmentPartner:
     def test_investment_signal_modal_saves_manual_source_without_auto_x_sync(self, logged_in_page):
         self._open_investment(logged_in_page)
 
-        logged_in_page.locator('#investment-menu-signals').click()
+        logged_in_page.locator('#investment-menu-research').click()
+        logged_in_page.locator('#investment-hub-signals').click()
         logged_in_page.wait_for_selector('#investment-signals-modal', timeout=8_000)
         assert logged_in_page.locator('#investment-x-sync').count() == 0
         modal_text = logged_in_page.locator('#modal-box').inner_text()
@@ -1445,7 +1452,8 @@ class TestInvestmentPartner:
 
         logged_in_page.evaluate("() => { state.investment.rules.maxPositionWeight = 30; render(); }")
 
-        logged_in_page.locator('#investment-menu-decisions').click()
+        logged_in_page.locator('#investment-menu-plan').click()
+        logged_in_page.locator('#investment-hub-decisions').click()
         position_id = logged_in_page.evaluate("() => state.investment.positions.at(-1).id")
         logged_in_page.locator('#ig-position').select_option(position_id)
         logged_in_page.locator('#ig-action').select_option('add')
@@ -1486,7 +1494,8 @@ class TestInvestmentPartner:
             render();
         }""")
 
-        logged_in_page.locator('#investment-menu-decisions').click()
+        logged_in_page.locator('#investment-menu-plan').click()
+        logged_in_page.locator('#investment-hub-decisions').click()
         logged_in_page.locator('#investment-gate-tools summary').click()
         logged_in_page.locator('#ig-position').select_option('ip-trade-sync')
         logged_in_page.locator('#ig-action').select_option('add')
@@ -1887,7 +1896,8 @@ class TestInvestmentPartner:
         assert '510' in logged_in_page.locator('#modal-box').inner_text()
         logged_in_page.locator('.modal-close').click()
 
-        logged_in_page.locator('#investment-menu-decisions').click()
+        logged_in_page.locator('#investment-menu-plan').click()
+        logged_in_page.locator('#investment-hub-decisions').click()
         logged_in_page.wait_for_selector('.investment-decision-summary.chat-markdown table', timeout=8_000)
         assert logged_in_page.locator('.investment-decision-summary.chat-markdown h5').inner_text() == 'IREN 매매 기록'
         assert '약 2,500만원' in logged_in_page.locator('.investment-decision-summary.chat-markdown table').inner_text()

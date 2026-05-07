@@ -61,17 +61,23 @@ function applyTradeToPortfolio(positionId, action, tradeShares, tradePrice) {
   const oldCost = oldShares * oldAvg;
   const hadCash = hasInvestmentCashPosition();
   const accountTotal = getInvestmentAccountTotalAtExecution(positionId, tradePrice);
+  let appliedShares = parseInvestmentNumber(tradeShares);
+  let cashDelta = 0;
+  let realizedGain = 0;
   let nextShares = oldShares;
   let nextAvg = oldAvg;
 
   if (action === 'buy' || action === 'add') {
-    nextShares = oldShares + tradeShares;
-    nextAvg = nextShares ? (oldCost + tradeShares * tradePrice) / nextShares : tradePrice;
+    nextShares = oldShares + appliedShares;
+    nextAvg = nextShares ? (oldCost + appliedShares * tradePrice) / nextShares : tradePrice;
+    cashDelta = -(appliedShares * tradePrice);
   } else if (action === 'sell') {
-    const appliedShares = Math.min(tradeShares, oldShares);
+    appliedShares = Math.min(appliedShares, oldShares);
     if (appliedShares <= 0) return;
     nextShares = Math.max(0, oldShares - appliedShares);
     nextAvg = nextShares > 0 ? oldAvg : 0;
+    cashDelta = appliedShares * tradePrice;
+    realizedGain = (tradePrice - oldAvg) * appliedShares;
   } else {
     return;
   }
@@ -88,6 +94,15 @@ function applyTradeToPortfolio(positionId, action, tradeShares, tradePrice) {
     rebalanceInvestmentCashToAccountTotal(accountTotal);
   }
   state.investment.alerts = buildInvestmentRiskAlerts(state.investment.positions, state.investment.rules);
+  return {
+    action,
+    appliedShares,
+    tradePrice,
+    cashDelta,
+    proceeds: action === 'sell' ? cashDelta : 0,
+    realizedGain,
+    accountTotal: state.investment.account?.totalCapital || accountTotal,
+  };
 }
 
 function hasInvestmentCashPosition() {
