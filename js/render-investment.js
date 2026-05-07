@@ -589,52 +589,24 @@ function renderModalInvestmentNews() {
 function renderModalInvestmentSignals() {
   const inv = state.investment = normalizeInvestmentState(state.investment);
   const signals = (inv.events || []).filter(e => e.type === 'signal').slice().reverse();
-  const watchlist = inv.signals?.watchlist || [];
   const latestDate = signals.map(e => e.date || '').filter(Boolean).sort().at(-1) || '';
   return `
     <button class="modal-close" onclick="closeModal()">x</button>
-    <div class="modal-title">X market signals</div>
+    <div class="modal-title">Search signals</div>
     <div class="investment-news-modal" id="investment-signals-modal">
       <section class="investment-news-overview">
         <div><span>Saved signals</span><strong>${signals.length}</strong></div>
-        <div><span>Watch accounts</span><strong>${watchlist.length}</strong></div>
+        <div><span>Source</span><strong>On demand</strong></div>
         <div><span>Last signal</span><strong>${latestDate || '-'}</strong></div>
-        <div><span>Last sync</span><strong>${inv.signals?.lastSyncedAt ? formatDateTimeShort(inv.signals.lastSyncedAt) : '-'}</strong></div>
+        <div><span>Auto X sync</span><strong>Paused</strong></div>
       </section>
       <section class="investment-news-guide">
-        <h4>Signal rule</h4>
-        <p>X posts, famous investors, and trader comments are not buy/sell evidence by themselves. They are saved as early signals, then checked against official filings, company IR, trusted financial news, price action, and your own rules.</p>
+        <h4>How this works</h4>
+        <p>Automatic X monitoring is paused. Ask the investment chat to search news, filings, analyst comments, or public web coverage when you need it. If a source matters, say "save this as a signal" and it will appear here, in the timeline, and on the calendar.</p>
       </section>
       <div class="investment-action-row">
-        <button class="investment-refresh-btn" id="investment-x-sync" onclick="syncInvestmentXSignals()">Sync X</button>
         <button class="investment-refresh-btn" id="investment-notification-permission" onclick="requestInvestmentNotifications()">Enable alerts</button>
       </div>
-      <section class="investment-news-list">
-        <div class="investment-portfolio-list-head"><strong>Watchlist</strong><span>X API sync uses these handles and your keyword filter.</span></div>
-        ${watchlist.length ? watchlist.map(a => `<article class="investment-manage-row">
-          <div><strong>@${esc(a.handle || '')}</strong><small>${esc(a.label || '')} · ${esc(a.theme || '')} · ${esc(a.trust || 'signal')}</small></div>
-          <div><button type="button" class="danger" onclick="removeInvestmentSignalAccount('${esc(a.handle || '')}')">Remove</button></div>
-        </article>`).join('') : '<div class="investment-empty">No X watch accounts yet.</div>'}
-      </section>
-      <details class="investment-manage-tools investment-manual-tools" id="investment-signal-watch-tools">
-        <summary><span>Add watch account</span><small>Elon, The Tech Investor, executives, analysts</small></summary>
-        <form class="investment-form" id="investment-signal-watch-form" onsubmit="addInvestmentSignalAccountFromForm(event)">
-          <div class="investment-form-row">
-            <input class="form-input" id="isw-handle" placeholder="X handle, e.g. thetechinvest" autocomplete="off">
-            <input class="form-input" id="isw-label" placeholder="Display name" autocomplete="off">
-          </div>
-          <div class="investment-form-row">
-            <input class="form-input" id="isw-theme" placeholder="Theme, e.g. AI infra / IREN / crypto" autocomplete="off">
-            <select class="form-input" id="isw-trust">
-              <option value="narrative">Narrative signal</option>
-              <option value="investor">Investor signal</option>
-              <option value="executive">Company/executive signal</option>
-              <option value="analyst">Analyst signal</option>
-            </select>
-          </div>
-          <button class="btn-primary investment-primary" type="submit">Save account</button>
-        </form>
-      </details>
       <section class="investment-news-list">
         <div class="investment-portfolio-list-head"><strong>Saved signal feed</strong><span>Also appears in timeline and calendar.</span></div>
         ${signals.length ? signals.map(e => `<article class="investment-news-card">
@@ -644,7 +616,7 @@ function renderModalInvestmentSignals() {
         </article>`).join('') : '<div class="investment-empty">No saved market signals yet.</div>'}
       </section>
       <details class="investment-manage-tools investment-manual-tools" id="investment-signal-manual-tools">
-        <summary><span>Save X link manually</span><small>Paste links when API sync is not enough.</small></summary>
+        <summary><span>Save source manually</span><small>Paste news, filing, X, or analyst links after checking them.</small></summary>
         <form class="investment-form" id="investment-signal-form" onsubmit="addInvestmentSignalFromForm(event)">
           <div class="investment-form-row">
             <input class="form-input" id="is-symbol" placeholder="Symbol, e.g. IREN" autocomplete="off">
@@ -652,7 +624,7 @@ function renderModalInvestmentSignals() {
             <input class="form-input" id="is-date" type="date" value="${new Date().toISOString().split('T')[0]}">
           </div>
           <input class="form-input" id="is-title" placeholder="Signal title" autocomplete="off">
-          <input class="form-input" id="is-url" placeholder="https://x.com/.../status/..." autocomplete="off">
+          <input class="form-input" id="is-url" placeholder="Source URL" autocomplete="off">
           <textarea class="form-input investment-textarea investment-news-textarea" id="is-body" placeholder="What happened, why it matters, what must be verified"></textarea>
           <button class="btn-primary investment-primary" type="submit">Save signal</button>
         </form>

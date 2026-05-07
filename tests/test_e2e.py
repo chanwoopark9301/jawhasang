@@ -310,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260507-05');
+            const res = await fetch('/js/data.js?v=20260507-06');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -919,22 +919,15 @@ class TestInvestmentPartner:
         assert 'Check the rule first.' in modal_text
         assert 'Check the risk first.' in modal_text
 
-    def test_investment_signal_modal_saves_manual_x_link_and_watchlist(self, logged_in_page):
+    def test_investment_signal_modal_saves_manual_source_without_auto_x_sync(self, logged_in_page):
         self._open_investment(logged_in_page)
 
         logged_in_page.locator('#investment-menu-signals').click()
         logged_in_page.wait_for_selector('#investment-signals-modal', timeout=8_000)
-        assert logged_in_page.locator('#investment-x-sync').is_visible()
-
-        logged_in_page.locator('#investment-signal-watch-tools summary').click()
-        logged_in_page.locator('#isw-handle').fill('iren_exec')
-        logged_in_page.locator('#isw-label').fill('IREN Executive')
-        logged_in_page.locator('#isw-theme').fill('IREN official signal')
-        logged_in_page.locator('#investment-signal-watch-form button[type="submit"]').click()
-        logged_in_page.wait_for_function(
-            "() => state.investment.signals.watchlist.some(a => a.handle === 'iren_exec')",
-            timeout=8_000,
-        )
+        assert logged_in_page.locator('#investment-x-sync').count() == 0
+        modal_text = logged_in_page.locator('#modal-box').inner_text()
+        assert 'Auto X sync' in modal_text
+        assert 'Paused' in modal_text
 
         logged_in_page.locator('#investment-signal-manual-tools').evaluate("(el) => { el.open = true; }")
         logged_in_page.wait_for_selector('#is-title', state='visible', timeout=8_000)
@@ -953,42 +946,50 @@ class TestInvestmentPartner:
         logged_in_page.wait_for_selector('.investment-news-card .chat-markdown h5', timeout=8_000)
         assert logged_in_page.locator('.investment-news-card .chat-markdown h5').inner_text() == 'Signal'
 
-    def test_investment_x_sync_button_adds_signal_event(self, logged_in_page):
+    def test_investment_chat_searches_news_for_x_or_trader_requests(self, logged_in_page):
         self._open_investment(logged_in_page)
         logged_in_page.evaluate("""() => {
             const originalFetch = window.fetch.bind(window);
+            window.__investmentNewsUrl = '';
+            window.__capturedAnalyzePayload = null;
             window.fetch = (url, opts) => {
-                if (String(url).includes('/api/investment/x/sync')) {
-                    const inv = normalizeInvestmentState(state.investment);
-                    inv.events.push({
-                        id: 'x-signal-test-1',
-                        date: '2026-05-07',
-                        type: 'signal',
-                        symbol: 'IREN',
-                        title: '@thetechinvest signal',
-                        body: 'IREN AI signal from X',
-                        severity: 'watch',
-                        source: 'x-api',
-                    });
-                    inv.signals.lastSyncedAt = '2026-05-07T00:00:00Z';
+                if (String(url).includes('/api/investment/news')) {
+                    window.__investmentNewsUrl = String(url);
                     return Promise.resolve(new Response(JSON.stringify({
-                        ok: true,
-                        investment: inv,
-                        signalsSynced: 1,
+                        source: 'test-news-search',
+                        requested: ['IREN'],
+                        requestedQueries: ['thetechinvest IREN market news'],
+                        news: [{
+                            topic: 'thetechinvest IREN market news',
+                            title: 'Trader commentary says IREN AI infra remains in focus',
+                            published: '2026-05-07',
+                            publisher: 'Test News',
+                            source: 'google-news-rss',
+                            summary: 'Public search result summary.',
+                            link: 'https://example.com/iren-signal',
+                        }],
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                if (String(url).includes('/api/analyze')) {
+                    window.__capturedAnalyzePayload = JSON.parse(opts.body);
+                    return Promise.resolve(new Response(JSON.stringify({
+                        content: [{ text: 'Searched public results first and treated this as a weak signal.' }],
                     }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
                 }
                 return originalFetch(url, opts);
             };
         }""")
 
-        logged_in_page.locator('#investment-menu-signals').click()
-        logged_in_page.wait_for_selector('#investment-x-sync', timeout=8_000)
-        logged_in_page.locator('#investment-x-sync').click()
+        logged_in_page.locator('#chat-input-bottom').fill('thetechinvest IREN X 코멘트 찾아줘')
+        logged_in_page.locator('#chat-input-bottom').press('Enter')
         logged_in_page.wait_for_function(
-            "() => state.investment.events.some(e => e.id === 'x-signal-test-1')",
+            "() => window.__capturedAnalyzePayload && window.__investmentNewsUrl.includes('/api/investment/news')",
             timeout=8_000,
         )
-        assert 'IREN AI signal from X' in logged_in_page.locator('#modal-box').inner_text()
+        assert 'thetechinvest' in logged_in_page.evaluate("() => decodeURIComponent(window.__investmentNewsUrl)")
+        system_text = logged_in_page.evaluate("() => window.__capturedAnalyzePayload.system[0].text")
+        assert 'Trader commentary says IREN AI infra remains in focus' in system_text
+        assert 'Automatic X monitoring is paused' in system_text
 
     def test_investment_chat_fetches_market_context_for_position_status(self, logged_in_page):
         self._open_investment(logged_in_page)

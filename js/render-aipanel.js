@@ -22,7 +22,7 @@ function _ensureInvestmentSignalMenu() {
   if (!menu || document.getElementById('investment-menu-signals')) return;
   menu.insertAdjacentHTML(
     'beforeend',
-    "<button id=\"investment-menu-signals\" onclick=\"openModal('investment-signals')\">X signal</button>"
+    "<button id=\"investment-menu-signals\" onclick=\"openModal('investment-signals')\">Search signals</button>"
   );
 }
 

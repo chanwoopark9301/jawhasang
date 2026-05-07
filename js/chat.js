@@ -295,7 +295,7 @@ function inferInvestmentSymbol(text) {
 function shouldFetchInvestmentNews(text) {
   const ask = (text || '').toLowerCase();
   if (state.view === 'investment' && state.replyMode === 'invest-news') return true;
-  return /\uB274\uC2A4|\uCD5C\uC2E0|\uB3D9\uD5A5|\uACF5\uC2DC|\uBC95\uC548|\uADDC\uC81C|news|headline|filing|bill|act|regulation/.test(ask);
+  return /\uB274\uC2A4|\uCD5C\uC2E0|\uB3D9\uD5A5|\uACF5\uC2DC|\uBC95\uC548|\uADDC\uC81C|\uAC80\uC0C9|\uCC3E\uC544|\uCC3E\uC544\uC918|\uC54C\uC544\uBD10|news|headline|filing|bill|act|regulation|search|find|look up|x\.com|twitter|tweet|thetechinvest|elon|musk|cathie|wood|thiel/.test(ask);
 }
 
 function shouldFetchInvestmentMarketContext(text) {
@@ -424,6 +424,10 @@ function inferInvestmentNewsQueries(text) {
     add('US crypto legislation news');
     add('US crypto market structure bill');
   }
+  if (/x\.com|twitter|tweet|\uD2B8\uC717|\uD2B8\uC704\uD130|thetechinvest|elon|musk|cathie|wood|thiel/.test(lower)) {
+    add(`${raw.replace(/\s+/g, ' ').trim()} market news`);
+    add(`${raw.replace(/\s+/g, ' ').trim()} investor commentary`);
+  }
 
   return queries.slice(0, 5);
 }
@@ -533,6 +537,11 @@ ${recentNews}
 다가오는 투자 일정:
 Recent X / market signals:
 ${recentSignals}
+
+Search behavior:
+- If investment news/search context is supplied, use it directly and do not claim that real-time search is unavailable.
+- Automatic X monitoring is paused. For X/trader requests, summarize available public search/news results and treat them as weak market signals until confirmed by official filings, company IR, trusted financial media, or price/volume data.
+- If the user says to save a searched item, save it as news or signal depending on the wording.
 
 ${upcomingEvents}
 
