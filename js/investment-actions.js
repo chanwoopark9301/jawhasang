@@ -419,6 +419,7 @@ async function runInvestmentGateFromForm(event) {
   state.investment.decisions.push(decision);
   if (decision.verdict === 'allow' && tradeShares > 0 && tradePrice > 0) {
     applyTradeToPortfolio(position.id, action, tradeShares, tradePrice);
+    decision.cashApplied = true;
     decision.summary = `${decision.summary} 포트폴리오에 ${formatShares(tradeShares)}주 @ ${formatMoney(tradePrice)} 체결을 반영했습니다.`;
     try {
       const intentRes = await apiCreateInvestmentOrderIntent({

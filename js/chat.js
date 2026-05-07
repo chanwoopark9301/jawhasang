@@ -250,6 +250,7 @@ function saveInvestmentChatArtifacts(userText, aiText) {
     if (position && (action === 'buy' || action === 'add' || action === 'sell') && trade.shares > 0 && trade.price > 0) {
       applyTradeToPortfolio(position.id, action, trade.shares, trade.price);
       decision.portfolioApplied = true;
+      decision.cashApplied = true;
       decision.summary = `${decision.summary}\n\n---\n포트폴리오 반영: ${investmentActionLabel(action)} ${formatShares(trade.shares)}주 @ ${formatMoney(trade.price)}`;
     }
     state.investment.events.push({

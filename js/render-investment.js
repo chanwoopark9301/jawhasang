@@ -123,6 +123,9 @@ function renderInvestmentPositions(positions, totals) {
 
 function renderModalInvestmentPortfolio() {
   const inv = state.investment = normalizeInvestmentState(state.investment);
+  if (typeof reconcileCashFromAppliedSellDecisions === 'function' && reconcileCashFromAppliedSellDecisions()) {
+    saveData({ retries: 0 });
+  }
   const slices = getInvestmentPortfolioSlices(inv.positions).sort((a, b) => b.value - a.value);
   const unpriced = getInvestmentUnpricedPositions(inv.positions);
   const totals = investmentTotals(inv.positions);

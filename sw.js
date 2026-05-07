@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v84'; // Apply portfolio edits from chat summaries
+const CACHE_NAME = 'jip-v85'; // Reflect trade cash in portfolio
 
 const STATIC_ASSETS = [
   '/style.css',

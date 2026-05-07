@@ -59,9 +59,11 @@ function applyTradeToPortfolio(positionId, action, tradeShares, tradePrice) {
   if (action === 'buy' || action === 'add') {
     nextShares = oldShares + tradeShares;
     nextAvg = nextShares ? (oldCost + tradeShares * tradePrice) / nextShares : tradePrice;
+    applyTradeCashDelta(-(tradeShares * tradePrice));
   } else if (action === 'sell') {
     nextShares = Math.max(0, oldShares - tradeShares);
     nextAvg = nextShares > 0 ? oldAvg : 0;
+    applyTradeCashDelta(tradeShares * tradePrice);
   } else {
     return;
   }
@@ -75,4 +77,63 @@ function applyTradeToPortfolio(positionId, action, tradeShares, tradePrice) {
     marketUpdatedAt: new Date().toISOString(),
   };
   state.investment.alerts = buildInvestmentRiskAlerts(state.investment.positions, state.investment.rules);
+}
+
+function applyTradeCashDelta(delta) {
+  const amount = parseInvestmentNumber(delta);
+  if (!amount) return null;
+  state.investment = normalizeInvestmentState(state.investment);
+  const idx = state.investment.positions.findIndex(p => isCashInvestmentPosition(p) && String(p.currency || 'USD').toUpperCase() === 'USD');
+  const now = new Date().toISOString();
+  if (idx >= 0) {
+    const p = state.investment.positions[idx];
+    const next = Math.max(0, parseInvestmentNumber(p.cashAmount ?? p.shares) + amount);
+    state.investment.positions[idx] = {
+      ...p,
+      assetType: 'cash',
+      symbol: p.symbol || 'CASH',
+      name: p.name || '현금',
+      shares: next,
+      avgPrice: 1,
+      currentPrice: 1,
+      cashAmount: next,
+      manualPrice: true,
+      currency: 'USD',
+      marketUpdatedAt: now,
+    };
+    return state.investment.positions[idx];
+  }
+  if (amount < 0) return null;
+  const cash = {
+    id: 'ip-cash-auto',
+    assetType: 'cash',
+    symbol: 'CASH',
+    name: '현금',
+    shares: amount,
+    avgPrice: 1,
+    currentPrice: 1,
+    cashAmount: amount,
+    manualPrice: true,
+    currency: 'USD',
+    marketUpdatedAt: now,
+  };
+  state.investment.positions.push(cash);
+  return cash;
+}
+
+function reconcileCashFromAppliedSellDecisions() {
+  state.investment = normalizeInvestmentState(state.investment);
+  const hasCash = state.investment.positions.some(p => isCashInvestmentPosition(p));
+  if (hasCash) return false;
+  const sells = (state.investment.decisions || []).filter(d =>
+    d && d.portfolioApplied && !d.cashApplied && d.action === 'sell' &&
+    parseInvestmentNumber(d.tradeShares) > 0 && parseInvestmentNumber(d.tradePrice) > 0
+  );
+  if (!sells.length) return false;
+  const total = sells.reduce((sum, d) => sum + parseInvestmentNumber(d.tradeShares) * parseInvestmentNumber(d.tradePrice), 0);
+  if (total <= 0) return false;
+  applyTradeCashDelta(total);
+  sells.forEach(d => { d.cashApplied = true; });
+  state.investment.alerts = buildInvestmentRiskAlerts(state.investment.positions, state.investment.rules);
+  return true;
 }

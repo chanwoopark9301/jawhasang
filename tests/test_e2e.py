@@ -310,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260507-11');
+            const res = await fetch('/js/data.js?v=20260507-12');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -1759,10 +1759,12 @@ class TestInvestmentPartner:
         )
         portfolio = logged_in_page.evaluate("""() => {
             const p = state.investment.positions.find(item => item.symbol === 'IREN');
+            const cash = state.investment.positions.find(item => item.assetType === 'cash');
             const d = state.investment.decisions.at(-1);
             return {
                 shares: p.shares,
                 currentPrice: p.currentPrice,
+                cash: cash?.cashAmount,
                 tradeShares: d.tradeShares,
                 tradePrice: d.tradePrice,
             };
@@ -1770,6 +1772,7 @@ class TestInvestmentPartner:
         assert portfolio == {
             'shares': 510,
             'currentPrice': 60,
+            'cash': 71400,
             'tradeShares': 1190,
             'tradePrice': 60,
         }
@@ -1821,10 +1824,16 @@ class TestInvestmentPartner:
         )
         result = logged_in_page.evaluate("""() => {
             const p = state.investment.positions.find(item => item.symbol === 'IREN');
+            const cash = state.investment.positions.find(item => item.assetType === 'cash');
             const d = state.investment.decisions.at(-1);
+            const total = investmentTotals(state.investment.positions).totalValue;
+            const weight = investmentPositionValue(p, 'currentPrice') / total * 100;
             return {
                 shares: p.shares,
                 currentPrice: p.currentPrice,
+                cash: cash?.cashAmount,
+                total: Math.round(total * 100) / 100,
+                weight: Math.round(weight * 10) / 10,
                 action: d.action,
                 tradeShares: d.tradeShares,
                 tradePrice: d.tradePrice,
@@ -1834,10 +1843,58 @@ class TestInvestmentPartner:
         assert result == {
             'shares': 510,
             'currentPrice': 61.07,
+            'cash': 72673.3,
+            'total': 103819,
+            'weight': 30,
             'action': 'sell',
             'tradeShares': 1190,
             'tradePrice': 61.07,
             'applied': True,
+        }
+
+    def test_portfolio_reconciles_cash_from_previous_sell_decisions(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.investment.positions = [{
+                id: 'ip-iren-old-sell',
+                symbol: 'IREN',
+                name: 'Iris Energy',
+                shares: 510,
+                avgPrice: 46.06,
+                currentPrice: 60,
+            }];
+            state.investment.decisions = [{
+                id: 'id-old-sell',
+                createdAt: '2026-05-07T00:00:00',
+                symbol: 'IREN',
+                action: 'sell',
+                portfolioApplied: true,
+                tradeShares: 1190,
+                tradePrice: 60,
+                summary: 'old sell',
+            }];
+            state.investment.events = [];
+            render();
+        }""")
+
+        logged_in_page.locator('#investment-menu-portfolio').click()
+        logged_in_page.wait_for_function(
+            "() => state.investment.positions.some(p => p.assetType === 'cash' && p.cashAmount === 71400)",
+            timeout=8_000,
+        )
+        summary = logged_in_page.evaluate("""() => {
+            const p = state.investment.positions.find(item => item.symbol === 'IREN');
+            const total = investmentTotals(state.investment.positions).totalValue;
+            return {
+                total,
+                weight: Math.round((investmentPositionValue(p, 'currentPrice') / total) * 1000) / 10,
+                cashApplied: state.investment.decisions[0].cashApplied,
+            };
+        }""")
+        assert summary == {
+            'total': 102000,
+            'weight': 30,
+            'cashApplied': True,
         }
 
     def test_investment_news_request_injects_search_results(self, logged_in_page):
