@@ -253,6 +253,46 @@ class TestDataAPI:
         assert 'CPI' in titles
         assert loaded['investment']['calendar']['eventsSynced'] == 3
 
+    def test_investment_calendar_skips_invalid_earnings_dates(self, monkeypatch):
+        import investment_calendar
+
+        monkeypatch.setenv('ALPHA_VANTAGE_API_KEY', 'test-alpha')
+
+        class FakeResp:
+            ok = True
+            text = 'symbol,name,reportDate,fiscalDateEnding,estimate,currency\nIREN,Iris Energy,f,2026-03-31,0.01,USD\n'
+
+        monkeypatch.setattr(investment_calendar.requests, 'get', lambda *args, **kwargs: FakeResp())
+
+        events, missing = investment_calendar.fetch_earnings_events(['IREN'], days=90)
+
+        assert events == []
+        assert missing == []
+
+    def test_investment_calendar_earnings_fallback_extracts_month_day_without_year(self, monkeypatch):
+        import investment_calendar
+
+        rss = '''<?xml version="1.0" encoding="UTF-8"?>
+        <rss><channel><item>
+          <title>IREN schedules Q3 FY26 results and live investor Q&amp;A for May 7 - Stock Titan</title>
+          <link>https://example.com/iren-earnings</link>
+          <description>IREN earnings results release date</description>
+        </item></channel></rss>'''
+
+        class FakeResp:
+            ok = True
+            content = rss.encode('utf-8')
+
+        monkeypatch.setattr(investment_calendar.requests, 'get', lambda *args, **kwargs: FakeResp())
+
+        events, missing = investment_calendar.fetch_earnings_press_release_events(['IREN'], days=90)
+
+        assert missing == []
+        assert len(events) == 1
+        assert events[0]['date'] == '2026-05-07'
+        assert events[0]['type'] == 'earnings'
+        assert events[0]['source'] == 'google-news-earnings-fallback'
+
     def test_investment_ai_compare_endpoint_calls_claude_and_openai(self, client, monkeypatch):
         import server
 

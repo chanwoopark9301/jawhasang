@@ -11,6 +11,7 @@ import csv
 import io
 import os
 import re
+import xml.etree.ElementTree as ET
 
 import requests
 
@@ -18,6 +19,7 @@ import requests
 ALPHA_VANTAGE_URL = 'https://www.alphavantage.co/query'
 TRADING_ECONOMICS_URL = 'https://api.tradingeconomics.com/calendar/country/united%20states'
 FMP_STABLE_URL = 'https://financialmodelingprep.com/stable'
+GOOGLE_NEWS_RSS_URL = 'https://news.google.com/rss/search'
 
 MACRO_KEYWORDS = (
     'fomc', 'fed interest rate decision', 'federal funds rate',
@@ -43,7 +45,66 @@ def _iso_date(value):
                 return datetime.strptime(text, fmt).date().isoformat()
             except ValueError:
                 pass
-    return text[:10]
+    text = text[:10]
+    if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', text):
+        return ''
+    try:
+        datetime.fromisoformat(text)
+    except ValueError:
+        return ''
+    return text
+
+
+def _date_in_window(date, days):
+    if not date:
+        return False
+    try:
+        day = datetime.fromisoformat(date).date()
+    except ValueError:
+        return False
+    return _today() - timedelta(days=7) <= day <= _today() + timedelta(days=days)
+
+
+def _date_from_text(text):
+    raw = str(text or '')
+    months = {
+        'january': 1, 'jan': 1,
+        'february': 2, 'feb': 2,
+        'march': 3, 'mar': 3,
+        'april': 4, 'apr': 4,
+        'may': 5,
+        'june': 6, 'jun': 6,
+        'july': 7, 'jul': 7,
+        'august': 8, 'aug': 8,
+        'september': 9, 'sep': 9,
+        'october': 10, 'oct': 10,
+        'november': 11, 'nov': 11,
+        'december': 12, 'dec': 12,
+    }
+    pattern = re.compile(
+        r'\b(' + '|'.join(months.keys()) + r')\.?\s+(\d{1,2})(?:st|nd|rd|th)?[,]?\s+(20\d{2})\b',
+        re.IGNORECASE,
+    )
+    match = pattern.search(raw)
+    if match:
+        month = months[match.group(1).lower().rstrip('.')]
+        day = int(match.group(2))
+        year = int(match.group(3))
+    else:
+        pattern_no_year = re.compile(
+            r'\b(' + '|'.join(months.keys()) + r')\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b',
+            re.IGNORECASE,
+        )
+        match = pattern_no_year.search(raw)
+        if not match:
+            return ''
+        month = months[match.group(1).lower().rstrip('.')]
+        day = int(match.group(2))
+        year = _today().year
+    try:
+        return datetime(year, month, day).date().isoformat()
+    except ValueError:
+        return ''
 
 
 def _num(value):
@@ -102,10 +163,7 @@ def fetch_earnings_events(symbols, days=90):
         rows = csv.DictReader(io.StringIO(resp.text))
         for row in rows:
             date = _iso_date(row.get('reportDate'))
-            if not date:
-                continue
-            day = datetime.fromisoformat(date).date()
-            if day > cutoff:
+            if not _date_in_window(date, days):
                 continue
             estimate = row.get('estimate') or ''
             events.append({
@@ -122,6 +180,54 @@ def fetch_earnings_events(symbols, days=90):
                 'fiscalDateEnding': row.get('fiscalDateEnding') or '',
             })
     return events, []
+
+
+def fetch_earnings_press_release_events(symbols, days=90):
+    events = []
+    for symbol in symbols:
+        try:
+            resp = requests.get(
+                GOOGLE_NEWS_RSS_URL,
+                params={
+                    'q': f'{symbol} earnings results release date',
+                    'hl': 'en-US',
+                    'gl': 'US',
+                    'ceid': 'US:en',
+                },
+                timeout=12,
+            )
+        except requests.RequestException:
+            continue
+        if not resp.ok:
+            continue
+        try:
+            root = ET.fromstring(resp.content)
+        except ET.ParseError:
+            continue
+        for item in root.findall('.//item')[:10]:
+            title = (item.findtext('title') or '').strip()
+            summary = (item.findtext('description') or '').strip()
+            link = (item.findtext('link') or '').strip()
+            haystack = f'{title} {summary}'.lower()
+            if symbol.lower() not in haystack:
+                continue
+            if not any(k in haystack for k in ('earnings', 'results', 'conference call', 'financial results')):
+                continue
+            date = _date_from_text(f'{title} {summary}')
+            if not _date_in_window(date, days):
+                continue
+            events.append({
+                'id': _event_id('earnings-pr', symbol, date, title),
+                'date': date,
+                'type': 'earnings',
+                'severity': 'watch',
+                'symbol': symbol,
+                'title': f'{symbol} 실적 발표',
+                'body': f'뉴스/공식 보도자료 검색 기준: {title}. 발표 전 비중, 손절, 추가매수 금지 원칙을 점검.',
+                'source': 'google-news-earnings-fallback',
+                'sourceUrl': link,
+            })
+    return _merge_events([], events), []
 
 
 def fetch_macro_events(days=45):
@@ -239,6 +345,9 @@ def sync_investment_calendar(investment, days=45):
     earnings, miss = fetch_earnings_events(symbols, days=max(days, 90))
     events.extend(earnings)
     missing.extend(miss)
+
+    fallback_earnings, _ = fetch_earnings_press_release_events(symbols, days=max(days, 90))
+    events.extend(fallback_earnings)
 
     macro, miss = fetch_macro_events(days=days)
     events.extend(macro)
