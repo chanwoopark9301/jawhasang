@@ -113,6 +113,11 @@ function defaultInvestmentState() {
     decisions: [],
     orderIntents: [],
     chat: [],
+    account: {
+      totalCapital: null,
+      baseCurrency: 'USD',
+      lastRebalancedAt: null,
+    },
     market: {
       indexes: [],
       fetchedAt: null,
@@ -168,6 +173,7 @@ function normalizeInvestmentState(investment) {
     decisions: Array.isArray(src.decisions) ? src.decisions : [],
     orderIntents: Array.isArray(src.orderIntents) ? src.orderIntents : [],
     chat: Array.isArray(src.chat) ? src.chat : [],
+    account: src.account && typeof src.account === 'object' ? { ...base.account, ...src.account } : base.account,
     market: src.market && typeof src.market === 'object' ? src.market : base.market,
     alerts: Array.isArray(src.alerts) ? src.alerts : [],
     usdKrwRate: parseInvestmentNumber(src.usdKrwRate) || base.usdKrwRate,

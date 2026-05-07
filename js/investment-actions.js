@@ -436,7 +436,16 @@ async function runInvestmentGateFromForm(event) {
         decision.orderIntentId = intentRes.intent.id;
         decision.summary += ' 주문 연동용 초안도 생성했습니다.';
       }
-      if (intentRes.investment) state.investment = normalizeInvestmentState({ ...state.investment, ...intentRes.investment });
+      if (intentRes.investment) {
+        state.investment = normalizeInvestmentState({
+          ...intentRes.investment,
+          positions: state.investment.positions,
+          decisions: state.investment.decisions,
+          events: state.investment.events,
+          orderIntents: state.investment.orderIntents,
+          account: state.investment.account,
+        });
+      }
     } catch (e) {
       logger.warn('주문 의도 초안 생성 실패', e);
       decision.summary += ' 주문 초안 생성은 실패했지만 매매 기록은 저장합니다.';

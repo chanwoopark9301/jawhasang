@@ -310,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260507-14');
+            const res = await fetch('/js/data.js?v=20260507-15');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -1487,6 +1487,7 @@ class TestInvestmentPartner:
         }""")
 
         logged_in_page.locator('#investment-menu-decisions').click()
+        logged_in_page.locator('#investment-gate-tools summary').click()
         logged_in_page.locator('#ig-position').select_option('ip-trade-sync')
         logged_in_page.locator('#ig-action').select_option('add')
         logged_in_page.locator('#ig-context').select_option('normal')
@@ -1502,7 +1503,10 @@ class TestInvestmentPartner:
         logged_in_page.locator('#ig-invalidation').fill('120 이탈')
         logged_in_page.locator('#ig-reason').fill('계획된 분할매수')
         logged_in_page.locator('#investment-gate-run').click()
-        logged_in_page.wait_for_selector('.investment-verdict.allow', timeout=8_000)
+        logged_in_page.wait_for_function(
+            "() => state.investment.positions.find(item => item.id === 'ip-trade-sync')?.shares === 15 && state.investment.events.length > 0",
+            timeout=8_000,
+        )
 
         result = logged_in_page.evaluate("""() => {
             const p = state.investment.positions.find(item => item.id === 'ip-trade-sync');
@@ -2038,6 +2042,53 @@ class TestInvestmentPartner:
             'inferredShares': 0,
             'irenShares': 510,
             'cash': 71400,
+        }
+
+    def test_trade_reallocates_within_fixed_account_total_when_cash_exists(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.investment.positions = [{
+                id: 'ip-fixed-iren',
+                symbol: 'IREN',
+                name: 'Iris Energy',
+                shares: 510,
+                avgPrice: 46.06,
+                currentPrice: 60,
+            }, {
+                id: 'ip-fixed-cash',
+                assetType: 'cash',
+                symbol: 'CASH',
+                name: 'Cash',
+                shares: 71400,
+                cashAmount: 71400,
+                avgPrice: 1,
+                currentPrice: 1,
+                currency: 'USD',
+                autoTradeCash: true,
+            }];
+            state.investment.account = { totalCapital: 102000, baseCurrency: 'USD' };
+        }""")
+
+        result = logged_in_page.evaluate("""() => {
+            const before = investmentTotals(state.investment.positions).totalValue;
+            applyTradeToPortfolio('ip-fixed-iren', 'add', 100, 60);
+            const after = investmentTotals(state.investment.positions).totalValue;
+            const p = state.investment.positions.find(item => item.id === 'ip-fixed-iren');
+            const cash = state.investment.positions.find(item => item.assetType === 'cash');
+            return {
+                before,
+                after,
+                shares: p.shares,
+                cash: cash.cashAmount,
+                accountTotal: state.investment.account.totalCapital,
+            };
+        }""")
+        assert result == {
+            'before': 102000,
+            'after': 102000,
+            'shares': 610,
+            'cash': 65400,
+            'accountTotal': 102000,
         }
 
     def test_portfolio_report_excludes_cash_from_concentration(self, logged_in_page):

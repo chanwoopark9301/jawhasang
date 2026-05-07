@@ -52,25 +52,26 @@ function mergeInvestmentAfterPositionSave(currentInvestment, savedInvestment) {
 }
 
 function applyTradeToPortfolio(positionId, action, tradeShares, tradePrice) {
+  state.investment = normalizeInvestmentState(state.investment);
   const idx = state.investment.positions.findIndex(p => String(p.id) === String(positionId));
   if (idx < 0) return;
   const p = state.investment.positions[idx];
   const oldShares = parseInvestmentNumber(p.shares);
   const oldAvg = parseInvestmentNumber(p.avgPrice);
   const oldCost = oldShares * oldAvg;
+  const hadCash = hasInvestmentCashPosition();
+  const accountTotal = getInvestmentAccountTotalAtExecution(positionId, tradePrice);
   let nextShares = oldShares;
   let nextAvg = oldAvg;
 
   if (action === 'buy' || action === 'add') {
     nextShares = oldShares + tradeShares;
     nextAvg = nextShares ? (oldCost + tradeShares * tradePrice) / nextShares : tradePrice;
-    applyTradeCashDelta(-(tradeShares * tradePrice));
   } else if (action === 'sell') {
     const appliedShares = Math.min(tradeShares, oldShares);
     if (appliedShares <= 0) return;
     nextShares = Math.max(0, oldShares - appliedShares);
     nextAvg = nextShares > 0 ? oldAvg : 0;
-    applyTradeCashDelta(appliedShares * tradePrice);
   } else {
     return;
   }
@@ -83,7 +84,70 @@ function applyTradeToPortfolio(positionId, action, tradeShares, tradePrice) {
     manualPrice: true,
     marketUpdatedAt: new Date().toISOString(),
   };
+  if (action === 'sell' || hadCash || parseInvestmentNumber(state.investment.account?.totalCapital) > 0) {
+    rebalanceInvestmentCashToAccountTotal(accountTotal);
+  }
   state.investment.alerts = buildInvestmentRiskAlerts(state.investment.positions, state.investment.rules);
+}
+
+function hasInvestmentCashPosition() {
+  return (state.investment.positions || []).some(p => isCashInvestmentPosition(p) && String(p.currency || 'USD').toUpperCase() === 'USD');
+}
+
+function getInvestmentAccountTotalAtExecution(positionId, tradePrice) {
+  const executionPrice = parseInvestmentNumber(tradePrice);
+  return (state.investment.positions || []).reduce((sum, position) => {
+    if (String(position.id) === String(positionId) && executionPrice > 0) {
+      return sum + parseInvestmentNumber(position.shares) * executionPrice;
+    }
+    return sum + investmentPositionValue(position, 'currentPrice');
+  }, 0);
+}
+
+function rebalanceInvestmentCashToAccountTotal(accountTotal) {
+  const targetTotal = parseInvestmentNumber(accountTotal);
+  if (targetTotal <= 0) return null;
+  const nonCashValue = (state.investment.positions || [])
+    .filter(p => !isCashInvestmentPosition(p))
+    .reduce((sum, p) => sum + investmentPositionValue(p, 'currentPrice'), 0);
+  const cashAmount = Math.max(0, targetTotal - nonCashValue);
+  const cash = setInvestmentCashAmount(cashAmount);
+  state.investment.account = {
+    ...(state.investment.account || {}),
+    totalCapital: targetTotal,
+    baseCurrency: 'USD',
+    lastRebalancedAt: new Date().toISOString(),
+  };
+  return cash;
+}
+
+function setInvestmentCashAmount(amount) {
+  const cashAmount = Math.max(0, parseInvestmentNumber(amount));
+  const idx = state.investment.positions.findIndex(p => isCashInvestmentPosition(p) && String(p.currency || 'USD').toUpperCase() === 'USD');
+  const now = new Date().toISOString();
+  if (cashAmount <= 0 && idx >= 0 && (state.investment.positions[idx].id === 'ip-cash-auto' || state.investment.positions[idx].autoTradeCash)) {
+    state.investment.positions.splice(idx, 1);
+    return null;
+  }
+  const previous = idx >= 0 ? state.investment.positions[idx] : {};
+  const next = {
+    ...previous,
+    id: previous.id || 'ip-cash-auto',
+    assetType: 'cash',
+    symbol: previous.symbol || 'CASH',
+    name: previous.name || '현금',
+    shares: cashAmount,
+    avgPrice: 1,
+    currentPrice: 1,
+    cashAmount,
+    autoTradeCash: previous.autoTradeCash || previous.id === 'ip-cash-auto' || idx < 0,
+    manualPrice: true,
+    currency: 'USD',
+    marketUpdatedAt: now,
+  };
+  if (idx >= 0) state.investment.positions[idx] = next;
+  else state.investment.positions.push(next);
+  return next;
 }
 
 function applyTradeCashDelta(delta) {

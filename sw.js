@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v87'; // Fix duplicate sell cash and cash concentration
+const CACHE_NAME = 'jip-v88'; // Reallocate trades within account total
 
 const STATIC_ASSETS = [
   '/style.css',
