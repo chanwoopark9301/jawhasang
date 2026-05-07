@@ -310,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260507-04');
+            const res = await fetch('/js/data.js?v=20260507-05');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -918,6 +918,77 @@ class TestInvestmentPartner:
         assert 'OpenAI' in modal_text
         assert 'Check the rule first.' in modal_text
         assert 'Check the risk first.' in modal_text
+
+    def test_investment_signal_modal_saves_manual_x_link_and_watchlist(self, logged_in_page):
+        self._open_investment(logged_in_page)
+
+        logged_in_page.locator('#investment-menu-signals').click()
+        logged_in_page.wait_for_selector('#investment-signals-modal', timeout=8_000)
+        assert logged_in_page.locator('#investment-x-sync').is_visible()
+
+        logged_in_page.locator('#investment-signal-watch-tools summary').click()
+        logged_in_page.locator('#isw-handle').fill('iren_exec')
+        logged_in_page.locator('#isw-label').fill('IREN Executive')
+        logged_in_page.locator('#isw-theme').fill('IREN official signal')
+        logged_in_page.locator('#investment-signal-watch-form button[type="submit"]').click()
+        logged_in_page.wait_for_function(
+            "() => state.investment.signals.watchlist.some(a => a.handle === 'iren_exec')",
+            timeout=8_000,
+        )
+
+        logged_in_page.locator('#investment-signal-manual-tools').evaluate("(el) => { el.open = true; }")
+        logged_in_page.wait_for_selector('#is-title', state='visible', timeout=8_000)
+        logged_in_page.evaluate("""() => {
+            document.getElementById('is-symbol').value = 'IREN';
+            document.getElementById('is-handle').value = 'thetechinvest';
+            document.getElementById('is-title').value = 'AI infra signal';
+            document.getElementById('is-url').value = 'https://x.com/thetechinvest/status/123';
+            document.getElementById('is-body').value = '## Signal\\n- IREN data center thread needs verification';
+            document.getElementById('investment-signal-form').requestSubmit();
+        }""")
+        logged_in_page.wait_for_function(
+            "() => state.investment.events.some(e => e.type === 'signal' && e.symbol === 'IREN')",
+            timeout=8_000,
+        )
+        logged_in_page.wait_for_selector('.investment-news-card .chat-markdown h5', timeout=8_000)
+        assert logged_in_page.locator('.investment-news-card .chat-markdown h5').inner_text() == 'Signal'
+
+    def test_investment_x_sync_button_adds_signal_event(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = (url, opts) => {
+                if (String(url).includes('/api/investment/x/sync')) {
+                    const inv = normalizeInvestmentState(state.investment);
+                    inv.events.push({
+                        id: 'x-signal-test-1',
+                        date: '2026-05-07',
+                        type: 'signal',
+                        symbol: 'IREN',
+                        title: '@thetechinvest signal',
+                        body: 'IREN AI signal from X',
+                        severity: 'watch',
+                        source: 'x-api',
+                    });
+                    inv.signals.lastSyncedAt = '2026-05-07T00:00:00Z';
+                    return Promise.resolve(new Response(JSON.stringify({
+                        ok: true,
+                        investment: inv,
+                        signalsSynced: 1,
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                return originalFetch(url, opts);
+            };
+        }""")
+
+        logged_in_page.locator('#investment-menu-signals').click()
+        logged_in_page.wait_for_selector('#investment-x-sync', timeout=8_000)
+        logged_in_page.locator('#investment-x-sync').click()
+        logged_in_page.wait_for_function(
+            "() => state.investment.events.some(e => e.id === 'x-signal-test-1')",
+            timeout=8_000,
+        )
+        assert 'IREN AI signal from X' in logged_in_page.locator('#modal-box').inner_text()
 
     def test_investment_chat_fetches_market_context_for_position_status(self, logged_in_page):
         self._open_investment(logged_in_page)

@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v77'; // Earnings thesis analysis prompt
+const CACHE_NAME = 'jip-v78'; // X market signal workflow
 
 const STATIC_ASSETS = [
   '/style.css',
@@ -80,6 +80,17 @@ self.addEventListener('activate', event => {
       .then(() => self.clients.claim())
       // clients.claim() 이후 브라우저가 controllerchange 이벤트를 페이지에 자동 발화
       // → index.html의 controllerchange 리스너가 자동 새로고침 처리
+  );
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+      const existing = clients.find(client => client.url.includes(self.location.origin));
+      if (existing) return existing.focus();
+      return self.clients.openWindow('/');
+    })
   );
 });
 

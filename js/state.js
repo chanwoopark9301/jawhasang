@@ -133,6 +133,15 @@ function defaultInvestmentState() {
       missingProviders: [],
       eventsSynced: 0,
     },
+    signals: {
+      watchlist: [
+        { handle: 'elonmusk', label: 'Elon Musk', theme: 'AI/전력/시장 심리', trust: 'narrative' },
+        { handle: 'CathieDWood', label: 'Cathie Wood', theme: '성장주/AI', trust: 'investor' },
+        { handle: 'thetechinvest', label: 'The Tech Investor', theme: '테크/AI 인프라', trust: 'trader' },
+      ],
+      keywords: ['IREN', 'CRCL', 'AI', 'data center', 'Microsoft', 'Anthropic', 'Bitcoin', 'GPU', 'power', 'earnings'],
+      lastSyncedAt: null,
+    },
   };
 }
 
@@ -164,6 +173,7 @@ function normalizeInvestmentState(investment) {
     usdKrwRate: parseInvestmentNumber(src.usdKrwRate) || base.usdKrwRate,
     broker: src.broker && typeof src.broker === 'object' ? { ...base.broker, ...src.broker } : base.broker,
     calendar: src.calendar && typeof src.calendar === 'object' ? { ...base.calendar, ...src.calendar } : base.calendar,
+    signals: src.signals && typeof src.signals === 'object' ? { ...base.signals, ...src.signals } : base.signals,
   };
 }
 

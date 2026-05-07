@@ -34,6 +34,8 @@ class TestDataAPI:
         assert data['investment']['broker']['orderIntentOnly'] is True
         assert 'calendar' in data['investment']
         assert data['investment']['calendar']['lookaheadDays'] == 45
+        assert 'signals' in data['investment']
+        assert len(data['investment']['signals']['watchlist']) >= 1
 
     def test_save_and_load_data(self, client, sample_student, sample_session_short):
         payload = {
@@ -254,6 +256,62 @@ class TestDataAPI:
         analyst = next(e for e in loaded['investment']['events'] if e['type'] == 'analyst')
         assert analyst['consensus']['targetConsensus'] == 70
         assert loaded['investment']['calendar']['eventsSynced'] == 3
+
+    def test_investment_x_sync_requires_bearer_token(self, client, monkeypatch):
+        import server
+
+        monkeypatch.setattr(server, 'X_BEARER_TOKEN', '')
+
+        r = client.post('/api/investment/x/sync',
+                        data=json.dumps({'watchlist': [{'handle': 'thetechinvest'}]}),
+                        content_type='application/json')
+
+        assert r.status_code == 400
+        data = r.get_json()
+        assert data['ok'] is False
+        assert 'X_BEARER_TOKEN' in data['missing']
+
+    def test_investment_x_sync_persists_keyword_matched_posts(self, client, monkeypatch):
+        import server
+
+        monkeypatch.setattr(server, 'X_BEARER_TOKEN', 'test-token')
+        monkeypatch.setattr(server, '_x_recent_posts', lambda handle, limit=5: [{
+            'id': '123',
+            'text': 'IREN AI data center progress looks important.',
+            'created_at': '2026-05-07T10:00:00Z',
+        }])
+
+        client.post('/api/data',
+                    data=json.dumps({
+                        'students': [],
+                        'sessions': [],
+                        'my_topics': [],
+                        'my_records': [],
+                        'investment': {
+                            'positions': [{'id': 'ip-iren', 'symbol': 'IREN'}],
+                            'events': [],
+                            'signals': {
+                                'watchlist': [{'handle': 'thetechinvest', 'label': 'The Tech Investor'}],
+                                'keywords': ['IREN', 'AI'],
+                            },
+                        },
+                    }),
+                    content_type='application/json')
+
+        r = client.post('/api/investment/x/sync',
+                        data=json.dumps({}),
+                        content_type='application/json')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['ok'] is True
+        assert data['signalsSynced'] == 1
+        loaded = client.get('/api/data').get_json()
+        event = loaded['investment']['events'][0]
+        assert event['type'] == 'signal'
+        assert event['source'] == 'x-api'
+        assert event['handle'] == 'thetechinvest'
+        assert 'IREN AI data center' in event['body']
 
     def test_investment_calendar_skips_invalid_earnings_dates(self, monkeypatch):
         import investment_calendar

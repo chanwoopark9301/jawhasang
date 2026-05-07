@@ -12,7 +12,18 @@ function renderRightPanel() {
   _updateRpRolePills();
   _updateRpPeriod();
   _updateRpContent();
+  _ensureInvestmentSignalMenu();
   _updateRpButtons();
+}
+
+function _ensureInvestmentSignalMenu() {
+  if (state.view !== 'investment') return;
+  const menu = document.querySelector('.investment-side-menu');
+  if (!menu || document.getElementById('investment-menu-signals')) return;
+  menu.insertAdjacentHTML(
+    'beforeend',
+    "<button id=\"investment-menu-signals\" onclick=\"openModal('investment-signals')\">X signal</button>"
+  );
 }
 
 // 하위 호환 alias (setSessionTab, setMyTab, setMyPeriod 등에서 호출)

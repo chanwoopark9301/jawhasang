@@ -136,6 +136,118 @@ async function syncInvestmentCalendarData() {
   }
 }
 
+async function addInvestmentSignalFromForm(event) {
+  event.preventDefault();
+  state.investment = normalizeInvestmentState(state.investment);
+  const date = document.getElementById('is-date')?.value || new Date().toISOString().split('T')[0];
+  const symbol = normalizeInvestmentMarketSymbol(document.getElementById('is-symbol')?.value || '');
+  const handle = (document.getElementById('is-handle')?.value || '').trim().replace(/^@/, '');
+  const title = (document.getElementById('is-title')?.value || '').trim() || (handle ? `@${handle} signal` : 'Market signal');
+  const body = (document.getElementById('is-body')?.value || '').trim();
+  const sourceUrl = (document.getElementById('is-url')?.value || '').trim();
+  if (!body && !sourceUrl) return showToast('X link or signal note is required.');
+
+  state.investment.events.push({
+    id: `x-manual-${Date.now()}`,
+    date,
+    type: 'signal',
+    severity: 'watch',
+    symbol,
+    title,
+    body: [
+      handle ? `@${handle}` : '',
+      body,
+      sourceUrl ? `[source](${sourceUrl})` : '',
+      'Rule: treat this as a watch signal until confirmed by official filings, company IR, or trusted financial news.',
+    ].filter(Boolean).join('\n\n'),
+    source: 'x-manual',
+    sourceUrl,
+    handle,
+  });
+  const persisted = await saveData();
+  if (!persisted) return showToast('Server save failed. Please try again.');
+  showToast('Market signal saved.');
+  openModal('investment-signals');
+  render();
+}
+
+async function addInvestmentSignalAccountFromForm(event) {
+  event.preventDefault();
+  state.investment = normalizeInvestmentState(state.investment);
+  const handle = (document.getElementById('isw-handle')?.value || '').trim().replace(/^@/, '');
+  if (!/^[A-Za-z0-9_]{1,15}$/.test(handle)) return showToast('Enter a valid X handle.');
+  const watchlist = state.investment.signals.watchlist || [];
+  if (watchlist.some(a => String(a.handle || '').toLowerCase() === handle.toLowerCase())) {
+    return showToast('This account is already in the watchlist.');
+  }
+  watchlist.push({
+    handle,
+    label: (document.getElementById('isw-label')?.value || '').trim() || handle,
+    theme: (document.getElementById('isw-theme')?.value || '').trim() || 'market signal',
+    trust: document.getElementById('isw-trust')?.value || 'narrative',
+  });
+  state.investment.signals.watchlist = watchlist;
+  const persisted = await saveData();
+  if (!persisted) return showToast('Server save failed. Please try again.');
+  showToast('X watch account saved.');
+  openModal('investment-signals');
+}
+
+async function removeInvestmentSignalAccount(handle) {
+  state.investment = normalizeInvestmentState(state.investment);
+  const target = String(handle || '').toLowerCase();
+  state.investment.signals.watchlist = (state.investment.signals.watchlist || [])
+    .filter(a => String(a.handle || '').toLowerCase() !== target);
+  const persisted = await saveData();
+  if (!persisted) return showToast('Server save failed. Please try again.');
+  showToast('X watch account removed.');
+  openModal('investment-signals');
+}
+
+async function syncInvestmentXSignals() {
+  state.investment = normalizeInvestmentState(state.investment);
+  const button = document.getElementById('investment-x-sync');
+  if (button) {
+    button.disabled = true;
+    button.dataset.originalText = button.dataset.originalText || button.textContent;
+    button.textContent = 'Syncing...';
+  }
+  try {
+    const data = await apiSyncInvestmentXSignals(state.investment.signals.watchlist || []);
+    if (data.investment) state.investment = normalizeInvestmentState(data.investment);
+    const count = data.signalsSynced || 0;
+    showToast(`X signal sync complete: ${count} new.`);
+    if (count > 0) notifyInvestmentSignal('Investment signal synced', `${count} new X market signal(s) were saved.`);
+    render();
+    if (state.activeModal === 'investment-signals') openModal('investment-signals');
+  } catch (e) {
+    logger.warn('X signal sync failed', e);
+    showToast(e.message || 'X signal sync failed. Check X_BEARER_TOKEN.');
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = button.dataset.originalText || 'Sync X';
+    }
+  }
+}
+
+async function requestInvestmentNotifications() {
+  if (!('Notification' in window)) return showToast('This browser does not support notifications.');
+  const permission = await Notification.requestPermission();
+  showToast(permission === 'granted' ? 'Investment notifications enabled.' : 'Notification permission was not granted.');
+}
+
+function notifyInvestmentSignal(title, body) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  if (navigator.serviceWorker?.ready) {
+    navigator.serviceWorker.ready
+      .then(reg => reg.showNotification(title, { body, tag: 'investment-signal' }))
+      .catch(() => new Notification(title, { body }));
+    return;
+  }
+  new Notification(title, { body });
+}
+
 function clearInvestmentPositionForm() {
   ['ip-id', 'ip-symbol', 'ip-name', 'ip-shares', 'ip-avg', 'ip-target', 'ip-stop', 'ip-thesis', 'ip-add-rule'].forEach(id => {
     const el = document.getElementById(id);

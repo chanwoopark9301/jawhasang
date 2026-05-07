@@ -172,6 +172,22 @@ function saveInvestmentChatArtifacts(userText, aiText) {
 
   const symbol = inferInvestmentSymbol(ask);
   const lower = ask.toLowerCase();
+  if (/x\.com|twitter|tweet|x\s*link|signal|elon|musk|thetechinvest|x 계정|트윗/i.test(ask)) {
+    state.investment.events.push({
+      id: 'x-chat-' + Date.now(),
+      date: today,
+      type: 'signal',
+      symbol,
+      title: `${symbol || 'Market'} signal`,
+      body: content,
+      severity: 'watch',
+      source: 'chat',
+    });
+    saveData();
+    showToast('Market signal saved.');
+    renderRightPanel();
+    return;
+  }
   if (/뉴스|동향|공시|기사|news|headline|filing/.test(ask)) {
     state.investment.events.push({
       id: 'ie' + Date.now(),
@@ -462,6 +478,11 @@ function _buildChatSysPrompt(isMyRecords, topic, student, extraContext = '') {
       .slice(-5)
       .map(e => `- ${e.date} ${e.symbol || ''} ${e.title}: ${e.body}`)
       .join('\n') || '- 기록된 뉴스 없음';
+    const recentSignals = (inv.events || [])
+      .filter(e => e.type === 'signal')
+      .slice(-8)
+      .map(e => `- ${e.date || ''} ${e.symbol || ''} ${e.title || 'Signal'}${e.handle ? ` (@${e.handle})` : ''}: ${e.body || ''}`)
+      .join('\n') || '- No saved market signals';
     const todayIso = new Date().toISOString().slice(0, 10);
     const upcomingEvents = (inv.events || [])
       .filter(e => e.date && e.date >= todayIso && ['earnings', 'macro', 'analyst'].includes(e.type))
@@ -510,6 +531,9 @@ ${portfolioSnapshot}
 ${recentNews}
 
 다가오는 투자 일정:
+Recent X / market signals:
+${recentSignals}
+
 ${upcomingEvents}
 
 최근 매매 판단:

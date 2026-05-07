@@ -16,6 +16,7 @@ import logging.handlers
 import time
 import requests
 import xml.etree.ElementTree as ET
+from datetime import datetime
 from functools import wraps
 from investment_backend import upsert_position
 from investment_broker import build_order_intent
@@ -39,6 +40,7 @@ POLYGON_API_KEY   = os.getenv('POLYGON_API_KEY', '')
 ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY', '')
 FINNHUB_API_KEY   = os.getenv('FINNHUB_API_KEY', '')
 BENZINGA_API_KEY  = os.getenv('BENZINGA_API_KEY', '')
+X_BEARER_TOKEN    = os.getenv('X_BEARER_TOKEN', '')
 DATA_FILE         = 'data.json'
 SEC_USER_AGENT    = os.getenv('SEC_USER_AGENT', 'jip-investment-partner contact@example.com')
 
@@ -199,6 +201,15 @@ def _empty_investment():
             'missingProviders': [],
             'eventsSynced': 0,
         },
+        'signals': {
+            'watchlist': [
+                {'handle': 'elonmusk', 'label': 'Elon Musk', 'theme': 'AI/전력/시장 심리', 'trust': 'narrative'},
+                {'handle': 'CathieDWood', 'label': 'Cathie Wood', 'theme': '성장주/AI', 'trust': 'investor'},
+                {'handle': 'thetechinvest', 'label': 'The Tech Investor', 'theme': '테크/AI 인프라', 'trust': 'trader'},
+            ],
+            'lastSyncedAt': None,
+            'keywords': ['IREN', 'CRCL', 'AI', 'data center', 'Microsoft', 'Anthropic', 'Bitcoin', 'GPU', 'power', 'earnings'],
+        },
     }
 
 EMPTY = lambda: {
@@ -237,6 +248,7 @@ def _normalize_data(data: dict) -> dict:
             'usdKrwRate': inv.get('usdKrwRate') or base['usdKrwRate'],
             'broker': {**base['broker'], **(inv.get('broker') if isinstance(inv.get('broker'), dict) else {})},
             'calendar': {**base['calendar'], **(inv.get('calendar') if isinstance(inv.get('calendar'), dict) else {})},
+            'signals': {**base['signals'], **(inv.get('signals') if isinstance(inv.get('signals'), dict) else {})},
         }
     data['investment'] = inv
     return data
@@ -658,6 +670,91 @@ def investment_calendar_sync_route():
     except Exception as e:
         log.error('POST /api/investment/calendar/sync failed: %s', e, exc_info=True)
         return jsonify({'ok': False, 'error': 'investment calendar sync failed', 'errorDetail': _safe_error_detail(e)}), 500
+
+def _x_headers():
+    return {'Authorization': f'Bearer {X_BEARER_TOKEN}', 'User-Agent': 'jip-investment-signal'}
+
+def _x_get_user_id(handle):
+    resp = requests.get(
+        f'https://api.x.com/2/users/by/username/{handle}',
+        headers=_x_headers(),
+        params={'user.fields': 'username,name,verified'},
+        timeout=12,
+    )
+    if not resp.ok:
+        return None
+    return (resp.json().get('data') or {}).get('id')
+
+def _x_recent_posts(handle, limit=5):
+    user_id = _x_get_user_id(handle)
+    if not user_id:
+        return []
+    resp = requests.get(
+        f'https://api.x.com/2/users/{user_id}/tweets',
+        headers=_x_headers(),
+        params={
+            'max_results': max(5, min(int(limit or 5), 10)),
+            'tweet.fields': 'created_at,public_metrics,entities',
+            'exclude': 'replies,retweets',
+        },
+        timeout=12,
+    )
+    if not resp.ok:
+        return []
+    return resp.json().get('data') or []
+
+@app.route('/api/investment/x/sync', methods=['POST'])
+@require_auth
+def investment_x_sync_route():
+    if not X_BEARER_TOKEN:
+        return jsonify({'ok': False, 'configured': False, 'missing': ['X_BEARER_TOKEN'], 'message': 'X API bearer token is not configured'}), 400
+    payload = request.get_json(silent=True) or {}
+    try:
+        data = _normalize_data(read_data())
+        inv = data['investment']
+        signals = inv.get('signals') if isinstance(inv.get('signals'), dict) else _empty_investment()['signals']
+        watchlist = payload.get('watchlist') if isinstance(payload.get('watchlist'), list) else signals.get('watchlist', [])
+        keywords = [str(k).lower() for k in (signals.get('keywords') or []) if str(k).strip()]
+        events = inv.get('events') if isinstance(inv.get('events'), list) else []
+        added = 0
+        for account in watchlist[:20]:
+            handle = str(account.get('handle') if isinstance(account, dict) else account).strip().lstrip('@')
+            if not re.fullmatch(r'[A-Za-z0-9_]{1,15}', handle):
+                continue
+            for post in _x_recent_posts(handle, limit=5):
+                text = str(post.get('text') or '')
+                haystack = text.lower()
+                if keywords and not any(k in haystack for k in keywords):
+                    continue
+                post_id = str(post.get('id') or '')
+                created = str(post.get('created_at') or '')
+                date = created[:10] if re.match(r'\d{4}-\d{2}-\d{2}', created) else datetime.utcnow().date().isoformat()
+                event = {
+                    'id': f'x-signal-{handle.lower()}-{post_id}',
+                    'date': date,
+                    'type': 'signal',
+                    'severity': 'watch',
+                    'symbol': '',
+                    'title': f'@{handle} 시장 신호',
+                    'body': f"X 계정 @{handle} 게시글입니다.\n\n{text}\n\n원칙: 공식 확인 전 매수 근거가 아니라 관찰/검증 신호로만 사용.",
+                    'source': 'x-api',
+                    'sourceUrl': f'https://x.com/{handle}/status/{post_id}' if post_id else f'https://x.com/{handle}',
+                    'handle': handle,
+                    'trust': account.get('trust') if isinstance(account, dict) else '',
+                }
+                if not any(str(e.get('id')) == event['id'] for e in events):
+                    events.append(event)
+                    added += 1
+        signals['watchlist'] = watchlist
+        signals['lastSyncedAt'] = datetime.utcnow().isoformat() + 'Z'
+        inv['signals'] = signals
+        inv['events'] = events
+        data['investment'] = inv
+        write_data(data)
+        return jsonify({'ok': True, 'investment': inv, 'signalsSynced': added})
+    except Exception as e:
+        log.error('POST /api/investment/x/sync failed: %s', e, exc_info=True)
+        return jsonify({'ok': False, 'error': 'X signal sync failed', 'errorDetail': _safe_error_detail(e)}), 500
 _MARKET_SYMBOL_RE = re.compile(r'^[A-Za-z0-9.\-^=]{1,16}$')
 _NEWS_QUERY_RE = re.compile(r'^[^<>]{2,160}$')
 _MARKET_SYMBOL_ALIASES = {

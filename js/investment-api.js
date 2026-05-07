@@ -155,3 +155,25 @@ async function apiSyncInvestmentCalendar(days = 45) {
   if (!res.ok || !data.ok) throw new Error(data?.error || `investment calendar sync failed: ${res.status}`);
   return data;
 }
+
+async function apiSyncInvestmentXSignals(watchlist = null) {
+  const payload = Array.isArray(watchlist) ? { watchlist } : {};
+  const res = await fetch('/api/investment/x/sync', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const text = await res.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch (e) {
+    throw new Error(`X signal sync returned non-json: ${res.status}`);
+  }
+  if (!res.ok || !data.ok) {
+    const missing = Array.isArray(data?.missing) ? ` (${data.missing.join(', ')})` : '';
+    throw new Error(`${data?.message || data?.error || `X signal sync failed: ${res.status}`}${missing}`);
+  }
+  return data;
+}
