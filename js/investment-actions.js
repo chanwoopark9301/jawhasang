@@ -110,6 +110,32 @@ async function syncKisBrokerData() {
   }
 }
 
+async function syncInvestmentCalendarData() {
+  const buttons = document.querySelectorAll('#investment-sync-calendar, #investment-menu-calendar-sync');
+  buttons.forEach(btn => {
+    btn.disabled = true;
+    btn.dataset.originalText = btn.dataset.originalText || btn.textContent;
+    btn.textContent = '일정 동기화 중';
+  });
+  try {
+    const data = await apiSyncInvestmentCalendar(45);
+    if (data.investment) state.investment = normalizeInvestmentState(data.investment);
+    const missing = Array.isArray(data.missingProviders) && data.missingProviders.length
+      ? ` 필요한 키: ${data.missingProviders.join(', ')}`
+      : '';
+    showToast(`투자 일정 ${data.eventsSynced || 0}개를 캘린더에 반영했어요.${missing}`);
+    render();
+  } catch (e) {
+    logger.warn('투자 일정 동기화 실패', e);
+    showToast(e.message || '투자 일정 동기화에 실패했어요.');
+  } finally {
+    buttons.forEach(btn => {
+      btn.disabled = false;
+      btn.textContent = btn.dataset.originalText || '일정 동기화';
+    });
+  }
+}
+
 function clearInvestmentPositionForm() {
   ['ip-id', 'ip-symbol', 'ip-name', 'ip-shares', 'ip-avg', 'ip-target', 'ip-stop', 'ip-thesis', 'ip-add-rule'].forEach(id => {
     const el = document.getElementById(id);

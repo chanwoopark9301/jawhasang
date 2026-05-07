@@ -144,6 +144,7 @@ function _updateRpContent() {
         <button id="investment-menu-decisions" onclick="openModal('investment-decisions')">매매 기록</button>
         <button id="investment-menu-news" onclick="openModal('investment-news')">뉴스 동향</button>
         <button id="investment-menu-timeline" onclick="openModal('investment-timeline')">타임라인</button>
+        <button id="investment-menu-calendar-sync" onclick="syncInvestmentCalendarData()">일정 동기화</button>
         <button id="investment-menu-ai-compare" onclick="openModal('investment-ai-compare')">AI 비교</button>
       </div>
       <div class="ctx-block">

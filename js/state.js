@@ -126,6 +126,13 @@ function defaultInvestmentState() {
       orderIntentOnly: true,
       lastSyncedAt: null,
     },
+    calendar: {
+      lastSyncedAt: null,
+      lookaheadDays: 45,
+      symbols: [],
+      missingProviders: [],
+      eventsSynced: 0,
+    },
   };
 }
 
@@ -156,6 +163,7 @@ function normalizeInvestmentState(investment) {
     alerts: Array.isArray(src.alerts) ? src.alerts : [],
     usdKrwRate: parseInvestmentNumber(src.usdKrwRate) || base.usdKrwRate,
     broker: src.broker && typeof src.broker === 'object' ? { ...base.broker, ...src.broker } : base.broker,
+    calendar: src.calendar && typeof src.calendar === 'object' ? { ...base.calendar, ...src.calendar } : base.calendar,
   };
 }
 

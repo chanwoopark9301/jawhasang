@@ -310,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260507-01');
+            const res = await fetch('/js/data.js?v=20260507-02');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -1023,6 +1023,14 @@ class TestInvestmentPartner:
                 stopPrice: 55,
                 thesis: 'AI cloud execution and earnings catalyst',
             }];
+            state.investment.events = [{
+                id: 'earnings-iren-2026-05-07',
+                date: '2026-05-07',
+                type: 'earnings',
+                symbol: 'IREN',
+                title: 'IREN 실적 발표',
+                body: 'EPS 컨센서스와 AI cloud 가이던스 확인',
+            }];
         }""")
 
         prompt = logged_in_page.evaluate("() => _buildChatSysPrompt(false, null, null)")
@@ -1034,6 +1042,8 @@ class TestInvestmentPartner:
         assert '수익 방어/업사이드 참여' in prompt
         assert '공짜 주식' in prompt
         assert '최종 액션 플랜' in prompt
+        assert '다가오는 투자 일정' in prompt
+        assert 'IREN 실적 발표' in prompt
 
     def test_kis_sync_button_merges_broker_positions(self, logged_in_page):
         self._open_investment(logged_in_page)
@@ -1084,6 +1094,64 @@ class TestInvestmentPartner:
             timeout=8_000,
         )
         assert 'IREN' in logged_in_page.locator('#investment-view').inner_text()
+
+    def test_investment_calendar_sync_adds_events_to_calendar(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = (url, opts) => {
+                if (String(url).includes('/api/investment/calendar/sync')) {
+                    return Promise.resolve(new Response(JSON.stringify({
+                        ok: true,
+                        eventsSynced: 3,
+                        missingProviders: [],
+                        investment: {
+                            ...state.investment,
+                            events: [{
+                                id: 'earnings-iren-2026-05-07',
+                                date: '2026-05-07',
+                                type: 'earnings',
+                                symbol: 'IREN',
+                                title: 'IREN 실적 발표',
+                                body: 'EPS 컨센서스 점검',
+                            }, {
+                                id: 'macro-cpi-2026-05-12',
+                                date: '2026-05-12',
+                                type: 'macro',
+                                symbol: 'MACRO',
+                                title: 'CPI',
+                                body: '인플레이션 컨센서스 확인',
+                            }, {
+                                id: 'analyst-iren-target',
+                                date: '2026-05-07',
+                                type: 'analyst',
+                                symbol: 'IREN',
+                                title: 'IREN 목표주가 컨센서스',
+                                body: '목표가 변화 점검',
+                            }],
+                            calendar: {
+                                lastSyncedAt: '2026-05-07T00:00:00Z',
+                                lookaheadDays: 45,
+                                eventsSynced: 3,
+                            },
+                        },
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                return originalFetch(url, opts);
+            };
+            render();
+        }""")
+
+        logged_in_page.locator('#investment-sync-calendar').click()
+        logged_in_page.wait_for_function(
+            "() => state.investment.events.some(e => e.type === 'macro' && e.title === 'CPI')",
+            timeout=8_000,
+        )
+        logged_in_page.evaluate("() => setView('calendar')")
+        logged_in_page.wait_for_selector('.cal-event-invest', timeout=8_000)
+        calendar_text = logged_in_page.locator('.calendar').inner_text()
+        assert 'IREN 실적 발표' in calendar_text
+        assert 'CPI' in calendar_text
 
     def test_refresh_data_from_server_updates_investment_positions(self, logged_in_page):
         self._open_investment(logged_in_page)

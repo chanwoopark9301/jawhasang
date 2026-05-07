@@ -19,6 +19,7 @@ import xml.etree.ElementTree as ET
 from functools import wraps
 from investment_backend import upsert_position
 from investment_broker import build_order_intent
+from investment_calendar import sync_investment_calendar
 from kis_broker import sync_kis_account
 from flask import (
     Flask, request, jsonify, send_from_directory,
@@ -191,6 +192,13 @@ def _empty_investment():
             'orderIntentOnly': True,
             'lastSyncedAt': None,
         },
+        'calendar': {
+            'lastSyncedAt': None,
+            'lookaheadDays': 45,
+            'symbols': [],
+            'missingProviders': [],
+            'eventsSynced': 0,
+        },
     }
 
 EMPTY = lambda: {
@@ -228,6 +236,7 @@ def _normalize_data(data: dict) -> dict:
             'alerts': inv.get('alerts') if isinstance(inv.get('alerts'), list) else [],
             'usdKrwRate': inv.get('usdKrwRate') or base['usdKrwRate'],
             'broker': {**base['broker'], **(inv.get('broker') if isinstance(inv.get('broker'), dict) else {})},
+            'calendar': {**base['calendar'], **(inv.get('calendar') if isinstance(inv.get('calendar'), dict) else {})},
         }
     data['investment'] = inv
     return data
@@ -629,6 +638,26 @@ def investment_broker_sync_route():
     except Exception as e:
         log.error('POST /api/investment/broker/sync failed: %s', e, exc_info=True)
         return jsonify({'ok': False, 'error': 'KIS sync failed', 'errorDetail': _safe_error_detail(e)}), 500
+
+@app.route('/api/investment/calendar/sync', methods=['POST'])
+@require_auth
+def investment_calendar_sync_route():
+    payload = request.get_json(silent=True) or {}
+    days = payload.get('days', 45) if isinstance(payload, dict) else 45
+    try:
+        data = _normalize_data(read_data())
+        result = sync_investment_calendar(data.get('investment') or {}, days=days)
+        data['investment'] = _normalize_data({'investment': result['investment']})['investment']
+        write_data(data)
+        return jsonify({
+            'ok': True,
+            'investment': data['investment'],
+            'eventsSynced': result.get('eventsSynced', 0),
+            'missingProviders': result.get('missingProviders', []),
+        })
+    except Exception as e:
+        log.error('POST /api/investment/calendar/sync failed: %s', e, exc_info=True)
+        return jsonify({'ok': False, 'error': 'investment calendar sync failed', 'errorDetail': _safe_error_detail(e)}), 500
 _MARKET_SYMBOL_RE = re.compile(r'^[A-Za-z0-9.\-^=]{1,16}$')
 _NEWS_QUERY_RE = re.compile(r'^[^<>]{2,160}$')
 _MARKET_SYMBOL_ALIASES = {

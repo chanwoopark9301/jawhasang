@@ -24,6 +24,7 @@ function renderInvestmentView() {
         <div class="investment-action-row">
           <button class="investment-refresh-btn" id="investment-refresh-market" onclick="refreshInvestmentMarketData()">현재가 갱신</button>
           <button class="investment-refresh-btn" id="investment-sync-kis" onclick="syncKisBrokerData()">KIS 동기화</button>
+          <button class="investment-refresh-btn" id="investment-sync-calendar" onclick="syncInvestmentCalendarData()">일정 동기화</button>
         </div>
       </div>
     </section>

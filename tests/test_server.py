@@ -32,6 +32,8 @@ class TestDataAPI:
         assert data['investment']['rules']['maxPositionWeight'] == 25
         assert '계획 없이 매수하지 않는다' in data['investment']['rules']['coreRules']
         assert data['investment']['broker']['orderIntentOnly'] is True
+        assert 'calendar' in data['investment']
+        assert data['investment']['calendar']['lookaheadDays'] == 45
 
     def test_save_and_load_data(self, client, sample_student, sample_session_short):
         payload = {
@@ -208,6 +210,48 @@ class TestDataAPI:
         assert loaded['investment']['positions'][0]['symbol'] == 'IREN'
         assert loaded['investment']['decisions'][0]['action'] == 'buy'
         assert loaded['investment']['broker']['provider'] == 'kis'
+
+    def test_investment_calendar_sync_persists_macro_earnings_and_analyst_events(self, client, monkeypatch):
+        import server
+
+        client.post('/api/data',
+                    data=json.dumps({
+                        'students': [],
+                        'sessions': [],
+                        'my_topics': [],
+                        'my_records': [],
+                        'investment': {
+                            'positions': [{'id': 'ip-iren', 'symbol': 'IREN', 'shares': 1}],
+                            'events': [],
+                        },
+                    }),
+                    content_type='application/json')
+
+        def fake_sync(investment, days=45):
+            inv = dict(investment)
+            inv['events'] = [
+                {'id': 'earnings-iren-2026-05-07', 'date': '2026-05-07', 'type': 'earnings', 'symbol': 'IREN', 'title': 'IREN 실적 발표'},
+                {'id': 'macro-cpi-2026-05-12', 'date': '2026-05-12', 'type': 'macro', 'symbol': 'MACRO', 'title': 'CPI'},
+                {'id': 'analyst-iren-target', 'date': '2026-05-07', 'type': 'analyst', 'symbol': 'IREN', 'title': 'IREN 목표주가 컨센서스'},
+            ]
+            inv['calendar'] = {'lastSyncedAt': '2026-05-07T00:00:00Z', 'lookaheadDays': days, 'eventsSynced': 3}
+            return {'ok': True, 'investment': inv, 'eventsSynced': 3, 'missingProviders': []}
+
+        monkeypatch.setattr(server, 'sync_investment_calendar', fake_sync)
+
+        r = client.post('/api/investment/calendar/sync',
+                        data=json.dumps({'days': 45}),
+                        content_type='application/json')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['ok'] is True
+        assert data['eventsSynced'] == 3
+        loaded = client.get('/api/data').get_json()
+        titles = [e['title'] for e in loaded['investment']['events']]
+        assert 'IREN 실적 발표' in titles
+        assert 'CPI' in titles
+        assert loaded['investment']['calendar']['eventsSynced'] == 3
 
     def test_investment_ai_compare_endpoint_calls_claude_and_openai(self, client, monkeypatch):
         import server

@@ -137,3 +137,21 @@ async function apiSyncKisBroker(days = 30) {
   }
   return data;
 }
+
+async function apiSyncInvestmentCalendar(days = 45) {
+  const res = await fetch('/api/investment/calendar/sync', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ days }),
+  });
+  const text = await res.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch (e) {
+    throw new Error(`investment calendar sync returned non-json: ${res.status}`);
+  }
+  if (!res.ok || !data.ok) throw new Error(data?.error || `investment calendar sync failed: ${res.status}`);
+  return data;
+}

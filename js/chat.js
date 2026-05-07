@@ -462,6 +462,13 @@ function _buildChatSysPrompt(isMyRecords, topic, student, extraContext = '') {
       .slice(-5)
       .map(e => `- ${e.date} ${e.symbol || ''} ${e.title}: ${e.body}`)
       .join('\n') || '- 기록된 뉴스 없음';
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const upcomingEvents = (inv.events || [])
+      .filter(e => e.date && e.date >= todayIso && ['earnings', 'macro', 'analyst'].includes(e.type))
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)))
+      .slice(0, 10)
+      .map(e => `- ${e.date} [${e.type}] ${e.symbol || ''} ${e.title}: ${e.body || ''}`)
+      .join('\n') || '- 예정된 투자 일정 없음';
     const recentDecisions = inv.decisions.slice(-5).map(d =>
       `- ${d.createdAt?.slice(0, 10) || ''} ${d.symbol} ${d.action}: ${d.label} — ${d.summary}`
     ).join('\n') || '- 기록된 매매 판단 없음';
@@ -497,6 +504,9 @@ ${portfolioSnapshot}
 
 최근 뉴스 동향:
 ${recentNews}
+
+다가오는 투자 일정:
+${upcomingEvents}
 
 최근 매매 판단:
 ${recentDecisions}

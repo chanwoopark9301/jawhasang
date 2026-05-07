@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v74'; // Investment analyst action plan prompt
+const CACHE_NAME = 'jip-v75'; // Investment event calendar sync
 
 const STATIC_ASSETS = [
   '/style.css',
