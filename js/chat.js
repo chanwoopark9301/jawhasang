@@ -168,7 +168,7 @@ function saveInvestmentChatArtifacts(userText, aiText) {
   if (!ask || !content) return;
   const today = new Date().toISOString().split('T')[0];
   const combined = `${ask}\n${content}`;
-  const robustWantsSave = /(?:\uAE30\uB85D|\uC800\uC7A5|\uCD94\uAC00|\uBC18\uC601|\uC124\uC815|\uC815\uB9AC|\uC218\uC815|save|record|log)/i.test(ask);
+  const robustWantsSave = /(?:\uAE30\uB85D|\uC800\uC7A5|\uCD94\uAC00|\uBC18\uC601|\uC124\uC815|\uB9DE\uCDB0|\uD3EC\uD2B8\uD3F4\uB9AC\uC624|\uC815\uB9AC|\uC218\uC815|save|record|log|portfolio)/i.test(ask);
   const wantsSave = /기록|저장|추가|반영|설정|정해|남겨|수정/.test(ask);
   if (!wantsSave && !robustWantsSave) return;
 
@@ -219,7 +219,7 @@ function saveInvestmentChatArtifacts(userText, aiText) {
     return;
   }
 
-  if (/(?:\uB9E4\uB9E4|\uAC70\uB798|\uB9E4\uC218|\uB9E4\uB3C4|\uCD94\uAC00\uB9E4\uC218|\uBD84\uD560|\uC9C4\uC785|\uCCAD\uC0B0|\uC775\uC808|\uC190\uC808|\uD314\uC558|\uD314\uC544|\uC218\uC775\s*\uC2E4\uD604|trade|buy|sell)/i.test(lower + ask)) {
+  if (/(?:\uB9E4\uB9E4|\uAC70\uB798|\uB9E4\uC218|\uB9E4\uB3C4|\uCD94\uAC00\uB9E4\uC218|\uBD84\uD560|\uC9C4\uC785|\uCCAD\uC0B0|\uC775\uC808|\uC190\uC808|\uD314\uC558|\uD314\uC544|\uC218\uC775\s*\uC2E4\uD604|trade|buy|sell)/i.test(combined)) {
     const action = inferInvestmentAction(combined);
     const position = findInvestmentPositionFromText(combined, symbol);
     const trade = inferInvestmentTradeFill(ask, combined, action, position);
@@ -265,6 +265,8 @@ function saveInvestmentChatArtifacts(userText, aiText) {
     });
     saveData();
     showToast('매매 기록에 남겼어요.');
+    if (state.activeModal === 'investment-portfolio') openModal('investment-portfolio');
+    render();
     renderRightPanel();
   }
 }
@@ -274,13 +276,19 @@ function inferInvestmentTradeFill(userText, combinedText, action, position) {
   const combined = String(combinedText || '');
   const oldShares = parseInvestmentNumber(position?.shares);
   const shares = inferInvestmentTradeShares(user, combined, action, oldShares);
-  const price = inferInvestmentTradePrice(user) || inferInvestmentTradePrice(combined);
+  const price = inferInvestmentTradePrice(user, action, position) || inferInvestmentTradePrice(combined, action, position);
   return { shares, price };
 }
 
 function inferInvestmentTradeShares(userText, combinedText, action, oldShares = 0) {
   const user = String(userText || '');
   const combined = String(combinedText || '');
+  if (action === 'sell' && oldShares > 0) {
+    const residual = extractResidualShares(user) || extractResidualShares(combined);
+    if (residual > 0 && residual < oldShares) {
+      return Math.round((oldShares - residual) * 10000) / 10000;
+    }
+  }
   const direct =
     extractLabeledNumber(user, /(?:수량|quantity|shares?)/) ||
     extractShareCount(user) ||
@@ -295,18 +303,47 @@ function inferInvestmentTradeShares(userText, combinedText, action, oldShares = 
   return 0;
 }
 
-function inferInvestmentTradePrice(text) {
+function inferInvestmentTradePrice(text, action = '', position = null) {
   const raw = String(text || '');
   const labeled = extractLabeledNumber(raw, /(?:가격|체결|단가|평균가|매도가|매수가|price|at)/);
   if (labeled > 0) return labeled;
+  if (action === 'sell') {
+    const avg = parseInvestmentNumber(position?.avgPrice);
+    const formula = raw.match(/\(([0-9][0-9,.]*)\s*-\s*([0-9][0-9,.]*)\)/);
+    if (formula) {
+      const first = parseInvestmentNumber(formula[1]);
+      const second = parseInvestmentNumber(formula[2]);
+      if (!avg || Math.abs(second - avg) < 0.02) return first;
+    }
+  }
   const currency = raw.match(/(?:[$＄]\s*([0-9][0-9,.]*)|([0-9][0-9,.]*)\s*(?:달러|불|usd|USD))/);
-  return currency ? parseInvestmentNumber(currency[1] || currency[2]) : 0;
+  if (currency) return parseInvestmentNumber(currency[1] || currency[2]);
+  return 0;
 }
 
 function extractShareCount(text) {
   const raw = String(text || '');
   const m = raw.match(/([0-9][0-9,.]*)\s*(?:주|shares?|개)/i);
   return m ? parseInvestmentNumber(m[1]) : 0;
+}
+
+function extractResidualShares(text) {
+  const raw = String(text || '');
+  const residualLine = raw.split(/\r?\n/).find(line => /(?:잔여|남은|남아있는|남겨진|remaining)/i.test(line));
+  if (residualLine) {
+    const matches = [...residualLine.matchAll(/([0-9][0-9,.]*)\s*(?:주|shares?)/gi)];
+    if (matches.length) return parseInvestmentNumber(matches[matches.length - 1][1]);
+  }
+  const patterns = [
+    /(?:잔여|남은|남아있는|남겨진|remaining)[^\n]*=\s*([0-9][0-9,.]*)\s*(?:주|shares?)/i,
+    /(?:잔여|남은|남아있는|남겨진|remaining)[^0-9]{0,24}([0-9][0-9,.]*)\s*(?:주|shares?)/i,
+    /(?:수량|포지션)[^0-9]{0,24}=\s*([0-9][0-9,.]*)\s*(?:주|shares?)/i,
+  ];
+  for (const pattern of patterns) {
+    const m = raw.match(pattern);
+    if (m) return parseInvestmentNumber(m[1]);
+  }
+  return 0;
 }
 
 function extractTradePercent(text) {
@@ -565,6 +602,8 @@ function _buildChatSysPrompt(isMyRecords, topic, student, extraContext = '') {
 앱은 '/api/market/quote'를 통해 보유 종목 현재가와 지수를 조회할 수 있습니다. 시세/상태 컨텍스트가 제공된 경우 절대 "실시간 시세 조회 기능이 없다"고 말하지 않습니다.
 사용자가 "상태 어때", "현재 어때", "시세", "가격", "보유 종목 어때"처럼 물으면 현재가, 평단, 평가손익, 목표가/손절가 거리, 원칙상 확인할 점을 우선 답합니다.
 사용자가 "뉴스 동향에 기록", "투자 원칙으로 저장", "매매 기록으로 남겨"처럼 말하면 저장될 수 있게 제목과 본문을 정돈해서 답합니다.
+사용자가 "포트폴리오 수정", "포트폴리오 반영", "다시 시도", "반영된 포트폴리오 보여줘"처럼 말하면 실제 앱 데이터에 반영될 수 있도록 종목, 매수/매도, 체결 수량, 체결가, 잔여 수량을 명확히 적습니다.
+절대 "저는 실제로 포트폴리오 데이터를 직접 수정하는 기능이 없습니다" 또는 "앱에서 직접 변경해 주세요"라고 말하지 않습니다. 정보가 충분하면 반영 문장을 만들고, 부족하면 필요한 숫자 하나만 물어봅니다.
 저장에 필요한 정보가 부족하면 바로 저장하지 말고 딱 필요한 항목만 짧게 물어봅니다.
 매매 기록에 필요한 최소 항목은 종목, 매수/매도/보유, 이유입니다. 가능하면 수량, 가격, 손절가, 목표가도 확인합니다.
 투자 원칙은 사용자의 말에서 원칙 문장을 만들되, 기준이 애매하면 "어느 조건에서 적용할지"를 먼저 물어봅니다.

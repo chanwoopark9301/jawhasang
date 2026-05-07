@@ -310,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260507-10');
+            const res = await fetch('/js/data.js?v=20260507-11');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -1728,6 +1728,8 @@ class TestInvestmentPartner:
         logged_in_page.evaluate("""() => {
             state.currentChatMessages = [];
             state.investment.chat = [];
+            state.investment.decisions = [];
+            state.investment.events = [];
             state.investment.positions = [{
                 id: 'ip-iren-md',
                 symbol: 'IREN',
@@ -1782,6 +1784,61 @@ class TestInvestmentPartner:
         assert logged_in_page.locator('.investment-decision-summary.chat-markdown h5').inner_text() == 'IREN 매매 기록'
         assert '약 2,500만원' in logged_in_page.locator('.investment-decision-summary.chat-markdown table').inner_text()
         assert logged_in_page.locator('.investment-decision-summary.chat-markdown li').first.inner_text() == '60달러대에서 보유 주식 70% 익절'
+
+    def test_investment_chat_portfolio_update_uses_ai_residual_position(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.currentChatMessages = [];
+            state.investment.chat = [];
+            state.investment.decisions = [];
+            state.investment.events = [];
+            state.investment.positions = [{
+                id: 'ip-iren-residual',
+                symbol: 'IREN',
+                name: 'Iris Energy',
+                shares: 1700,
+                avgPrice: 46.06,
+                currentPrice: 60.98,
+            }];
+            render();
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = (url, opts) => {
+                if (String(url).includes('/api/analyze')) {
+                    return Promise.resolve(new Response(JSON.stringify({
+                        content: [{ text: '## IREN 매도 후 업데이트\\n\\n잔여 수량: 1,700 - 1,190 = 510주\\n평단: $46.06 (동일)\\n매도 실현익: (61.07 - 46.06) × 1,190 = 약 $17,862\\n잔여 평가액: 510 × 60.98 = 약 $31,100\\n\\n포트폴리오 수정 반영해 드릴게요.' }],
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                return originalFetch(url, opts);
+            };
+            setReplyMode('invest-summary');
+        }""")
+
+        logged_in_page.locator('#chat-input-bottom').fill('포트폴리오도 수정해야지')
+        logged_in_page.locator('#chat-input-bottom').press('Enter')
+        logged_in_page.wait_for_function(
+            "() => state.investment.positions.find(p => p.symbol === 'IREN')?.shares === 510",
+            timeout=8_000,
+        )
+        result = logged_in_page.evaluate("""() => {
+            const p = state.investment.positions.find(item => item.symbol === 'IREN');
+            const d = state.investment.decisions.at(-1);
+            return {
+                shares: p.shares,
+                currentPrice: p.currentPrice,
+                action: d.action,
+                tradeShares: d.tradeShares,
+                tradePrice: d.tradePrice,
+                applied: d.portfolioApplied,
+            };
+        }""")
+        assert result == {
+            'shares': 510,
+            'currentPrice': 61.07,
+            'action': 'sell',
+            'tradeShares': 1190,
+            'tradePrice': 61.07,
+            'applied': True,
+        }
 
     def test_investment_news_request_injects_search_results(self, logged_in_page):
         self._open_investment(logged_in_page)
