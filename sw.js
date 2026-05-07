@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v80'; // Trade markdown records
+const CACHE_NAME = 'jip-v81'; // Trade records update portfolio
 
 const STATIC_ASSETS = [
   '/style.css',

@@ -220,6 +220,7 @@ function saveInvestmentChatArtifacts(userText, aiText) {
   if (/(?:\uB9E4\uB9E4|\uAC70\uB798|\uB9E4\uC218|\uB9E4\uB3C4|\uCD94\uAC00\uB9E4\uC218|\uBD84\uD560|\uC9C4\uC785|\uCCAD\uC0B0|\uC775\uC808|\uC190\uC808|\uD314\uC558|\uD314\uC544|\uC218\uC775\s*\uC2E4\uD604|trade|buy|sell)/i.test(lower + ask)) {
     const action = inferInvestmentAction(combined);
     const position = findInvestmentPositionFromText(combined, symbol);
+    const trade = inferInvestmentTradeFill(ask, combined, action, position);
     const decision = {
       id: 'id' + Date.now(),
       createdAt: new Date().toISOString(),
@@ -240,10 +241,15 @@ function saveInvestmentChatArtifacts(userText, aiText) {
       summary: content,
       findings: [],
       nextSteps: [],
-      tradeShares: extractLabeledNumber(ask, /(수량|주|개)/),
-      tradePrice: extractLabeledNumber(ask, /(가격|체결|단가|price)/),
+      tradeShares: trade.shares,
+      tradePrice: trade.price,
     };
     state.investment.decisions.push(decision);
+    if (position && (action === 'buy' || action === 'add' || action === 'sell') && trade.shares > 0 && trade.price > 0) {
+      applyTradeToPortfolio(position.id, action, trade.shares, trade.price);
+      decision.portfolioApplied = true;
+      decision.summary = `${decision.summary}\n\n---\n포트폴리오 반영: ${investmentActionLabel(action)} ${formatShares(trade.shares)}주 @ ${formatMoney(trade.price)}`;
+    }
     state.investment.events.push({
       id: 'ie' + Date.now(),
       date: today,
@@ -259,6 +265,52 @@ function saveInvestmentChatArtifacts(userText, aiText) {
     showToast('매매 기록에 남겼어요.');
     renderRightPanel();
   }
+}
+
+function inferInvestmentTradeFill(userText, combinedText, action, position) {
+  const user = String(userText || '');
+  const combined = String(combinedText || '');
+  const oldShares = parseInvestmentNumber(position?.shares);
+  const shares = inferInvestmentTradeShares(user, combined, action, oldShares);
+  const price = inferInvestmentTradePrice(user) || inferInvestmentTradePrice(combined);
+  return { shares, price };
+}
+
+function inferInvestmentTradeShares(userText, combinedText, action, oldShares = 0) {
+  const user = String(userText || '');
+  const combined = String(combinedText || '');
+  const direct =
+    extractLabeledNumber(user, /(?:수량|quantity|shares?)/) ||
+    extractShareCount(user) ||
+    extractLabeledNumber(combined, /(?:수량|quantity|shares?)/) ||
+    extractShareCount(combined);
+  if (direct > 0) return direct;
+
+  const percent = extractTradePercent(user) || extractTradePercent(combined);
+  if (oldShares > 0 && percent > 0 && (action === 'sell' || action === 'buy' || action === 'add')) {
+    return Math.round(oldShares * (percent / 100) * 10000) / 10000;
+  }
+  return 0;
+}
+
+function inferInvestmentTradePrice(text) {
+  const raw = String(text || '');
+  const labeled = extractLabeledNumber(raw, /(?:가격|체결|단가|평균가|매도가|매수가|price|at)/);
+  if (labeled > 0) return labeled;
+  const currency = raw.match(/(?:[$＄]\s*([0-9][0-9,.]*)|([0-9][0-9,.]*)\s*(?:달러|불|usd|USD))/);
+  return currency ? parseInvestmentNumber(currency[1] || currency[2]) : 0;
+}
+
+function extractShareCount(text) {
+  const raw = String(text || '');
+  const m = raw.match(/([0-9][0-9,.]*)\s*(?:주|shares?|개)/i);
+  return m ? parseInvestmentNumber(m[1]) : 0;
+}
+
+function extractTradePercent(text) {
+  const raw = String(text || '');
+  const m = raw.match(/([0-9][0-9,.]*)\s*(?:%|퍼센트|프로|percent)/i);
+  return m ? parseInvestmentNumber(m[1]) : 0;
 }
 
 function inferInvestmentAction(text) {

@@ -310,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260507-07');
+            const res = await fetch('/js/data.js?v=20260507-08');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -1719,7 +1719,7 @@ class TestInvestmentPartner:
                 id: 'ip-iren-md',
                 symbol: 'IREN',
                 name: 'Iris Energy',
-                shares: 510,
+                shares: 1700,
                 avgPrice: 46.06,
                 currentPrice: 54.74,
             }];
@@ -1739,9 +1739,25 @@ class TestInvestmentPartner:
         logged_in_page.locator('#chat-input-bottom').fill('아까 IREN 60불대에 70프로 매도한 거 매매기록에 기록해줘')
         logged_in_page.locator('#chat-input-bottom').press('Enter')
         logged_in_page.wait_for_function(
-            "() => state.investment.decisions.some(d => d.symbol === 'IREN' && d.action === 'sell')",
+            "() => state.investment.decisions.some(d => d.symbol === 'IREN' && d.action === 'sell' && d.portfolioApplied)",
             timeout=8_000,
         )
+        portfolio = logged_in_page.evaluate("""() => {
+            const p = state.investment.positions.find(item => item.symbol === 'IREN');
+            const d = state.investment.decisions.at(-1);
+            return {
+                shares: p.shares,
+                currentPrice: p.currentPrice,
+                tradeShares: d.tradeShares,
+                tradePrice: d.tradePrice,
+            };
+        }""")
+        assert portfolio == {
+            'shares': 510,
+            'currentPrice': 60,
+            'tradeShares': 1190,
+            'tradePrice': 60,
+        }
 
         logged_in_page.locator('#investment-menu-decisions').click()
         logged_in_page.wait_for_selector('.investment-decision-summary.chat-markdown table', timeout=8_000)
