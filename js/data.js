@@ -65,6 +65,7 @@ async function loadData() {
 const _CACHE_KEY = 'jip_data_cache';
 let _lastSyncAt = 0;
 let _syncInFlight = false;
+let _saveQueue = Promise.resolve();
 
 async function refreshDataFromServer(options = {}) {
   const minInterval = Number.isFinite(options.minInterval) ? options.minInterval : 5000;
@@ -122,7 +123,26 @@ function _applyServerData(data) {
   state.sessions  = data.sessions  && data.sessions.length  ? data.sessions  : SAMPLE_SESSIONS;
   state.myTopics  = data.my_topics  && data.my_topics.length  ? data.my_topics  : SAMPLE_TOPICS;
   state.myRecords = data.my_records && data.my_records.length ? data.my_records : SAMPLE_RECORDS;
-  state.investment = normalizeInvestmentState(data.investment);
+  state.investment = _mergeIncomingInvestmentState(data.investment);
+}
+
+function _mergeIncomingInvestmentState(incomingInvestment) {
+  const current = normalizeInvestmentState(state.investment);
+  const incoming = normalizeInvestmentState(incomingInvestment);
+  const merged = { ...incoming };
+
+  if ((current.chat || []).length > (incoming.chat || []).length) {
+    merged.chat = current.chat;
+  }
+  if ((current.decisions || []).length > (incoming.decisions || []).length) {
+    merged.decisions = current.decisions;
+    merged.positions = current.positions;
+  }
+  if ((current.events || []).length > (incoming.events || []).length) {
+    merged.events = current.events;
+  }
+
+  return normalizeInvestmentState(merged);
 }
 
 function _dataSignature() {
@@ -140,13 +160,15 @@ function _dataSignature() {
     inv.positions?.length || 0,
     inv.events?.length || 0,
     inv.decisions?.length || 0,
+    inv.chat?.length || 0,
     lastOf(state.students, s => s.id || s.createdAt || ''),
     lastOf(state.sessions, s => s.id || s.date || ''),
     lastOf(state.myTopics, t => t.id || t.createdAt || ''),
     lastOf(state.myRecords, r => r.id || r.date || ''),
-    lastOf(inv.positions, p => `${p.id || ''}:${p.symbol || ''}:${p.shares || ''}:${p.currentPrice || ''}`),
+    (inv.positions || []).map(p => `${p.id || ''}:${p.symbol || ''}:${p.shares || ''}:${p.avgPrice || ''}:${p.currentPrice || ''}`).join(','),
     lastOf(inv.events, e => e.id || e.date || ''),
     lastOf(inv.decisions, d => d.id || d.createdAt || ''),
+    lastOf(inv.chat, m => `${m.role || ''}:${m.text || ''}`),
   ].join('|');
 }
 
@@ -184,6 +206,13 @@ function _useSampleData() {
 }
 
 async function saveData(options = {}) {
+  _saveQueue = _saveQueue
+    .catch(() => {})
+    .then(() => _saveDataNow(options));
+  return _saveQueue;
+}
+
+async function _saveDataNow(options = {}) {
   const retries = Number.isFinite(options.retries) ? options.retries : 2;
   const payload = {
     students:   state.students,

@@ -202,6 +202,8 @@ function saveInvestmentChatArtifacts(userText, aiText) {
       linkedDecisionId: null,
       linkedRecordId: null,
     });
+    if (state.activeModal === 'investment-portfolio') openModal('investment-portfolio');
+    render();
     saveData();
     showToast('뉴스 동향에 기록했어요.');
     renderRightPanel();
@@ -746,6 +748,7 @@ function saveChatHistory() {
     if (state.view === 'investment') {
       state.investment = normalizeInvestmentState(state.investment);
       state.investment.chat = [...state.currentChatMessages];
+      if (typeof _saveToLocalCache === 'function') _saveToLocalCache();
       saveData();
     }
   } catch (e) { /* 용량 초과 무시 */ }

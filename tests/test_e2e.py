@@ -310,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260507-09');
+            const res = await fetch('/js/data.js?v=20260507-10');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -1772,6 +1772,11 @@ class TestInvestmentPartner:
             'tradePrice': 60,
         }
 
+        logged_in_page.locator('#investment-menu-portfolio').click()
+        logged_in_page.wait_for_selector('#modal-box', timeout=8_000)
+        assert '510' in logged_in_page.locator('#modal-box').inner_text()
+        logged_in_page.locator('.modal-close').click()
+
         logged_in_page.locator('#investment-menu-decisions').click()
         logged_in_page.wait_for_selector('.investment-decision-summary.chat-markdown table', timeout=8_000)
         assert logged_in_page.locator('.investment-decision-summary.chat-markdown h5').inner_text() == 'IREN 매매 기록'
@@ -1884,6 +1889,24 @@ class TestInvestmentPartner:
         assert saved['count'] >= 2
         assert '손실 직후' in saved['first']
         assert '투자 원칙 초안' in saved['last']
+
+        preserved = logged_in_page.evaluate("""() => {
+            const before = state.investment.chat.length;
+            _applyServerData({
+                students: [],
+                sessions: [],
+                my_topics: [],
+                my_records: [],
+                investment: { ...state.investment, chat: [] },
+            });
+            return {
+                before,
+                after: state.investment.chat.length,
+                last: state.investment.chat.at(-1).text,
+            };
+        }""")
+        assert preserved['after'] == preserved['before']
+        assert preserved['last'] == saved['last']
 
     def test_market_refresh_updates_prices_and_risk_alerts(self, logged_in_page):
         self._open_investment(logged_in_page)
