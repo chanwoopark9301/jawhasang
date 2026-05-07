@@ -310,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260507-13');
+            const res = await fetch('/js/data.js?v=20260507-14');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -1997,6 +1997,87 @@ class TestInvestmentPartner:
             'weight': 30,
             'cashApplied': True,
         }
+
+    def test_duplicate_sell_summary_does_not_zero_position_or_double_cash(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.investment.positions = [{
+                id: 'ip-iren-duplicate-sell',
+                symbol: 'IREN',
+                name: 'Iris Energy',
+                shares: 510,
+                avgPrice: 46.06,
+                currentPrice: 60,
+            }, {
+                id: 'ip-cash-auto',
+                assetType: 'cash',
+                symbol: 'CASH',
+                name: 'Cash',
+                shares: 71400,
+                cashAmount: 71400,
+                avgPrice: 1,
+                currentPrice: 1,
+                currency: 'USD',
+                autoTradeCash: true,
+            }];
+        }""")
+
+        result = logged_in_page.evaluate("""() => {
+            const p = state.investment.positions.find(item => item.symbol === 'IREN');
+            const text = '잔여 수량: 1,700 - 1,190 = 510주\\n평단: $46.06\\n매도 실현익: (61.07 - 46.06) × 1,190';
+            const shares = inferInvestmentTradeShares(text, text, 'sell', p.shares);
+            if (shares > 0) applyTradeToPortfolio(p.id, 'sell', shares, 61.07);
+            const cash = state.investment.positions.find(item => item.assetType === 'cash');
+            return {
+                inferredShares: shares,
+                irenShares: state.investment.positions.find(item => item.symbol === 'IREN').shares,
+                cash: cash.cashAmount,
+            };
+        }""")
+        assert result == {
+            'inferredShares': 0,
+            'irenShares': 510,
+            'cash': 71400,
+        }
+
+    def test_portfolio_report_excludes_cash_from_concentration(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.investment.positions = [{
+                id: 'ip-iren-zero',
+                symbol: 'IREN',
+                name: 'Iris Energy',
+                shares: 0,
+                avgPrice: 0,
+                currentPrice: 0,
+            }, {
+                id: 'ip-crcl-small',
+                symbol: 'CRCL',
+                name: 'Circle',
+                shares: 113,
+                avgPrice: 128.91,
+                currentPrice: 121.8,
+            }, {
+                id: 'ip-cash-auto',
+                assetType: 'cash',
+                symbol: 'CASH',
+                name: 'Cash',
+                shares: 191054.5,
+                cashAmount: 191054.5,
+                avgPrice: 1,
+                currentPrice: 1,
+                currency: 'USD',
+                autoTradeCash: true,
+            }];
+            render();
+        }""")
+
+        logged_in_page.locator('#investment-menu-portfolio').click()
+        logged_in_page.wait_for_selector('#investment-portfolio-modal', timeout=8_000)
+        text = logged_in_page.locator('#modal-box').inner_text()
+        assert 'CASH 88.2%' not in text
+        assert 'CRCL' in text
+        assert 'IREN' not in logged_in_page.locator('.investment-portfolio-row-muted').inner_text() if logged_in_page.locator('.investment-portfolio-row-muted').count() else True
 
     def test_investment_news_request_injects_search_results(self, logged_in_page):
         self._open_investment(logged_in_page)

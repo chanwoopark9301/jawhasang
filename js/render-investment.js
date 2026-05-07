@@ -223,6 +223,7 @@ function renderModalInvestmentPortfolio() {
     saveData({ retries: 0 });
   }
   const slices = getInvestmentPortfolioSlices(inv.positions).sort((a, b) => b.value - a.value);
+  const tradableSlices = getTradableInvestmentSlices(inv.positions).sort((a, b) => b.value - a.value);
   const unpriced = getInvestmentUnpricedPositions(inv.positions);
   const totals = investmentTotals(inv.positions);
   const total = totals.totalValue;
@@ -248,8 +249,8 @@ function renderModalInvestmentPortfolio() {
     return `${p.color} ${start.toFixed(2)}deg ${end.toFixed(2)}deg`;
   }).join(', ');
 
-  const top = slices[0];
-  const gainRows = slices.map(p => ({ ...p, gain: p.value - p.cost, gainPercent: p.cost ? ((p.value - p.cost) / p.cost) * 100 : 0 }));
+  const top = tradableSlices[0] || slices[0];
+  const gainRows = (tradableSlices.length ? tradableSlices : slices).map(p => ({ ...p, gain: p.value - p.cost, gainPercent: p.cost ? ((p.value - p.cost) / p.cost) * 100 : 0 }));
   const best = [...gainRows].sort((a, b) => b.gain - a.gain)[0];
   const worst = [...gainRows].sort((a, b) => a.gain - b.gain)[0];
   const staleCount = slices.filter(p => !p.marketUpdatedAt && !p.lastMarketUpdatedAt).length;

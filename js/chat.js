@@ -289,13 +289,23 @@ function inferInvestmentTradeShares(userText, combinedText, action, oldShares = 
     if (residual > 0 && residual < oldShares) {
       return Math.round((oldShares - residual) * 10000) / 10000;
     }
+    if (residual > 0 && Math.abs(residual - oldShares) < 0.0001) {
+      return 0;
+    }
   }
   const direct =
     extractLabeledNumber(user, /(?:수량|quantity|shares?)/) ||
     extractShareCount(user) ||
     extractLabeledNumber(combined, /(?:수량|quantity|shares?)/) ||
     extractShareCount(combined);
-  if (direct > 0) return direct;
+  if (direct > 0) {
+    if (action === 'sell' && oldShares > 0 && direct >= oldShares) {
+      const residual = extractResidualShares(user) || extractResidualShares(combined);
+      if (residual > 0 && residual >= oldShares) return 0;
+      return oldShares;
+    }
+    return direct;
+  }
 
   const percent = extractTradePercent(user) || extractTradePercent(combined);
   if (oldShares > 0 && percent > 0 && (action === 'sell' || action === 'buy' || action === 'add')) {

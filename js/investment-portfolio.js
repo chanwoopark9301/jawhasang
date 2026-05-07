@@ -19,6 +19,11 @@ function getInvestmentPortfolioSlices(positions) {
   return rows.map(p => ({ ...p, weight: total ? (p.value / total) * 100 : 0, total }));
 }
 
+function getTradableInvestmentSlices(positions) {
+  return getInvestmentPortfolioSlices(positions)
+    .filter(p => !isCashInvestmentPosition(p) && parseInvestmentNumber(p.shares) > 0);
+}
+
 function getInvestmentUnpricedPositions(positions) {
   return (Array.isArray(positions) ? positions : [])
     .map(p => ({
@@ -28,7 +33,7 @@ function getInvestmentUnpricedPositions(positions) {
       currentPrice: p.currentPrice == null ? null : parseInvestmentNumber(p.currentPrice),
       cost: investmentPositionValue(p, 'avgPrice'),
     }))
-    .filter(p => !isCashInvestmentPosition(p) && investmentPositionValue(p, 'currentPrice') <= 0);
+    .filter(p => !isCashInvestmentPosition(p) && parseInvestmentNumber(p.shares) > 0 && investmentPositionValue(p, 'currentPrice') <= 0);
 }
 
 function mergeInvestmentAfterPositionSave(currentInvestment, savedInvestment) {
@@ -61,9 +66,11 @@ function applyTradeToPortfolio(positionId, action, tradeShares, tradePrice) {
     nextAvg = nextShares ? (oldCost + tradeShares * tradePrice) / nextShares : tradePrice;
     applyTradeCashDelta(-(tradeShares * tradePrice));
   } else if (action === 'sell') {
-    nextShares = Math.max(0, oldShares - tradeShares);
+    const appliedShares = Math.min(tradeShares, oldShares);
+    if (appliedShares <= 0) return;
+    nextShares = Math.max(0, oldShares - appliedShares);
     nextAvg = nextShares > 0 ? oldAvg : 0;
-    applyTradeCashDelta(tradeShares * tradePrice);
+    applyTradeCashDelta(appliedShares * tradePrice);
   } else {
     return;
   }
@@ -97,6 +104,7 @@ function applyTradeCashDelta(delta) {
       avgPrice: 1,
       currentPrice: 1,
       cashAmount: next,
+      autoTradeCash: p.autoTradeCash || p.id === 'ip-cash-auto',
       manualPrice: true,
       currency: 'USD',
       marketUpdatedAt: now,
@@ -113,6 +121,7 @@ function applyTradeCashDelta(delta) {
     avgPrice: 1,
     currentPrice: 1,
     cashAmount: amount,
+    autoTradeCash: true,
     manualPrice: true,
     currency: 'USD',
     marketUpdatedAt: now,
@@ -123,17 +132,88 @@ function applyTradeCashDelta(delta) {
 
 function reconcileCashFromAppliedSellDecisions() {
   state.investment = normalizeInvestmentState(state.investment);
-  const hasCash = state.investment.positions.some(p => isCashInvestmentPosition(p));
-  if (hasCash) return false;
+  repairOverSoldPositionsFromResidualDecisions();
+  const cashIdx = state.investment.positions.findIndex(p => isCashInvestmentPosition(p) && (p.id === 'ip-cash-auto' || p.autoTradeCash));
   const sells = (state.investment.decisions || []).filter(d =>
-    d && d.portfolioApplied && !d.cashApplied && d.action === 'sell' &&
+    d && d.portfolioApplied && d.action === 'sell' &&
     parseInvestmentNumber(d.tradeShares) > 0 && parseInvestmentNumber(d.tradePrice) > 0
   );
   if (!sells.length) return false;
-  const total = sells.reduce((sum, d) => sum + parseInvestmentNumber(d.tradeShares) * parseInvestmentNumber(d.tradePrice), 0);
+  const total = dedupeInvestmentSellDecisions(sells)
+    .reduce((sum, d) => sum + parseInvestmentNumber(d.tradeShares) * parseInvestmentNumber(d.tradePrice), 0);
   if (total <= 0) return false;
-  applyTradeCashDelta(total);
+  if (cashIdx >= 0) {
+    const cash = state.investment.positions[cashIdx];
+    if (Math.abs(parseInvestmentNumber(cash.cashAmount ?? cash.shares) - total) < 0.01) {
+      sells.forEach(d => { d.cashApplied = true; });
+      return false;
+    }
+    state.investment.positions[cashIdx] = {
+      ...cash,
+      assetType: 'cash',
+      symbol: cash.symbol || 'CASH',
+      name: cash.name || '현금',
+      shares: total,
+      avgPrice: 1,
+      currentPrice: 1,
+      cashAmount: total,
+      autoTradeCash: true,
+      manualPrice: true,
+      currency: 'USD',
+      marketUpdatedAt: new Date().toISOString(),
+    };
+  } else {
+    applyTradeCashDelta(total);
+  }
   sells.forEach(d => { d.cashApplied = true; });
   state.investment.alerts = buildInvestmentRiskAlerts(state.investment.positions, state.investment.rules);
   return true;
+}
+
+function dedupeInvestmentSellDecisions(sells) {
+  const seen = new Set();
+  return (Array.isArray(sells) ? sells : []).filter(d => {
+    const key = [
+      String(d.symbol || '').toUpperCase(),
+      parseInvestmentNumber(d.tradeShares).toFixed(4),
+      parseInvestmentNumber(d.tradePrice).toFixed(2),
+    ].join('|');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function repairOverSoldPositionsFromResidualDecisions() {
+  let changed = false;
+  (state.investment.positions || []).forEach(position => {
+    if (isCashInvestmentPosition(position)) return;
+    if (parseInvestmentNumber(position.shares) > 0) return;
+    const symbol = String(position.symbol || '').toUpperCase();
+    if (!symbol) return;
+    const residualDecision = (state.investment.decisions || [])
+      .slice()
+      .reverse()
+      .find(d => String(d.symbol || '').toUpperCase() === symbol && d.action === 'sell' && extractResidualShares(d.summary || d.reason || '') > 0);
+    if (!residualDecision) return;
+    const residual = extractResidualShares(residualDecision.summary || residualDecision.reason || '');
+    if (residual <= 0) return;
+    const avg = extractInvestmentNumberNearLabel(residualDecision.summary || '', /(?:평단|avg|average)/i) || parseInvestmentNumber(position.avgPrice);
+    const current = extractInvestmentNumberNearLabel(residualDecision.summary || '', /(?:현재|잔여 평가액|current)/i) || parseInvestmentNumber(residualDecision.tradePrice) || parseInvestmentNumber(position.currentPrice);
+    position.shares = residual;
+    position.avgPrice = avg || position.avgPrice || 0;
+    position.currentPrice = current || position.currentPrice || 0;
+    position.manualPrice = true;
+    position.marketUpdatedAt = new Date().toISOString();
+    changed = true;
+  });
+  return changed;
+}
+
+function extractInvestmentNumberNearLabel(text, labelPattern) {
+  const raw = String(text || '');
+  const line = raw.split(/\r?\n/).find(item => labelPattern.test(item));
+  if (!line) return 0;
+  const match = line.match(/[$]?\s*([0-9][0-9,.]*)/);
+  return match ? parseInvestmentNumber(match[1]) : 0;
 }
