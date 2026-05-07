@@ -648,7 +648,7 @@ function renderModalInvestmentTimeline() {
     date: (d.createdAt || '').slice(0, 10) || '',
     type: 'decision',
     symbol: d.symbol || '',
-    title: `${d.symbol || '종목'} ${investmentActionLabel(d.action)} · ${d.label || '판단'}`,
+    title: `${investmentActionLabel(d.action)} · ${d.label || '판단'}`,
     body: d.summary || d.reason || '',
     severity: d.verdict || 'info',
   }));
@@ -681,12 +681,25 @@ function renderModalInvestmentTimeline() {
           ${items.map(item => `<article class="investment-timeline-item ${esc(item.severity)}">
             <span>${esc(typeLabel(item.type))}</span>
             <div>
-              <strong>${esc(item.symbol ? `${item.symbol} · ${item.title}` : item.title)}</strong>
+              <strong>${esc(investmentTimelineDisplayTitle(item))}</strong>
               ${item.body ? `<div class="investment-timeline-body chat-markdown">${renderMarkdownBasic(item.body)}</div>` : ''}
             </div>
           </article>`).join('')}
         </section>`).join('') : '<div class="investment-empty">아직 타임라인에 표시할 투자 이벤트가 없습니다.</div>'}
     </div>`;
+}
+
+function investmentTimelineDisplayTitle(item) {
+  const symbol = String(item?.symbol || '').trim();
+  const title = String(item?.title || '').trim();
+  if (!symbol) return title || '투자 이벤트';
+  if (!title) return symbol;
+  const normalizedTitle = title.toUpperCase();
+  const normalizedSymbol = symbol.toUpperCase();
+  if (normalizedTitle === normalizedSymbol || normalizedTitle.startsWith(`${normalizedSymbol} `) || normalizedTitle.startsWith(`${normalizedSymbol} · `)) {
+    return title;
+  }
+  return `${symbol} · ${title}`;
 }
 
 function renderModalInvestmentAICompare() {

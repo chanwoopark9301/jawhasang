@@ -310,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260507-08');
+            const res = await fetch('/js/data.js?v=20260507-09');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -872,6 +872,14 @@ class TestInvestmentPartner:
                 title: 'Circle news',
                 body: 'Stablecoin policy update',
                 severity: 'info',
+            }, {
+                id: 'ie-timeline-earnings',
+                date: '2026-05-06',
+                type: 'event',
+                symbol: 'IREN',
+                title: 'IREN earnings',
+                body: 'Q3 earnings call',
+                severity: 'info',
             }];
             state.investment.decisions = [{
                 id: 'id-timeline',
@@ -894,6 +902,11 @@ class TestInvestmentPartner:
         assert 'Circle news' in timeline_text
         assert 'IREN' in timeline_text
         assert 'Planned entry memo' in timeline_text
+        titles = logged_in_page.evaluate("""() =>
+            [...document.querySelectorAll('.investment-timeline-item strong')].map(el => el.textContent)
+        """)
+        assert 'IREN earnings' in titles
+        assert 'IREN · IREN earnings' not in titles
 
     def test_investment_ai_compare_modal_renders_two_provider_cards(self, logged_in_page):
         self._open_investment(logged_in_page)

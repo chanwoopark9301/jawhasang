@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v81'; // Trade records update portfolio
+const CACHE_NAME = 'jip-v82'; // Deduplicate investment timeline titles
 
 const STATIC_ASSETS = [
   '/style.css',

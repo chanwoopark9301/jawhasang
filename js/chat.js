@@ -224,7 +224,7 @@ function saveInvestmentChatArtifacts(userText, aiText) {
     const decision = {
       id: 'id' + Date.now(),
       createdAt: new Date().toISOString(),
-      symbol: symbol || position?.symbol || '미지정',
+      symbol: position?.symbol || symbol || '',
       action,
       context: 'chat',
       setup: /충동/.test(ask) ? 'impulse' : 'planned',
@@ -255,7 +255,7 @@ function saveInvestmentChatArtifacts(userText, aiText) {
       date: today,
       type: 'trade-note',
       symbol: decision.symbol,
-      title: `${decision.symbol} ${investmentActionLabel(action)} 기록`,
+      title: `${investmentActionLabel(action)} 기록`,
       body: content,
       severity: 'info',
       linkedDecisionId: decision.id,
