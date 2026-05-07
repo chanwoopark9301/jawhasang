@@ -575,6 +575,10 @@ function _buildChatSysPrompt(isMyRecords, topic, student, extraContext = '') {
       `- 총 매입금: ${totals.totalCost.toFixed(2)}`,
       `- 평가손익: ${totals.totalGain.toFixed(2)} (${totals.totalGainPercent.toFixed(2)}%)`,
     ].join('\n');
+    const dailyDesk = typeof buildDailyInvestmentDesk === 'function' ? buildDailyInvestmentDesk(inv) : null;
+    const dailyDeskBrief = dailyDesk && typeof renderDailyDeskBrief === 'function'
+      ? renderDailyDeskBrief(dailyDesk)
+      : 'Daily Investment Desk: unavailable';
     const recentNews = inv.events
       .filter(e => e.type === 'news')
       .slice(-5)
@@ -630,6 +634,15 @@ ${positions}
 
 포트폴리오 스냅샷:
 ${portfolioSnapshot}
+
+Daily Investment Desk guardrails:
+- Before answering any buy/add/re-entry question, inspect the Daily Investment Desk below.
+- If an action is listed under Forbidden actions, say it is blocked for now and explain the rule/event/trade-history reason first.
+- Treat cash after a sell as tax reserve or dry powder until a new written re-entry rule exists.
+- The desk is a behavioral control layer; it overrides vague encouragement and generic optimism.
+
+오늘의 투자 데스크:
+${dailyDeskBrief}
 
 최근 뉴스 동향:
 ${recentNews}

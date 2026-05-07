@@ -310,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260507-12');
+            const res = await fetch('/js/data.js?v=20260507-13');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -811,6 +811,107 @@ class TestInvestmentPartner:
         assert '주문 계획' in journal_text
         assert '주문 전 확인' in journal_text
         logged_in_page.locator('.modal-close').click()
+
+    def test_daily_investment_desk_blocks_reentry_after_sell_and_event(self, logged_in_page):
+        self._open_investment(logged_in_page)
+
+        logged_in_page.evaluate("""() => {
+            state.investment.positions = [{
+                id: 'ip-iren',
+                symbol: 'IREN',
+                name: 'Iris Energy',
+                shares: 510,
+                avgPrice: 46.06,
+                currentPrice: 60,
+                marketUpdatedAt: '2026-05-07T05:00:00.000Z',
+            }, {
+                id: 'ip-cash-auto',
+                assetType: 'cash',
+                symbol: 'CASH',
+                name: 'Cash',
+                shares: 71400,
+                cashAmount: 71400,
+                avgPrice: 1,
+                currentPrice: 1,
+                currency: 'USD',
+            }];
+            state.investment.rules.maxPositionWeight = 30;
+            state.investment.events = [{
+                id: 'evt-iren-earnings',
+                type: 'earnings',
+                date: '2026-05-07',
+                symbol: 'IREN',
+                title: 'IREN earnings',
+                body: 'Q3 FY26 after market close',
+            }];
+            state.investment.decisions = [{
+                id: 'dec-iren-sell',
+                symbol: 'IREN',
+                action: 'sell',
+                tradeShares: 1190,
+                tradePrice: 60,
+                portfolioApplied: true,
+                cashApplied: true,
+                createdAt: '2026-05-07T04:00:00.000Z',
+                label: 'Sell 70%',
+                summary: 'Realized profit before earnings',
+            }];
+            render();
+        }""")
+
+        logged_in_page.locator('#investment-menu-desk').click()
+        logged_in_page.wait_for_selector('#investment-desk-modal', timeout=8_000)
+        modal_text = logged_in_page.locator('#modal-box').inner_text()
+        assert 'Daily Investment Desk' in modal_text
+        assert 'IREN' in modal_text
+        assert 'Cash' in modal_text or '$71,400' in modal_text
+        assert logged_in_page.locator('#investment-desk-modal .investment-alert.block').count() >= 1
+
+        desk = logged_in_page.evaluate("""() => buildDailyInvestmentDesk(
+            state.investment,
+            new Date('2026-05-07T00:00:00.000Z')
+        )""")
+        labels = ' '.join(item['label'] for item in desk['forbiddenActions'])
+        assert 'IREN' in labels
+        assert desk['accountSnapshot']['cashValue'] == 71400
+        assert desk['todayEvents'][0]['symbol'] == 'IREN'
+
+    def test_investment_prompt_includes_daily_desk_guardrails(self, logged_in_page):
+        self._open_investment(logged_in_page)
+
+        prompt = logged_in_page.evaluate("""() => {
+            state.investment.positions = [{
+                id: 'ip-iren-prompt',
+                symbol: 'IREN',
+                name: 'Iris Energy',
+                shares: 1700,
+                avgPrice: 46.06,
+                currentPrice: 60,
+            }];
+            state.investment.events = [{
+                id: 'evt-iren-prompt',
+                type: 'earnings',
+                date: new Date().toISOString().slice(0, 10),
+                symbol: 'IREN',
+                title: 'IREN earnings',
+            }];
+            state.investment.decisions = [{
+                id: 'dec-iren-prompt',
+                symbol: 'IREN',
+                action: 'sell',
+                tradeShares: 1190,
+                tradePrice: 60,
+                portfolioApplied: true,
+                cashApplied: true,
+                createdAt: new Date().toISOString(),
+            }];
+            return _buildChatSysPrompt(false, null, null);
+        }""")
+
+        assert 'Daily Investment Desk guardrails' in prompt
+        assert 'Forbidden actions' in prompt
+        assert 'IREN' in prompt
+        assert 're-entry' in prompt or 'buy/add' in prompt
 
     def test_investment_krw_auxiliary_display_keeps_usd_inputs(self, logged_in_page):
         self._open_investment(logged_in_page)

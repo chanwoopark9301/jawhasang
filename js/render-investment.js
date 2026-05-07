@@ -10,6 +10,7 @@ function renderInvestmentView() {
   const last = inv.decisions.at(-1);
   const messages = state.currentChatMessages || [];
   const alerts = inv.alerts || buildInvestmentRiskAlerts(inv.positions, inv.rules);
+  const desk = typeof buildDailyInvestmentDesk === 'function' ? buildDailyInvestmentDesk(inv) : null;
 
   return `<div class="investment-view" id="investment-view">
     <section class="investment-hero" id="investment-portfolio-summary">
@@ -30,6 +31,7 @@ function renderInvestmentView() {
     </section>
 
     ${renderInvestmentIndexes(inv.market?.indexes || [])}
+    ${desk ? renderInvestmentDeskStrip(desk) : ''}
 
     <section class="investment-summary-grid">
       <div class="investment-summary-card">
@@ -119,6 +121,100 @@ function renderInvestmentPositions(positions, totals) {
       </div>`;
     }).join('')}
   </div>`;
+}
+
+function renderInvestmentDeskStrip(desk) {
+  const snapshot = desk.accountSnapshot || {};
+  const topRisk = (desk.riskSignals || [])[0];
+  const tone = topRisk?.severity || 'allow';
+  return `<section class="investment-desk-strip ${esc(tone)}" id="investment-daily-desk-strip">
+    <div>
+      <span class="investment-badge ${esc(tone)}">Daily Desk</span>
+      <h3>${esc(topRisk?.title || '오늘의 투자 데스크')}</h3>
+      <p>${esc(topRisk?.body || '오늘 계좌 기준으로 큰 위험 신호는 없습니다.')}</p>
+    </div>
+    <div class="investment-desk-strip-metrics">
+      <div><span>현금</span><strong>${formatMoney(snapshot.cashValue || 0)}</strong></div>
+      <div><span>최대 비중</span><strong>${esc(snapshot.topSymbol || '-')} ${Number(snapshot.topWeight || 0).toFixed(1)}%</strong></div>
+      <div><span>금지 행동</span><strong>${(desk.forbiddenActions || []).length}</strong></div>
+    </div>
+    <button class="investment-refresh-btn" id="investment-open-daily-desk" onclick="openModal('investment-desk')">오늘의 데스크 열기</button>
+  </section>`;
+}
+
+function renderModalInvestmentDesk() {
+  const inv = state.investment = normalizeInvestmentState(state.investment);
+  const desk = buildDailyInvestmentDesk(inv);
+  const snapshot = desk.accountSnapshot || {};
+  const riskTone = (desk.riskSignals || [])[0]?.severity || 'allow';
+  const todayEvents = desk.todayEvents || [];
+  const upcomingEvents = desk.upcomingEvents || [];
+  return `
+    <button class="modal-close" onclick="closeModal()">x</button>
+    <div class="investment-modal-titlebar">
+      <div class="modal-title">오늘의 투자 데스크</div>
+      <div class="investment-action-row">
+        <button class="investment-refresh-btn investment-modal-refresh-btn" onclick="refreshInvestmentMarketData()">현재가 갱신</button>
+        <button class="investment-refresh-btn investment-modal-refresh-btn" onclick="syncInvestmentCalendarData()">일정 동기화</button>
+      </div>
+    </div>
+    <div class="investment-desk-modal" id="investment-desk-modal">
+      <div class="investment-portfolio-overview">
+        <div><span>총 평가액</span><strong>${formatMoney(snapshot.totalValue || 0)}</strong>${formatKrwApprox(snapshot.totalValue || 0)}</div>
+        <div><span>현금</span><strong>${formatMoney(snapshot.cashValue || 0)}</strong><small>${Number(snapshot.cashWeight || 0).toFixed(1)}%</small></div>
+        <div><span>평가손익</span><strong class="${Number(snapshot.totalGain || 0) >= 0 ? 'up' : 'down'}">${formatMoneySigned(snapshot.totalGain || 0)}</strong><small>${formatPercent(snapshot.totalGainPercent || 0)}</small></div>
+        <div><span>최대 비중</span><strong>${esc(snapshot.topSymbol || '-')} ${Number(snapshot.topWeight || 0).toFixed(1)}%</strong></div>
+        <div><span>금지 행동</span><strong class="${(desk.forbiddenActions || []).length ? 'block' : 'allow'}">${(desk.forbiddenActions || []).length}개</strong></div>
+        <div><span>오늘 일정</span><strong>${todayEvents.length}개</strong></div>
+      </div>
+
+      <section class="investment-desk-conclusion ${esc(riskTone)}">
+        <span class="investment-badge ${esc(riskTone)}">Daily Investment Desk</span>
+        <h4>${esc((desk.riskSignals || [])[0]?.title || '오늘의 결론')}</h4>
+        <p>${esc((desk.riskSignals || [])[0]?.body || '기록된 계좌 기준으로 즉시 차단할 위험은 크지 않습니다.')}</p>
+      </section>
+
+      <section class="investment-portfolio-status">
+        <div>
+          <h4>금지 행동</h4>
+          ${renderInvestmentDeskActionList(desk.forbiddenActions, '오늘은 바로 하지 않을 행동이 없습니다.')}
+        </div>
+        <div>
+          <h4>허용 행동</h4>
+          ${renderInvestmentDeskActionList(desk.allowedActions, '시나리오 정리 후 판단하세요.')}
+        </div>
+        <div>
+          <h4>오늘 체크리스트</h4>
+          <ul class="investment-desk-list">${desk.checklist.map(item => `<li>${esc(item)}</li>`).join('')}</ul>
+        </div>
+      </section>
+
+      <section class="investment-portfolio-alerts">
+        <h4>위험 신호</h4>
+        ${(desk.riskSignals || []).map(signal => `<div class="investment-alert ${esc(signal.severity)}">
+          <strong>${esc(signal.title)}</strong>
+          <p>${esc(signal.body)}</p>
+          ${signal.evidence ? `<small>${esc(signal.evidence)}</small>` : ''}
+        </div>`).join('')}
+      </section>
+
+      <section class="investment-portfolio-alerts">
+        <h4>투자 일정</h4>
+        ${upcomingEvents.length ? upcomingEvents.map(event => `<div class="investment-desk-event">
+          <strong>${esc(event.date || '')} · ${esc(investmentDeskEventTypeLabel(event.type))}</strong>
+          <p>${esc(event.symbol ? `${event.symbol} ${event.title || ''}` : event.title || '')}</p>
+          ${event.body ? `<small>${esc(event.body)}</small>` : ''}
+        </div>`).join('') : '<p>다가오는 투자 일정이 없습니다.</p>'}
+      </section>
+    </div>`;
+}
+
+function renderInvestmentDeskActionList(actions, emptyText) {
+  const list = Array.isArray(actions) ? actions : [];
+  if (!list.length) return `<p>${esc(emptyText)}</p>`;
+  return `<ul class="investment-desk-list">${list.map(action => `
+    <li><strong>${esc(action.label || action.action || '-')}</strong><span>${esc(action.reason || '')}</span></li>
+  `).join('')}</ul>`;
 }
 
 function renderModalInvestmentPortfolio() {
