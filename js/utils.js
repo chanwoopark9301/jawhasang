@@ -35,7 +35,8 @@ function renderMarkdownBasic(text) {
     .replace(/`(.+?)`/g, '<code>$1</code>')
     .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
 
-  for (const rawLine of lines) {
+  for (let i = 0; i < lines.length; i += 1) {
+    const rawLine = lines[i];
     const line = rawLine.trim();
     if (!line) {
       if (inList) { html += '</ul>'; inList = false; }
@@ -45,6 +46,19 @@ function renderMarkdownBasic(text) {
     if (/^[-*_]{3,}$/.test(line)) {
       if (inList) { html += '</ul>'; inList = false; }
       html += '<hr>';
+      continue;
+    }
+    if (/^\|.+\|$/.test(line) && i + 1 < lines.length && /^\|\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?$/.test(lines[i + 1].trim())) {
+      if (inList) { html += '</ul>'; inList = false; }
+      const headers = line.replace(/^\||\|$/g, '').split('|').map(cell => inline(cell.trim()));
+      const rows = [];
+      i += 2;
+      while (i < lines.length && /^\|.+\|$/.test(lines[i].trim())) {
+        rows.push(lines[i].trim().replace(/^\||\|$/g, '').split('|').map(cell => inline(cell.trim())));
+        i += 1;
+      }
+      i -= 1;
+      html += `<table><thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${headers.map((_, idx) => `<td>${row[idx] || ''}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
       continue;
     }
     const heading = line.match(/^(#{1,3})\s+(.+)$/);

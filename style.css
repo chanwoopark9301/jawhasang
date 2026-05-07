@@ -778,6 +778,26 @@ body {
   border-radius: 3px;
 }
 
+.chat-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 10px;
+  font-size: 12px;
+}
+
+.chat-markdown th,
+.chat-markdown td {
+  border: 1px solid rgba(86, 72, 58, 0.16);
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.chat-markdown th {
+  background: rgba(100, 80, 55, 0.06);
+  font-weight: 650;
+}
+
 /* 캘린더 날짜 세션 목록 */
 .cal-sessions-header {
   font-size: 13px;

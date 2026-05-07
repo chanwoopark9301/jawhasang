@@ -682,7 +682,7 @@ function renderModalInvestmentTimeline() {
             <span>${esc(typeLabel(item.type))}</span>
             <div>
               <strong>${esc(item.symbol ? `${item.symbol} · ${item.title}` : item.title)}</strong>
-              ${item.body ? `<p>${esc(item.body).slice(0, 260)}</p>` : ''}
+              ${item.body ? `<div class="investment-timeline-body chat-markdown">${renderMarkdownBasic(item.body)}</div>` : ''}
             </div>
           </article>`).join('')}
         </section>`).join('') : '<div class="investment-empty">아직 타임라인에 표시할 투자 이벤트가 없습니다.</div>'}
@@ -715,7 +715,7 @@ function renderInvestmentVerdict(decision) {
   const nextSteps = decision.nextSteps || [];
   return `<div class="investment-verdict ${esc(cls)}">
     <div class="investment-verdict-label">${esc(label)}</div>
-    <div class="investment-verdict-summary">${esc(decision.summary || '')}</div>
+    <div class="investment-verdict-summary chat-markdown">${renderMarkdownBasic(decision.summary || '')}</div>
     <ul>${findings.map(f => `<li>${esc(f)}</li>`).join('')}</ul>
     ${nextSteps.length ? `<div class="investment-next">${nextSteps.map(s => `<span>${esc(s)}</span>`).join('')}</div>` : ''}
   </div>`;
@@ -764,7 +764,7 @@ function renderInvestmentDecisionList(decisions) {
         <span>손익비 ${d.riskReward ? esc(d.riskReward) : '-'}</span>
         <span>${esc(d.orderType === 'market' ? '시장가' : d.orderType === 'stop' ? '조건부' : '지정가')}</span>
       </div>
-      <p>${esc(d.summary || '')}</p>
+      <div class="investment-decision-summary chat-markdown">${renderMarkdownBasic(d.summary || '')}</div>
       ${d.invalidation ? `<p class="investment-decision-note">무효화: ${esc(d.invalidation)}</p>` : ''}
       <small>${esc((d.createdAt || '').slice(0, 16).replace('T', ' '))}</small>
     </div>`).join('')}

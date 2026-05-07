@@ -167,10 +167,12 @@ function saveInvestmentChatArtifacts(userText, aiText) {
   const content = (aiText || '').trim();
   if (!ask || !content) return;
   const today = new Date().toISOString().split('T')[0];
+  const combined = `${ask}\n${content}`;
+  const robustWantsSave = /(?:\uAE30\uB85D|\uC800\uC7A5|\uCD94\uAC00|\uBC18\uC601|\uC124\uC815|\uC815\uB9AC|\uC218\uC815|save|record|log)/i.test(ask);
   const wantsSave = /기록|저장|추가|반영|설정|정해|남겨|수정/.test(ask);
-  if (!wantsSave) return;
+  if (!wantsSave && !robustWantsSave) return;
 
-  const symbol = inferInvestmentSymbol(ask);
+  const symbol = inferInvestmentSymbol(combined);
   const lower = ask.toLowerCase();
   if (/x\.com|twitter|tweet|x\s*link|signal|elon|musk|thetechinvest|x 계정|트윗/i.test(ask)) {
     state.investment.events.push({
@@ -215,9 +217,9 @@ function saveInvestmentChatArtifacts(userText, aiText) {
     return;
   }
 
-  if (/매매|거래|매수|매도|추가매수|분할|진입|청산|trade|buy|sell/.test(lower + ask)) {
-    const action = inferInvestmentAction(ask);
-    const position = findInvestmentPositionFromText(ask, symbol);
+  if (/(?:\uB9E4\uB9E4|\uAC70\uB798|\uB9E4\uC218|\uB9E4\uB3C4|\uCD94\uAC00\uB9E4\uC218|\uBD84\uD560|\uC9C4\uC785|\uCCAD\uC0B0|\uC775\uC808|\uC190\uC808|\uD314\uC558|\uD314\uC544|\uC218\uC775\s*\uC2E4\uD604|trade|buy|sell)/i.test(lower + ask)) {
+    const action = inferInvestmentAction(combined);
+    const position = findInvestmentPositionFromText(combined, symbol);
     const decision = {
       id: 'id' + Date.now(),
       createdAt: new Date().toISOString(),
@@ -261,6 +263,10 @@ function saveInvestmentChatArtifacts(userText, aiText) {
 
 function inferInvestmentAction(text) {
   const raw = String(text || '').toLowerCase();
+  if (/(?:\uB9E4\uB3C4|\uD314\uC558|\uD314\uC544|\uC775\uC808|\uCCAD\uC0B0|\uC218\uC775\s*\uC2E4\uD604|sell)/i.test(raw)) return 'sell';
+  if (/(?:\uCD94\uAC00\uB9E4\uC218|\uBB3C\uD0C0\uAE30|add)/i.test(raw)) return 'add';
+  if (/(?:\uBCF4\uC720|hold)/i.test(raw)) return 'hold';
+  if (/(?:\uB9E4\uC218|\uC9C4\uC785|buy)/i.test(raw)) return 'buy';
   if (/추가매수|물타기|add/.test(raw)) return 'add';
   if (/매도|청산|익절|손절|sell/.test(raw)) return 'sell';
   if (/보유|홀드|hold/.test(raw)) return 'hold';

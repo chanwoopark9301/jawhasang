@@ -310,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260507-06');
+            const res = await fetch('/js/data.js?v=20260507-07');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -1709,6 +1709,45 @@ class TestInvestmentPartner:
         )
 
         assert logged_in_page.locator('.chat-bubble-ai').count() == 1
+
+    def test_investment_chat_records_trade_note_and_renders_markdown(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.currentChatMessages = [];
+            state.investment.chat = [];
+            state.investment.positions = [{
+                id: 'ip-iren-md',
+                symbol: 'IREN',
+                name: 'Iris Energy',
+                shares: 510,
+                avgPrice: 46.06,
+                currentPrice: 54.74,
+            }];
+            render();
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = (url, opts) => {
+                if (String(url).includes('/api/analyze')) {
+                    return Promise.resolve(new Response(JSON.stringify({
+                        content: [{ text: '## IREN 매매 기록\\n\\n| 항목 | 내용 |\\n|---|---|\\n| 실현익 | 약 2,500만원 |\\n| 잔여 이익 | 약 1,000만원 |\\n\\n- 60달러대에서 보유 주식 70% 익절\\n- 남은 물량은 새 포지션으로 재평가' }],
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                return originalFetch(url, opts);
+            };
+            setReplyMode('question');
+        }""")
+
+        logged_in_page.locator('#chat-input-bottom').fill('아까 IREN 60불대에 70프로 매도한 거 매매기록에 기록해줘')
+        logged_in_page.locator('#chat-input-bottom').press('Enter')
+        logged_in_page.wait_for_function(
+            "() => state.investment.decisions.some(d => d.symbol === 'IREN' && d.action === 'sell')",
+            timeout=8_000,
+        )
+
+        logged_in_page.locator('#investment-menu-decisions').click()
+        logged_in_page.wait_for_selector('.investment-decision-summary.chat-markdown table', timeout=8_000)
+        assert logged_in_page.locator('.investment-decision-summary.chat-markdown h5').inner_text() == 'IREN 매매 기록'
+        assert '약 2,500만원' in logged_in_page.locator('.investment-decision-summary.chat-markdown table').inner_text()
+        assert logged_in_page.locator('.investment-decision-summary.chat-markdown li').first.inner_text() == '60달러대에서 보유 주식 70% 익절'
 
     def test_investment_news_request_injects_search_results(self, logged_in_page):
         self._open_investment(logged_in_page)
