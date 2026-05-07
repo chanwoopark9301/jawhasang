@@ -15,10 +15,6 @@ function renderRightPanel() {
   _updateRpButtons();
 }
 
-function _ensureInvestmentSignalMenu() {
-  // Legacy no-op: investment signals now live under the research hub.
-}
-
 // 하위 호환 alias (setSessionTab, setMyTab, setMyPeriod 등에서 호출)
 function renderAIPanel() { renderRightPanel(); }
 

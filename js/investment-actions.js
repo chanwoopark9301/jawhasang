@@ -111,7 +111,7 @@ async function syncKisBrokerData() {
 }
 
 async function syncInvestmentCalendarData() {
-  const buttons = document.querySelectorAll('#investment-sync-calendar, #investment-menu-calendar-sync');
+  const buttons = document.querySelectorAll('#investment-sync-calendar, #investment-hub-calendar-sync');
   buttons.forEach(btn => {
     btn.disabled = true;
     btn.dataset.originalText = btn.dataset.originalText || btn.textContent;

@@ -165,50 +165,6 @@ function setInvestmentCashAmount(amount) {
   return next;
 }
 
-function applyTradeCashDelta(delta) {
-  const amount = parseInvestmentNumber(delta);
-  if (!amount) return null;
-  state.investment = normalizeInvestmentState(state.investment);
-  const idx = state.investment.positions.findIndex(p => isCashInvestmentPosition(p) && String(p.currency || 'USD').toUpperCase() === 'USD');
-  const now = new Date().toISOString();
-  if (idx >= 0) {
-    const p = state.investment.positions[idx];
-    const next = Math.max(0, parseInvestmentNumber(p.cashAmount ?? p.shares) + amount);
-    state.investment.positions[idx] = {
-      ...p,
-      assetType: 'cash',
-      symbol: p.symbol || 'CASH',
-      name: p.name || '현금',
-      shares: next,
-      avgPrice: 1,
-      currentPrice: 1,
-      cashAmount: next,
-      autoTradeCash: p.autoTradeCash || p.id === 'ip-cash-auto',
-      manualPrice: true,
-      currency: 'USD',
-      marketUpdatedAt: now,
-    };
-    return state.investment.positions[idx];
-  }
-  if (amount < 0) return null;
-  const cash = {
-    id: 'ip-cash-auto',
-    assetType: 'cash',
-    symbol: 'CASH',
-    name: '현금',
-    shares: amount,
-    avgPrice: 1,
-    currentPrice: 1,
-    cashAmount: amount,
-    autoTradeCash: true,
-    manualPrice: true,
-    currency: 'USD',
-    marketUpdatedAt: now,
-  };
-  state.investment.positions.push(cash);
-  return cash;
-}
-
 function reconcileCashFromAppliedSellDecisions() {
   state.investment = normalizeInvestmentState(state.investment);
   repairOverSoldPositionsFromResidualDecisions();
@@ -242,7 +198,7 @@ function reconcileCashFromAppliedSellDecisions() {
       marketUpdatedAt: new Date().toISOString(),
     };
   } else {
-    applyTradeCashDelta(total);
+    setInvestmentCashAmount(total);
   }
   sells.forEach(d => { d.cashApplied = true; });
   state.investment.alerts = buildInvestmentRiskAlerts(state.investment.positions, state.investment.rules);
