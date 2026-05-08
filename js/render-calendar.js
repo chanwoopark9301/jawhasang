@@ -22,6 +22,10 @@ function renderCalendar() {
   state.myRecords.forEach(r => { recordCnt[r.date] = (recordCnt[r.date] || 0) + 1; });
   const investCnt = {};
   (state.investment?.events || []).forEach(e => { investCnt[e.date] = (investCnt[e.date] || 0) + 1; });
+  (state.investment?.decisions || []).forEach(d => {
+    const ds = (d.createdAt || d.date || '').slice(0, 10);
+    if (ds) investCnt[ds] = (investCnt[ds] || 0) + 1;
+  });
 
   const days = [];
   for (let i = firstDay - 1; i >= 0; i--) {
@@ -44,7 +48,7 @@ function renderCalendar() {
     const items = [
       ...state.myRecords.filter(r => r.date === d.ds).map(r => ({ cls: 'record' })),
       ...state.sessions.filter(s => s.date === d.ds).map(s => ({ cls: 'session' })),
-      ...(state.investment?.events || []).filter(e => e.date === d.ds).map(e => ({ cls: 'invest' })),
+      ...calendarInvestmentItemsForDate(d.ds).map(e => ({ cls: 'invest' })),
     ];
     const dots = items.slice(0, 6).map(item =>
       `<span class="cal-event-dot cal-event-dot-${item.cls}"></span>`
@@ -118,7 +122,7 @@ function buildCalPopupHTML(date) {
   const label       = `${parseInt(m)}월 ${parseInt(d)}일`;
   const daySessions = state.sessions.filter(s => s.date === date);
   const dayRecords  = state.myRecords.filter(r => r.date === date);
-  const dayInvests  = (state.investment?.events || []).filter(e => e.date === date);
+  const dayInvests  = calendarInvestmentItemsForDate(date);
 
   const sDots  = Array(Math.min(daySessions.length, 3)).fill('<span class="popup-dot popup-dot-session"></span>').join('');
   const rDots  = Array(Math.min(dayRecords.length,  3)).fill('<span class="popup-dot popup-dot-record"></span>').join('');
@@ -195,6 +199,26 @@ function calendarInvestmentEventLabel(event) {
   return clean ? `${symbol} ${clean}` : symbol;
 }
 
+function calendarInvestmentItemsForDate(date) {
+  const inv = normalizeInvestmentState(state.investment);
+  const events = (inv.events || [])
+    .filter(e => e.date === date)
+    .map(e => ({ ...e, id: `event:${e.id || ''}`, sourceType: 'event' }));
+  const decisions = (inv.decisions || [])
+    .filter(d => (d.createdAt || d.date || '').slice(0, 10) === date)
+    .map(d => ({
+      id: `decision:${d.id || ''}`,
+      sourceType: 'decision',
+      date,
+      type: 'decision',
+      symbol: d.symbol || '',
+      title: `${investmentActionLabel(d.action)} · ${stripLeadingInvestmentSymbol(d.label || '판단', d.symbol || '') || '판단'}`,
+      body: d.summary || d.reason || '',
+      severity: d.verdict || 'info',
+    }));
+  return [...events, ...decisions];
+}
+
 function calPopupGoSession(id) {
   closeCalPopup();
   const s = state.sessions.find(s => s.id === id);
@@ -224,10 +248,15 @@ function calPopupGoRecord(id) {
 function calPopupGoInvestment(id) {
   closeCalPopup();
   state.view = 'investment';
-  const event = (state.investment?.events || []).find(e => e.id === id);
+  const rawId = String(id || '');
+  const [kind, realId] = rawId.includes(':') ? rawId.split(':') : ['event', rawId];
+  const event = kind === 'decision'
+    ? (state.investment?.decisions || []).find(d => String(d.id) === realId)
+    : (state.investment?.events || []).find(e => String(e.id) === realId);
   state.selInvestmentPosition = event?.symbol || null;
   _syncNavButtons('investment');
   render();
+  requestAnimationFrame(() => openModal('investment-timeline'));
 }
 
 function calPopupAddSession(date) {

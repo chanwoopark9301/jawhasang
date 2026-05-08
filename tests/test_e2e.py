@@ -876,8 +876,7 @@ class TestInvestmentPartner:
         assert logged_in_page.locator('#ip-current').count() == 0
         logged_in_page.locator('.modal-close').click()
 
-        logged_in_page.locator('#investment-menu-research').click()
-        logged_in_page.locator('#investment-hub-news').click()
+        logged_in_page.locator('#investment-menu-timeline').click()
         logged_in_page.wait_for_selector('#investment-news-form', state='attached', timeout=8_000)
         assert '투자 타임라인' in logged_in_page.locator('#modal-box').inner_text()
         assert logged_in_page.locator('#investment-news-edit-tools').evaluate("(el) => !el.open")
@@ -887,8 +886,7 @@ class TestInvestmentPartner:
         logged_in_page.locator('#in-body').fill('## 핵심 요약\n- 규제 불확실성 완화\n[원문](https://example.com/news)')
         logged_in_page.locator('#investment-news-form button[type="submit"]').click()
         logged_in_page.wait_for_function("() => !document.getElementById('modal-overlay').classList.contains('open')", timeout=8_000)
-        logged_in_page.locator('#investment-menu-research').click()
-        logged_in_page.locator('#investment-hub-news').click()
+        logged_in_page.locator('#investment-menu-timeline').click()
         logged_in_page.wait_for_selector('.investment-timeline-item.news .chat-markdown h5', timeout=8_000)
         news_text = logged_in_page.locator('#modal-box').inner_text()
         assert '투자 타임라인' in news_text
@@ -980,7 +978,8 @@ class TestInvestmentPartner:
         logged_in_page.locator('#investment-menu-desk').click()
         logged_in_page.wait_for_selector('#investment-desk-modal', timeout=8_000)
         modal_text = logged_in_page.locator('#modal-box').inner_text()
-        assert 'Daily Investment Desk' in modal_text
+        assert 'Account First Desk' in modal_text
+        assert '보유 종목별 통제 모드' in modal_text
         assert 'IREN' in modal_text
         assert 'Cash' in modal_text or '$71,400' in modal_text
         assert logged_in_page.locator('#investment-desk-modal .investment-alert.block').count() >= 1
@@ -1172,8 +1171,7 @@ class TestInvestmentPartner:
             render();
         }""")
 
-        logged_in_page.locator('#investment-menu-research').click()
-        logged_in_page.locator('#investment-hub-timeline').click()
+        logged_in_page.locator('#investment-menu-timeline').click()
         logged_in_page.wait_for_selector('.investment-timeline', timeout=8_000)
         timeline_text = logged_in_page.locator('#modal-box').inner_text()
         assert 'CRCL' in timeline_text
@@ -1212,8 +1210,7 @@ class TestInvestmentPartner:
             window.fetchInvestmentNewsContext = async () => '';
         }""")
 
-        logged_in_page.locator('#investment-menu-research').click()
-        logged_in_page.locator('#investment-hub-ai-compare').click()
+        logged_in_page.evaluate("() => openModal('investment-ai-compare')")
         logged_in_page.wait_for_selector('#investment-ai-compare-form', timeout=8_000)
         logged_in_page.locator('#iac-question').fill('IREN add?')
         logged_in_page.locator('#iac-run').click()
@@ -1227,8 +1224,7 @@ class TestInvestmentPartner:
     def test_investment_signal_modal_saves_manual_source_without_auto_x_sync(self, logged_in_page):
         self._open_investment(logged_in_page)
 
-        logged_in_page.locator('#investment-menu-research').click()
-        logged_in_page.locator('#investment-hub-signals').click()
+        logged_in_page.evaluate("() => openModal('investment-signals')")
         logged_in_page.wait_for_selector('#investment-signals-modal', timeout=8_000)
         assert logged_in_page.locator('#investment-x-sync').count() == 0
         modal_text = logged_in_page.locator('#modal-box').inner_text()
@@ -1653,13 +1649,13 @@ class TestInvestmentPartner:
             decisions: state.investment.decisions.length,
             events: state.investment.events.length,
             lastStatus: state.investment.decisions.at(-1).verdict,
-            eventType: state.investment.events.at(-1).type,
+            linkedTradeEvents: state.investment.events.filter(e => e.linkedDecisionId).length,
         })""")
 
         assert result['decisions'] == 1
-        assert result['events'] >= 1
+        assert result['events'] == 0
         assert result['lastStatus'] == 'block'
-        assert result['eventType'] == 'alert'
+        assert result['linkedTradeEvents'] == 0
 
         logged_in_page.evaluate("() => setView('calendar')")
         logged_in_page.wait_for_selector('.cal-event-dot-invest', timeout=8_000)
@@ -1699,7 +1695,7 @@ class TestInvestmentPartner:
         logged_in_page.locator('#ig-reason').fill('계획된 분할매수')
         logged_in_page.locator('#investment-gate-run').click()
         logged_in_page.wait_for_function(
-            "() => state.investment.positions.find(item => item.id === 'ip-trade-sync')?.shares === 15 && state.investment.events.length > 0",
+            "() => state.investment.positions.find(item => item.id === 'ip-trade-sync')?.shares === 15 && state.investment.decisions.length > 0",
             timeout=8_000,
         )
 
@@ -1710,14 +1706,14 @@ class TestInvestmentPartner:
                 avgPrice: p.avgPrice,
                 currentPrice: p.currentPrice,
                 decisionTradeShares: state.investment.decisions.at(-1).tradeShares,
-                eventType: state.investment.events.at(-1).type,
+                linkedTradeEvents: state.investment.events.filter(e => e.linkedDecisionId).length,
             };
         }""")
         assert result['shares'] == 15
         assert round(result['avgPrice'], 2) == 113.33
         assert result['currentPrice'] == 140
         assert result['decisionTradeShares'] == 5
-        assert result['eventType'] == 'trade'
+        assert result['linkedTradeEvents'] == 0
 
     def test_portfolio_modal_edits_and_deletes_position(self, logged_in_page):
         self._open_investment(logged_in_page)

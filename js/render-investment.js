@@ -146,7 +146,8 @@ function renderModalInvestmentDesk() {
   const inv = state.investment = normalizeInvestmentState(state.investment);
   const desk = buildDailyInvestmentDesk(inv);
   const snapshot = desk.accountSnapshot || {};
-  const riskTone = (desk.riskSignals || [])[0]?.severity || 'allow';
+  const primary = desk.primaryAction || {};
+  const riskTone = primary.tone || (desk.riskSignals || [])[0]?.severity || 'allow';
   const todayEvents = desk.todayEvents || [];
   const upcomingEvents = desk.upcomingEvents || [];
   return `
@@ -167,13 +168,21 @@ function renderModalInvestmentDesk() {
         <div><span>평가손익</span><strong class="${Number(snapshot.totalGain || 0) >= 0 ? 'up' : 'down'}">${formatMoneySigned(snapshot.totalGain || 0)}</strong><small>${formatPercent(snapshot.totalGainPercent || 0)}</small></div>
         <div><span>최대 비중</span><strong>${esc(snapshot.topSymbol || '-')} ${Number(snapshot.topWeight || 0).toFixed(1)}%</strong></div>
         <div><span>금지 행동</span><strong class="${(desk.forbiddenActions || []).length ? 'block' : 'allow'}">${(desk.forbiddenActions || []).length}개</strong></div>
-        <div><span>오늘 일정</span><strong>${todayEvents.length}개</strong></div>
+        <div><span>데이터 공백</span><strong>${(desk.dataGaps || []).length}개</strong></div>
       </div>
 
       <section class="investment-desk-conclusion ${esc(riskTone)}">
-        <span class="investment-badge ${esc(riskTone)}">Daily Investment Desk</span>
-        <h4>${esc((desk.riskSignals || [])[0]?.title || '오늘의 결론')}</h4>
-        <p>${esc((desk.riskSignals || [])[0]?.body || '기록된 계좌 기준으로 즉시 차단할 위험은 크지 않습니다.')}</p>
+        <span class="investment-badge ${esc(riskTone)}">Account First Desk</span>
+        <h4>${esc(primary.title || '오늘의 계좌 결론')}</h4>
+        <p>${esc(primary.body || '기록된 계좌 기준으로 즉시 차단할 위험은 크지 않습니다.')}</p>
+      </section>
+
+      <section class="investment-portfolio-alerts">
+        <div class="investment-portfolio-list-head">
+          <strong>보유 종목별 통제 모드</strong>
+          <span>계좌 비중, 손익, 일정, 방어 기준을 먼저 보고 오늘 할 행동을 제한합니다.</span>
+        </div>
+        ${renderInvestmentDeskPositionReviews(desk.positionReviews)}
       </section>
 
       <section class="investment-portfolio-alerts">
@@ -216,14 +225,42 @@ function renderModalInvestmentDesk() {
       </section>
 
       <section class="investment-portfolio-alerts">
-        <h4>투자 일정</h4>
+        <h4>오늘/다가오는 촉발 이벤트</h4>
         ${upcomingEvents.length ? upcomingEvents.map(event => `<div class="investment-desk-event">
           <strong>${esc(event.date || '')} · ${esc(investmentDeskEventTypeLabel(event.type))}</strong>
           <p>${esc(event.symbol ? `${event.symbol} ${event.title || ''}` : event.title || '')}</p>
           ${event.body ? `<small>${esc(event.body)}</small>` : ''}
         </div>`).join('') : '<p>다가오는 투자 일정이 없습니다.</p>'}
       </section>
+
+      <section class="investment-portfolio-alerts">
+        <h4>판단 전에 메울 공백</h4>
+        ${(desk.dataGaps || []).length ? (desk.dataGaps || []).map(gap => `<div class="investment-alert ${esc(gap.severity || 'watch')}">
+          <strong>${esc(gap.title)}</strong>
+          <p>${esc(gap.body)}</p>
+        </div>`).join('') : '<p>현재 계좌 원장 기준으로 큰 데이터 공백은 없습니다.</p>'}
+      </section>
     </div>`;
+}
+
+function renderInvestmentDeskPositionReviews(reviews) {
+  const list = Array.isArray(reviews) ? reviews : [];
+  if (!list.length) return '<p>보유 종목이 없어 계좌 통제 모드를 만들 수 없습니다.</p>';
+  return `<div class="investment-desk-position-grid">
+    ${list.map(item => `<article class="investment-desk-position ${esc(item.tone || 'allow')}">
+      <div>
+        <strong>${esc(item.symbol || '-')}</strong>
+        <span>${esc(item.name || item.mode || '')}</span>
+      </div>
+      <div class="investment-desk-position-metrics">
+        <span>${Number(item.weight || 0).toFixed(1)}%</span>
+        <span>${formatMoney(item.value || 0)}</span>
+        <span class="${Number(item.gain || 0) >= 0 ? 'up' : 'down'}">${formatMoneySigned(item.gain || 0)}</span>
+      </div>
+      <b>${esc(item.mode || '관찰')}</b>
+      <p>${esc(item.reason || '')}</p>
+    </article>`).join('')}
+  </div>`;
 }
 
 function renderInvestmentDeskActionList(actions, emptyText) {
@@ -814,63 +851,6 @@ function renderModalInvestmentSignals() {
     </div>`;
 }
 
-function renderModalInvestmentTimeline() {
-  const inv = state.investment = normalizeInvestmentState(state.investment);
-  const eventRows = (inv.events || []).map(e => ({
-    id: e.id,
-    date: e.date || (e.createdAt || '').slice(0, 10) || '',
-    type: e.type || 'event',
-    symbol: e.symbol || '',
-    title: e.title || '투자 이벤트',
-    body: e.body || '',
-    severity: e.severity || 'info',
-  }));
-  const decisionRows = (inv.decisions || []).map(d => ({
-    id: d.id,
-    date: (d.createdAt || '').slice(0, 10) || '',
-    type: 'decision',
-    symbol: d.symbol || '',
-    title: `${investmentActionLabel(d.action)} · ${stripLeadingInvestmentSymbol(d.label || '판단', d.symbol || '') || '판단'}`,
-    body: d.summary || d.reason || '',
-    severity: d.verdict || 'info',
-  }));
-  const rows = [...eventRows, ...decisionRows]
-    .filter(r => r.date || r.title || r.body)
-    .sort((a, b) => String(b.date).localeCompare(String(a.date)))
-    .slice(0, 80);
-  const grouped = rows.reduce((acc, row) => {
-    const key = row.date || '날짜 없음';
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(row);
-    return acc;
-  }, {});
-  const typeLabel = type => ({
-    news: '뉴스',
-    trade: '체결',
-    alert: '경고',
-    decision: '판단',
-    'trade-note': '매매 메모',
-  })[type] || '이벤트';
-
-  return `
-    <button class="modal-close" onclick="closeModal()">x</button>
-    <div class="modal-title">투자 타임라인</div>
-    <div class="investment-modal-note">뉴스, 매매 판단, 위험 신호, 체결 기록을 시간순으로 모아 봅니다. 대화로 저장한 내용도 여기에 함께 누적됩니다.</div>
-    <div class="investment-timeline">
-      ${Object.keys(grouped).length ? Object.entries(grouped).map(([date, items]) => `
-        <section class="investment-timeline-day">
-          <h4>${esc(date)}</h4>
-          ${items.map(item => `<article class="investment-timeline-item ${esc(item.severity)}">
-            <span>${esc(typeLabel(item.type))}</span>
-            <div>
-              <strong>${esc(investmentTimelineDisplayTitle(item))}</strong>
-              ${item.body ? `<div class="investment-timeline-body chat-markdown">${renderMarkdownBasic(item.body)}</div>` : ''}
-            </div>
-          </article>`).join('')}
-        </section>`).join('') : '<div class="investment-empty">아직 타임라인에 표시할 투자 이벤트가 없습니다.</div>'}
-    </div>`;
-}
-
 function investmentTimelineDisplayTitle(item) {
   const symbol = String(item?.symbol || '').trim();
   const title = String(item?.title || '').trim();
@@ -905,7 +885,14 @@ function stripLeadingInvestmentSymbol(title, symbol) {
 }
 
 function buildUnifiedInvestmentTimelineRows(inv) {
-  const events = (inv.events || []).map(e => ({
+  const decisionIds = new Set((inv.decisions || []).map(d => String(d.id || '')).filter(Boolean));
+  const shadowEventTypes = new Set(['trade', 'trade-note', 'alert']);
+  const events = (inv.events || [])
+    .filter(e => {
+      const linkedDecisionId = String(e.linkedDecisionId || '');
+      return !(linkedDecisionId && decisionIds.has(linkedDecisionId) && shadowEventTypes.has(e.type));
+    })
+    .map(e => ({
     id: e.id || `event-${Math.random()}`,
     date: e.date || (e.createdAt || '').slice(0, 10) || '',
     createdAt: e.createdAt || e.date || '',
@@ -931,8 +918,15 @@ function buildUnifiedInvestmentTimelineRows(inv) {
     realizedGain: parseInvestmentNumber(d.realizedGain),
     accountTotal: parseInvestmentNumber(d.accountTotal),
   }));
+  const seen = new Set();
   return [...events, ...decisions]
     .filter(r => r.date || r.title || r.body)
+    .filter(r => {
+      const key = String(r.id || `${r.type}-${r.date}-${r.symbol}-${r.title}`);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
     .sort((a, b) => String(b.createdAt || b.date || '').localeCompare(String(a.createdAt || a.date || '')))
     .slice(0, 120);
 }

@@ -31,6 +31,8 @@ function buildDailyInvestmentDesk(investment = state.investment, date = new Date
     const action = String(d.action || '').toLowerCase();
     return action === 'sell' && (d.portfolioApplied || d.cashApplied || parseInvestmentNumber(d.tradeShares) > 0);
   });
+  const positionReviews = buildInvestmentDeskPositionReviews(tradable, inv.rules, todayEvents, maxWeight);
+  const dataGaps = buildInvestmentDeskDataGaps(inv.positions, inv.rules);
 
   const riskSignals = [];
   const forbiddenActions = [];
@@ -136,6 +138,18 @@ function buildDailyInvestmentDesk(investment = state.investment, date = new Date
     checklist.push('매도 이익에서 세금 예비금을 먼저 분리했는지 확인');
   }
 
+  dataGaps.forEach(gap => {
+    riskSignals.push({
+      id: `gap-${gap.id}`,
+      severity: gap.severity || 'watch',
+      symbol: gap.symbol || '',
+      title: gap.title,
+      body: gap.body,
+      source: 'data-quality',
+      evidence: gap.evidence || '',
+    });
+  });
+
   checklist.push('오늘 새 매수 전에 금지 행동 목록을 먼저 확인');
   checklist.push('실적/경제지표 이벤트가 있으면 발표 전·후 행동 기준을 한 줄로 작성');
   checklist.push('포트폴리오 비중이 원칙을 넘는 종목은 추가매수보다 축소 조건을 먼저 논의');
@@ -161,6 +175,20 @@ function buildDailyInvestmentDesk(investment = state.investment, date = new Date
     });
   }
 
+  const primaryAction = buildInvestmentDeskPrimaryAction({
+    snapshot: {
+      totalValue: totals.totalValue,
+      cashValue,
+      cashWeight: totals.totalValue ? (cashValue / totals.totalValue) * 100 : 0,
+      topSymbol: top?.symbol || '',
+      topWeight: top?.weight || 0,
+    },
+    riskSignals: dedupeInvestmentDeskItems(riskSignals).sort(sortInvestmentDeskSignals),
+    forbiddenActions: dedupeInvestmentDeskItems(forbiddenActions),
+    recentSellDecisions,
+    dataGaps,
+  });
+
   return {
     date: today,
     generatedAt: new Date().toISOString(),
@@ -178,6 +206,9 @@ function buildDailyInvestmentDesk(investment = state.investment, date = new Date
     riskSignals: dedupeInvestmentDeskItems(riskSignals).sort(sortInvestmentDeskSignals),
     forbiddenActions: dedupeInvestmentDeskItems(forbiddenActions),
     allowedActions: dedupeInvestmentDeskItems(allowedActions),
+    primaryAction,
+    positionReviews,
+    dataGaps,
     todayEvents,
     upcomingEvents,
     recentDecisions,
@@ -197,14 +228,27 @@ function renderDailyDeskBrief(desk) {
   const allowed = (desk.allowedActions || []).slice(0, 4)
     .map(a => `- ${a.label}: ${a.reason}`)
     .join('\n') || '- scenario planning only';
+  const reviews = (desk.positionReviews || []).slice(0, 6)
+    .map(p => `- ${p.symbol}: ${p.mode} | weight=${Number(p.weight || 0).toFixed(1)}% | value=${Number(p.value || 0).toFixed(2)} | gain=${Number(p.gain || 0).toFixed(2)} | ${p.reason}`)
+    .join('\n') || '- no positions';
+  const gaps = (desk.dataGaps || []).slice(0, 6)
+    .map(g => `- ${g.symbol ? `${g.symbol}: ` : ''}${g.title} | ${g.body}`)
+    .join('\n') || '- none';
   const events = (desk.todayEvents || []).slice(0, 5)
     .map(e => `- ${e.date} [${e.type}] ${e.symbol || ''} ${e.title || ''}`)
     .join('\n') || '- none';
   return `Daily Investment Desk (${desk.date})
+Primary action:
+- [${desk.primaryAction?.tone || 'allow'}] ${desk.primaryAction?.title || ''}
+- ${desk.primaryAction?.body || ''}
 Account:
 - totalValue=${Number(snapshot.totalValue || 0).toFixed(2)}
 - cash=${Number(snapshot.cashValue || 0).toFixed(2)} (${Number(snapshot.cashWeight || 0).toFixed(1)}%)
 - top=${snapshot.topSymbol || 'none'} ${Number(snapshot.topWeight || 0).toFixed(1)}%
+Position control modes:
+${reviews}
+Data gaps:
+${gaps}
 Risk signals:
 ${risks}
 Forbidden actions:
@@ -246,6 +290,137 @@ function investmentDeskEventTypeLabel(type) {
     signal: '시장 신호',
   };
   return labels[type] || '투자 일정';
+}
+
+function buildInvestmentDeskPrimaryAction({ snapshot, riskSignals, forbiddenActions, recentSellDecisions, dataGaps }) {
+  const firstBlock = (riskSignals || []).find(r => r.severity === 'block');
+  if (firstBlock) {
+    return {
+      tone: 'block',
+      title: '오늘은 공격보다 방어가 우선입니다',
+      body: `${firstBlock.symbol ? `${firstBlock.symbol}: ` : ''}${firstBlock.body || firstBlock.title}`,
+    };
+  }
+  if ((recentSellDecisions || []).length) {
+    return {
+      tone: 'watch',
+      title: '최근 매도 후 재진입 충동을 분리해서 봐야 합니다',
+      body: '이미 바뀐 계좌 상태를 기준으로 새 포지션처럼 계산하고, 매도 대금은 세금·현금 버퍼·재진입 예산으로 나눠야 합니다.',
+    };
+  }
+  if (Number(snapshot?.cashWeight || 0) >= 50) {
+    return {
+      tone: 'watch',
+      title: '현금이 가장 큰 포지션입니다',
+      body: '현금은 빈 공간이 아니라 대기 자산입니다. 오늘의 핵심은 한 번에 투입하는 것이 아니라 투입 조건과 금지 조건을 먼저 고정하는 것입니다.',
+    };
+  }
+  if ((dataGaps || []).length) {
+    return {
+      tone: 'watch',
+      title: '판단 전에 계좌 데이터 공백을 먼저 메워야 합니다',
+      body: `${dataGaps[0].title}: ${dataGaps[0].body}`,
+    };
+  }
+  if ((forbiddenActions || []).length) {
+    return {
+      tone: 'watch',
+      title: '할 수 있는 행동보다 하지 말아야 할 행동이 먼저입니다',
+      body: forbiddenActions[0].reason || forbiddenActions[0].label || '금지 행동을 먼저 확인하세요.',
+    };
+  }
+  return {
+    tone: 'allow',
+    title: '즉시 차단할 위험은 크지 않습니다',
+    body: '그래도 매수·매도 전에는 수량, 가격, 무효화 조건, 계좌 비중을 원장 기준으로 먼저 확인하세요.',
+  };
+}
+
+function buildInvestmentDeskPositionReviews(slices, rules, todayEvents, maxWeight) {
+  const events = Array.isArray(todayEvents) ? todayEvents : [];
+  return (Array.isArray(slices) ? slices : []).map(slice => {
+    const position = slice.position || slice;
+    const symbol = position.symbol || slice.symbol || '';
+    const value = parseInvestmentNumber(slice.value);
+    const cost = parseInvestmentNumber(slice.cost);
+    const gain = value - cost;
+    const gainPercent = cost ? (gain / cost) * 100 : 0;
+    const hasEvent = events.some(e => !e.symbol || String(e.symbol).toUpperCase() === String(symbol).toUpperCase());
+    const stopPrice = parseInvestmentNumber(position.stopPrice);
+    const currentPrice = parseInvestmentNumber(position.currentPrice);
+    const stopDistance = stopPrice && currentPrice ? ((currentPrice - stopPrice) / currentPrice) * 100 : null;
+    let mode = '관찰';
+    let tone = 'allow';
+    let reason = '현재 원칙 위반은 크지 않습니다.';
+    if (slice.weight > maxWeight) {
+      mode = '축소/추가매수 금지';
+      tone = slice.weight >= 50 ? 'block' : 'watch';
+      reason = `비중 ${slice.weight.toFixed(1)}%로 한도 ${maxWeight}%를 초과했습니다.`;
+    } else if (hasEvent) {
+      mode = '이벤트 대기';
+      tone = 'block';
+      reason = '오늘 관련 일정이 있어 발표 전 충동 매매를 막아야 합니다.';
+    } else if (!currentPrice) {
+      mode = '가격 확인';
+      tone = 'watch';
+      reason = '현재가가 없어 계좌 평가와 위험 계산이 흔들립니다.';
+    } else if (!stopPrice) {
+      mode = '손절 기준 필요';
+      tone = 'watch';
+      reason = '손절가나 무효화 조건이 없어 행동 통제가 약합니다.';
+    } else if (stopDistance != null && stopDistance < 8) {
+      mode = '방어선 근접';
+      tone = 'watch';
+      reason = `손절 기준까지 약 ${stopDistance.toFixed(1)}% 남았습니다.`;
+    }
+    return {
+      symbol,
+      name: position.name || '',
+      weight: parseInvestmentNumber(slice.weight),
+      value,
+      gain,
+      gainPercent,
+      mode,
+      tone,
+      reason,
+    };
+  });
+}
+
+function buildInvestmentDeskDataGaps(positions, rules) {
+  const gaps = [];
+  (Array.isArray(positions) ? positions : []).forEach(p => {
+    if (isCashInvestmentPosition(p)) return;
+    const symbol = p.symbol || 'UNKNOWN';
+    if (!parseInvestmentNumber(p.currentPrice)) {
+      gaps.push({
+        id: `${symbol}-price`,
+        symbol,
+        severity: 'watch',
+        title: `${symbol} 현재가 공백`,
+        body: '현재가가 없으면 총 평가액, 비중, 손익, 위험 신호가 모두 부정확해집니다.',
+      });
+    }
+    if (!parseInvestmentNumber(p.stopPrice) && !String(p.addRule || p.thesis || '').includes('손절')) {
+      gaps.push({
+        id: `${symbol}-risk-rule`,
+        symbol,
+        severity: 'watch',
+        title: `${symbol} 방어 기준 공백`,
+        body: '가격 손절이 아니어도 실적, 공시, 금리, 비트코인 가격 같은 무효화 조건이 필요합니다.',
+      });
+    }
+  });
+  if (!rules?.coreRules) {
+    gaps.push({
+      id: 'core-rules',
+      symbol: '',
+      severity: 'watch',
+      title: '기본 투자 원칙 공백',
+      body: 'AI가 판단을 돕더라도 계좌의 최대 비중, 추격매수 제한, 쿨다운 같은 기본값이 먼저 있어야 합니다.',
+    });
+  }
+  return gaps.slice(0, 8);
 }
 
 function dedupeInvestmentDeskItems(items) {

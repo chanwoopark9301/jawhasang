@@ -142,7 +142,6 @@ function _updateRpContent() {
         <button id="investment-menu-desk" onclick="openModal('investment-desk')">오늘의 데스크</button>
         <button id="investment-menu-portfolio" onclick="openModal('investment-portfolio')">계좌·포트폴리오</button>
         <button id="investment-menu-timeline" onclick="openModal('investment-timeline')">투자 타임라인</button>
-        <button id="investment-menu-research" onclick="openModal('investment-research')">뉴스·일정</button>
       </div>
       <div class="ctx-block">
         <div class="ctx-lbl">역할</div>

@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v101'; // Timeline graph bounds and duplicate trades
+const CACHE_NAME = 'jip-v102'; // Account-first investment desk and canonical trade ledger
 
 const STATIC_ASSETS = [
   '/style.css',

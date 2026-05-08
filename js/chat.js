@@ -297,17 +297,6 @@ function saveInvestmentChatArtifacts(userText, aiText) {
         decision.summary = `${decision.summary}\n예수금 ${formatMoneySigned(decision.cashDelta || 0)}`;
       }
     }
-    state.investment.events.push({
-      id: 'ie' + Date.now(),
-      date: today,
-      type: 'trade-note',
-      symbol: decision.symbol,
-      title: `${investmentActionLabel(action)} 기록`,
-      body: content,
-      severity: 'info',
-      linkedDecisionId: decision.id,
-      linkedRecordId: null,
-    });
     saveData();
     showToast('매매 기록에 남겼어요.');
     if (state.activeModal === 'investment-portfolio') openModal('investment-portfolio');

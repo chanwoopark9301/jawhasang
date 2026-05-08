@@ -3677,6 +3677,66 @@ body { height: var(--app-height, 100dvh); }
   display: block;
 }
 
+.investment-desk-position-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.investment-desk-position {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+
+.investment-desk-position.block {
+  border-color: rgba(220, 38, 38, .28);
+  background: rgba(220, 38, 38, .04);
+}
+
+.investment-desk-position.watch {
+  border-color: rgba(217, 119, 6, .28);
+  background: rgba(217, 119, 6, .04);
+}
+
+.investment-desk-position > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.investment-desk-position > div:first-child span {
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+}
+
+.investment-desk-position-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.investment-desk-position-metrics span {
+  padding: 4px 7px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+  font-size: 11px;
+}
+
+.investment-desk-position b {
+  font-size: 13px;
+}
+
+.investment-desk-position p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
 .investment-desk-event {
   padding: 10px 0;
   border-top: 0.5px solid var(--color-border);

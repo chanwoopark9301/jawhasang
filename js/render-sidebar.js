@@ -52,7 +52,6 @@ function renderInvestmentActions() {
     <button class="sub-action-btn primary" id="investment-menu-desk" onclick="openModal('investment-desk')">오늘의 데스크</button>
     <button class="sub-action-btn" id="investment-menu-portfolio" onclick="openModal('investment-portfolio')">계좌·포트폴리오</button>
     <button class="sub-action-btn" id="investment-menu-timeline" onclick="openModal('investment-timeline')">투자 타임라인</button>
-    <button class="sub-action-btn" id="investment-menu-research" onclick="openModal('investment-research')">뉴스·일정</button>
     <div class="sub-action-note">${positions.length}종목 · 현금 ${formatMoney(cash)}</div>
   `;
 }

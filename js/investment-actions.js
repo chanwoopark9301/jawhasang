@@ -581,17 +581,6 @@ async function runInvestmentGateFromForm(event) {
       decision.summary += ' 주문 초안 생성은 실패했지만 매매 기록은 저장합니다.';
     }
   }
-  state.investment.events.push({
-    id: 'ie' + Date.now(),
-    date: new Date().toISOString().split('T')[0],
-    type: decision.verdict === 'allow' ? 'trade' : 'alert',
-    symbol: position.symbol,
-    title: stripLeadingInvestmentSymbol(decision.label || investmentActionLabel(action), position.symbol) || investmentActionLabel(action),
-    body: decision.summary,
-    severity: decision.verdict === 'block' ? 'block' : decision.verdict === 'cooldown' ? 'watch' : 'info',
-    linkedDecisionId: decision.id,
-    linkedRecordId: null,
-  });
   const persisted = await saveData();
   if (!persisted) return showToast('서버 저장에 실패했어요. 잠시 후 다시 저장해주세요.');
   showToast('판단 기록을 저장했어요.');
