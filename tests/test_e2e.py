@@ -310,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260507-17');
+            const res = await fetch('/js/data.js?v=20260508-01');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -765,7 +765,7 @@ class TestInvestmentPartner:
         logged_in_page.locator('#investment-menu-research').click()
         logged_in_page.locator('#investment-hub-news').click()
         logged_in_page.wait_for_selector('#investment-news-form', state='attached', timeout=8_000)
-        assert '뉴스 동향' in logged_in_page.locator('#modal-box').inner_text()
+        assert '투자 타임라인' in logged_in_page.locator('#modal-box').inner_text()
         assert logged_in_page.locator('#investment-news-edit-tools').evaluate("(el) => !el.open")
         logged_in_page.locator('#investment-news-edit-tools summary').click()
         logged_in_page.locator('#in-symbol').fill('IREN')
@@ -775,14 +775,14 @@ class TestInvestmentPartner:
         logged_in_page.wait_for_function("() => !document.getElementById('modal-overlay').classList.contains('open')", timeout=8_000)
         logged_in_page.locator('#investment-menu-research').click()
         logged_in_page.locator('#investment-hub-news').click()
-        logged_in_page.wait_for_selector('.investment-news-card .chat-markdown h5', timeout=8_000)
+        logged_in_page.wait_for_selector('.investment-timeline-item.news .chat-markdown h5', timeout=8_000)
         news_text = logged_in_page.locator('#modal-box').inner_text()
-        assert '뉴스 동향 리포트' in news_text
-        assert '저장 뉴스' in news_text
-        assert '관련 종목' in news_text
-        assert logged_in_page.locator('.investment-news-card .chat-markdown h5').inner_text() == '핵심 요약'
-        assert logged_in_page.locator('.investment-news-card .chat-markdown li').inner_text() == '규제 불확실성 완화'
-        assert logged_in_page.locator('.investment-news-card .chat-markdown a').get_attribute('href') == 'https://example.com/news'
+        assert '투자 타임라인' in news_text
+        assert '뉴스·신호' in news_text
+        assert 'Clarity Act update' in news_text
+        assert logged_in_page.locator('.investment-timeline-item.news .chat-markdown h5').inner_text() == '핵심 요약'
+        assert logged_in_page.locator('.investment-timeline-item.news .chat-markdown li').inner_text() == '규제 불확실성 완화'
+        assert logged_in_page.locator('.investment-timeline-item.news .chat-markdown a').get_attribute('href') == 'https://example.com/news'
         logged_in_page.locator('.modal-close').click()
 
         logged_in_page.locator('#investment-menu-plan').click()
@@ -807,7 +807,7 @@ class TestInvestmentPartner:
         logged_in_page.locator('#investment-hub-decisions').click()
         logged_in_page.wait_for_selector('#investment-gate-form', state='attached', timeout=8_000)
         journal_text = logged_in_page.locator('#modal-box').inner_text()
-        assert '매매 저널' in journal_text
+        assert '투자 타임라인' in journal_text
         assert logged_in_page.locator('#investment-gate-tools').evaluate("(el) => !el.open")
         logged_in_page.locator('#investment-gate-tools summary').click()
         journal_text = logged_in_page.locator('#modal-box').inner_text()
@@ -996,6 +996,18 @@ class TestInvestmentPartner:
                 verdict: 'journal',
                 label: 'Chat note',
                 summary: 'Planned entry memo',
+            }, {
+                id: 'id-timeline-sell',
+                createdAt: '2026-05-07T10:00:00',
+                symbol: 'IREN',
+                action: 'sell',
+                verdict: 'allow',
+                label: 'Partial sell',
+                summary: '## IREN 매도\\n- 실적 전 일부 익절',
+                tradeShares: 1190,
+                tradePrice: 60,
+                proceeds: 71400,
+                realizedGain: 16580,
             }];
             render();
         }""")
@@ -1008,6 +1020,9 @@ class TestInvestmentPartner:
         assert 'Circle news' in timeline_text
         assert 'IREN' in timeline_text
         assert 'Planned entry memo' in timeline_text
+        assert '매도 포인트 그래프' in timeline_text
+        assert logged_in_page.locator('.investment-trade-point').count() == 1
+        assert '71,400' in logged_in_page.locator('.investment-trade-tooltip').inner_text()
         titles = logged_in_page.evaluate("""() =>
             [...document.querySelectorAll('.investment-timeline-item strong')].map(el => el.textContent)
         """)
@@ -1898,10 +1913,10 @@ class TestInvestmentPartner:
 
         logged_in_page.locator('#investment-menu-plan').click()
         logged_in_page.locator('#investment-hub-decisions').click()
-        logged_in_page.wait_for_selector('.investment-decision-summary.chat-markdown table', timeout=8_000)
-        assert logged_in_page.locator('.investment-decision-summary.chat-markdown h5').inner_text() == 'IREN 매매 기록'
-        assert '약 2,500만원' in logged_in_page.locator('.investment-decision-summary.chat-markdown table').inner_text()
-        assert logged_in_page.locator('.investment-decision-summary.chat-markdown li').first.inner_text() == '60달러대에서 보유 주식 70% 익절'
+        logged_in_page.wait_for_selector('.investment-timeline-item.decision .chat-markdown table', timeout=8_000)
+        assert logged_in_page.locator('.investment-timeline-item.decision .chat-markdown h5').inner_text() == 'IREN 매매 기록'
+        assert '약 2,500만원' in logged_in_page.locator('.investment-timeline-item.decision .chat-markdown table').inner_text()
+        assert logged_in_page.locator('.investment-timeline-item.decision .chat-markdown li').first.inner_text() == '60달러대에서 보유 주식 70% 익절'
 
     def test_investment_chat_portfolio_update_uses_ai_residual_position(self, logged_in_page):
         self._open_investment(logged_in_page)

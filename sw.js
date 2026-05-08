@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v90'; // Asset desk planning and legacy cleanup
+const CACHE_NAME = 'jip-v91'; // Unified investment timeline and sell graph
 
 const STATIC_ASSETS = [
   '/style.css',

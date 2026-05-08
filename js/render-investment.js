@@ -522,9 +522,9 @@ function renderModalInvestmentPlan() {
           <strong>투자 원칙</strong>
           <span>방향성, 비중 한도, 손절/익절 기준을 한곳에서 관리합니다.</span>
         </button>
-        <button class="investment-hub-card" id="investment-hub-decisions" onclick="openModal('investment-decisions')">
-          <strong>매매 기록</strong>
-          <span>체결 기록, 예수금 변화, 실현손익을 계좌 장부처럼 봅니다.</span>
+        <button class="investment-hub-card" id="investment-hub-decisions" onclick="openModal('investment-timeline')">
+          <strong>투자 타임라인</strong>
+          <span>매매, 매도 포인트, 뉴스, 일정, 신호를 한 흐름으로 봅니다.</span>
         </button>
       </section>
       <section class="investment-news-overview">
@@ -559,9 +559,9 @@ function renderModalInvestmentResearch() {
     </div>
     <div class="investment-hub-modal" id="investment-research-modal">
       <section class="investment-hub-grid">
-        <button class="investment-hub-card" id="investment-hub-news" onclick="openModal('investment-news')">
-          <strong>뉴스 동향</strong>
-          <span>대화에서 저장한 뉴스와 공시 해석을 다시 봅니다.</span>
+        <button class="investment-hub-card" id="investment-hub-news" onclick="openModal('investment-timeline')">
+          <strong>투자 타임라인</strong>
+          <span>뉴스, 공시, 일정, 매매 기록을 한 화면에서 같이 봅니다.</span>
         </button>
         <button class="investment-hub-card" id="investment-hub-timeline" onclick="openModal('investment-timeline')">
           <strong>타임라인</strong>
@@ -879,6 +879,206 @@ function investmentTimelineDisplayTitle(item) {
     return title;
   }
   return `${symbol} · ${title}`;
+}
+
+function buildUnifiedInvestmentTimelineRows(inv) {
+  const events = (inv.events || []).map(e => ({
+    id: e.id || `event-${Math.random()}`,
+    date: e.date || (e.createdAt || '').slice(0, 10) || '',
+    createdAt: e.createdAt || e.date || '',
+    type: e.type || 'event',
+    symbol: e.symbol || '',
+    title: e.title || '투자 이벤트',
+    body: e.body || '',
+    severity: e.severity || 'info',
+  }));
+  const decisions = (inv.decisions || []).map(d => ({
+    id: d.id || `decision-${Math.random()}`,
+    date: (d.createdAt || '').slice(0, 10) || '',
+    createdAt: d.createdAt || '',
+    type: 'decision',
+    symbol: d.symbol || '',
+    action: d.action || '',
+    title: `${investmentActionLabel(d.action)} · ${d.label || '판단'}`,
+    body: d.summary || d.reason || '',
+    severity: d.verdict || 'info',
+    tradeShares: parseInvestmentNumber(d.tradeShares),
+    tradePrice: parseInvestmentNumber(d.tradePrice),
+    proceeds: parseInvestmentNumber(d.proceeds),
+    realizedGain: parseInvestmentNumber(d.realizedGain),
+    accountTotal: parseInvestmentNumber(d.accountTotal),
+  }));
+  return [...events, ...decisions]
+    .filter(r => r.date || r.title || r.body)
+    .sort((a, b) => String(b.createdAt || b.date || '').localeCompare(String(a.createdAt || a.date || '')))
+    .slice(0, 120);
+}
+
+function renderInvestmentSellPointGraph(decisions) {
+  const sells = (Array.isArray(decisions) ? decisions : [])
+    .filter(d => d && d.action === 'sell' && parseInvestmentNumber(d.tradeShares) > 0 && parseInvestmentNumber(d.tradePrice) > 0)
+    .map(d => {
+      const shares = parseInvestmentNumber(d.tradeShares);
+      const price = parseInvestmentNumber(d.tradePrice);
+      const proceeds = parseInvestmentNumber(d.proceeds) || shares * price;
+      const value = parseInvestmentNumber(d.accountTotal) || proceeds;
+      return {
+        ...d,
+        shares,
+        price,
+        proceeds,
+        value,
+        realizedGain: parseInvestmentNumber(d.realizedGain),
+        date: (d.createdAt || '').slice(0, 10) || d.date || '',
+      };
+    });
+  if (!sells.length) {
+    return `<section class="investment-trade-graph empty" id="investment-trade-graph">
+      <div class="investment-portfolio-list-head">
+        <strong>매도 포인트 그래프</strong>
+        <span>매도 기록이 생기면 계좌 흐름과 함께 표시됩니다.</span>
+      </div>
+      <div class="investment-empty">아직 그래프로 표시할 매도 기록이 없습니다.</div>
+    </section>`;
+  }
+  const values = sells.map(s => s.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = Math.max(1, max - min);
+  const points = sells.map((s, i) => {
+    const x = sells.length === 1 ? 50 : (i / (sells.length - 1)) * 100;
+    const y = 86 - ((s.value - min) / range) * 66;
+    return { ...s, x, y };
+  });
+  const polyline = points.map(p => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
+  const latest = points.at(-1);
+  return `<section class="investment-trade-graph" id="investment-trade-graph">
+    <div class="investment-portfolio-list-head">
+      <strong>매도 포인트 그래프</strong>
+      <span>X축 매도 순서 · Y축 계좌 총액 또는 매도대금</span>
+    </div>
+    <div class="investment-trade-graph-summary">
+      <div><span>매도 포인트</span><strong>${points.length}개</strong></div>
+      <div><span>최근 매도</span><strong>${esc(latest.symbol || '-')} ${formatShares(latest.shares)}주</strong></div>
+      <div><span>최근 매도대금</span><strong>${formatMoney(latest.proceeds)}</strong></div>
+      <div><span>최근 실현손익</span><strong class="${latest.realizedGain >= 0 ? 'up' : 'down'}">${formatMoneySigned(latest.realizedGain)}</strong></div>
+    </div>
+    <div class="investment-trade-graph-area">
+      <div class="investment-trade-y-label">자산/매도대금</div>
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        <polyline points="${esc(polyline)}" fill="none" stroke="rgba(37,99,235,.72)" stroke-width="2.4" vector-effect="non-scaling-stroke"></polyline>
+      </svg>
+      ${points.map(p => `<button type="button" class="investment-trade-point ${p.realizedGain >= 0 ? 'up' : 'down'}"
+        style="left:${p.x.toFixed(2)}%;top:${p.y.toFixed(2)}%;" aria-label="${esc(p.symbol || '매도')} 매도 포인트">
+        <span></span>
+        <div class="investment-trade-tooltip">
+          <strong>${esc(p.symbol || '-')} · ${formatShares(p.shares)}주 매도</strong>
+          <small>${esc(p.date || '')} · ${formatMoney(p.price)} 체결</small>
+          <small>매도대금 ${formatMoney(p.proceeds)}</small>
+          <small>실현손익 ${formatMoneySigned(p.realizedGain)}</small>
+          <small>Y값 ${formatMoney(p.value)}</small>
+        </div>
+      </button>`).join('')}
+      <div class="investment-trade-x-label">매도 포인트</div>
+    </div>
+  </section>`;
+}
+
+function renderModalInvestmentTimeline() {
+  const inv = state.investment = normalizeInvestmentState(state.investment);
+  const rows = buildUnifiedInvestmentTimelineRows(inv);
+  const newsCount = rows.filter(r => r.type === 'news').length;
+  const signalCount = rows.filter(r => r.type === 'signal').length;
+  const decisionCount = rows.filter(r => r.type === 'decision').length;
+  const sellCount = (inv.decisions || []).filter(d => d.action === 'sell').length;
+  const grouped = rows.reduce((acc, row) => {
+    const key = row.date || '날짜 없음';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(row);
+    return acc;
+  }, {});
+  const typeLabel = type => ({
+    news: '뉴스',
+    signal: '신호',
+    trade: '체결',
+    alert: '경고',
+    decision: '매매',
+    'trade-note': '매매 메모',
+    earnings: '실적',
+    macro: '경제',
+  })[type] || '이벤트';
+
+  return `
+    <button class="modal-close" onclick="closeModal()">x</button>
+    <div class="investment-modal-titlebar">
+      <div class="modal-title">투자 타임라인</div>
+      <div class="investment-action-row">
+        <button class="investment-refresh-btn investment-modal-refresh-btn" onclick="syncInvestmentCalendarData()">일정 동기화</button>
+      </div>
+    </div>
+    <div class="investment-timeline-modal" id="investment-timeline-modal">
+      <section class="investment-news-overview">
+        <div><span>전체 기록</span><strong>${rows.length}</strong></div>
+        <div><span>매매 판단</span><strong>${decisionCount}</strong></div>
+        <div><span>뉴스·신호</span><strong>${newsCount + signalCount}</strong></div>
+        <div><span>매도 포인트</span><strong>${sellCount}</strong></div>
+      </section>
+
+      ${renderInvestmentSellPointGraph(inv.decisions || [])}
+
+      <details class="investment-manage-tools investment-manual-tools" id="investment-gate-tools">
+        <summary>
+          <span>수동 매매 추가</span>
+          <small>대화 대신 직접 주문 게이트 작성</small>
+        </summary>
+        <div class="investment-modal-note">매매 기록도 타임라인에 저장됩니다. 대화창에서 결정하는 흐름을 우선하고, 필요한 경우에만 직접 입력하세요.</div>
+        ${renderInvestmentGateForm(inv.positions)}
+      </details>
+
+      <details class="investment-manage-tools investment-manual-tools" id="investment-news-edit-tools">
+        <summary>
+          <span>수동 뉴스 추가</span>
+          <small>뉴스·공시·메모를 타임라인에 저장</small>
+        </summary>
+        <form class="investment-form investment-news-form" id="investment-news-form" onsubmit="addInvestmentNewsFromForm(event)">
+          <div class="investment-form-row">
+            <input class="form-input" id="in-symbol" placeholder="종목/테마" autocomplete="off">
+            <input class="form-input" id="in-title" placeholder="뉴스 제목" autocomplete="off">
+            <input class="form-input" id="in-date" type="date" value="${new Date().toISOString().split('T')[0]}">
+          </div>
+          <textarea class="form-input investment-textarea investment-news-textarea" id="in-body" placeholder="뉴스 내용과 나의 해석을 마크다운으로 기록"></textarea>
+          <button class="btn-primary investment-primary" type="submit">뉴스 저장</button>
+        </form>
+      </details>
+
+      <div class="investment-timeline">
+        ${Object.keys(grouped).length ? Object.entries(grouped).map(([date, items]) => `
+          <section class="investment-timeline-day">
+            <h4>${esc(date)}</h4>
+            ${items.map(item => `<article class="investment-timeline-item ${esc(item.type)} ${esc(item.severity)}">
+              <span>${esc(typeLabel(item.type))}</span>
+              <div>
+                <strong>${esc(investmentTimelineDisplayTitle(item))}</strong>
+                ${item.type === 'decision' && item.tradeShares > 0 ? `<div class="investment-timeline-metrics">
+                  <span>${formatShares(item.tradeShares)}주</span>
+                  <span>${formatMoney(item.tradePrice)}</span>
+                  ${item.proceeds ? `<span>대금 ${formatMoney(item.proceeds)}</span>` : ''}
+                  ${item.realizedGain ? `<span class="${item.realizedGain >= 0 ? 'up' : 'down'}">실현 ${formatMoneySigned(item.realizedGain)}</span>` : ''}
+                </div>` : ''}
+                ${item.body ? `<div class="investment-timeline-body chat-markdown">${renderMarkdownBasic(item.body)}</div>` : ''}
+              </div>
+            </article>`).join('')}
+          </section>`).join('') : '<div class="investment-empty">아직 투자 타임라인에 표시할 기록이 없습니다.</div>'}
+      </div>
+    </div>`;
+}
+
+function renderModalInvestmentDecisions() {
+  return renderModalInvestmentTimeline();
+}
+
+function renderModalInvestmentNews() {
+  return renderModalInvestmentTimeline();
 }
 
 function renderModalInvestmentAICompare() {
