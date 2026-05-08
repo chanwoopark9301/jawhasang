@@ -107,7 +107,6 @@ function toggleSidebar() {
   const isOpen = sb.classList.toggle('panel-open');
   if (isOpen && ai) ai.classList.remove('panel-open');
   if (bd) bd.classList.toggle('visible', isOpen || !!(ai?.classList.contains('panel-open')));
-  _updateMobileNavActive();
 }
 
 function toggleAIPanel() {
@@ -118,18 +117,12 @@ function toggleAIPanel() {
   const isOpen = ai.classList.toggle('panel-open');
   if (isOpen && sb) sb.classList.remove('panel-open');
   if (bd) bd.classList.toggle('visible', isOpen || !!(sb?.classList.contains('panel-open')));
-  _updateMobileNavActive();
 }
 
 function closePanels() {
   document.getElementById('sidebar')?.classList.remove('panel-open');
   document.getElementById('right-panel')?.classList.remove('panel-open');
   document.getElementById('panel-backdrop')?.classList.remove('visible');
-  _updateMobileNavActive();
-}
-
-function _updateMobileNavActive() {
-  // 모바일 하단 상태바는 제거됨. 패널 상태는 backdrop/sidebar class만으로 관리한다.
 }
 
 // ---------------------------------------------------------------------------
@@ -175,5 +168,5 @@ function _initVisualViewport() {
 // ---------------------------------------------------------------------------
 
 function updateMobileLayout() {
-  _updateMobileNavActive();
+  // 하단 상태바는 제거됨. 모바일 레이아웃은 CSS와 visualViewport 보정만 사용한다.
 }

@@ -110,6 +110,12 @@ body {
   backdrop-filter: blur(1px);
   -webkit-backdrop-filter: blur(1px);
 }
+
+/* 하단 상태바/모바일 네비게이션은 앱 전체에서 사용하지 않는다. */
+#mobile-nav,
+.mobile-nav {
+  display: none !important;
+}
 .panel-backdrop.visible { display: block; }
 
 /* --- 패널 공통 닫기 버튼 --- */
