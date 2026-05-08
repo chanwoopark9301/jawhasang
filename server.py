@@ -799,6 +799,10 @@ _MARKET_SYMBOL_ALIASES = {
     'SOL': 'SOL-USD',
     'SOLANA': 'SOL-USD',
     'XRP': 'XRP-USD',
+    'USDKRW': 'USDKRW=X',
+    'USD/KRW': 'USDKRW=X',
+    'USDKRW=X': 'USDKRW=X',
+    'KRW': 'USDKRW=X',
 }
 _COINGECKO_IDS = {
     'BTC-USD': 'bitcoin',

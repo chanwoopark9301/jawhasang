@@ -168,38 +168,19 @@ function setInvestmentCashAmount(amount) {
 function reconcileCashFromAppliedSellDecisions() {
   state.investment = normalizeInvestmentState(state.investment);
   repairOverSoldPositionsFromResidualDecisions();
-  const cashIdx = state.investment.positions.findIndex(p => isCashInvestmentPosition(p) && (p.id === 'ip-cash-auto' || p.autoTradeCash));
   const sells = (state.investment.decisions || []).filter(d =>
     d && d.portfolioApplied && d.action === 'sell' &&
+    !d.cashApplied &&
     parseInvestmentNumber(d.tradeShares) > 0 && parseInvestmentNumber(d.tradePrice) > 0
   );
   if (!sells.length) return false;
   const total = dedupeInvestmentSellDecisions(sells)
     .reduce((sum, d) => sum + parseInvestmentNumber(d.tradeShares) * parseInvestmentNumber(d.tradePrice), 0);
   if (total <= 0) return false;
-  if (cashIdx >= 0) {
-    const cash = state.investment.positions[cashIdx];
-    if (Math.abs(parseInvestmentNumber(cash.cashAmount ?? cash.shares) - total) < 0.01) {
-      sells.forEach(d => { d.cashApplied = true; });
-      return false;
-    }
-    state.investment.positions[cashIdx] = {
-      ...cash,
-      assetType: 'cash',
-      symbol: cash.symbol || 'CASH',
-      name: cash.name || '현금',
-      shares: total,
-      avgPrice: 1,
-      currentPrice: 1,
-      cashAmount: total,
-      autoTradeCash: true,
-      manualPrice: true,
-      currency: 'USD',
-      marketUpdatedAt: new Date().toISOString(),
-    };
-  } else {
-    setInvestmentCashAmount(total);
-  }
+  const currentCash = (state.investment.positions || [])
+    .filter(p => isCashInvestmentPosition(p) && String(p.currency || 'USD').toUpperCase() === 'USD')
+    .reduce((sum, p) => sum + investmentPositionValue(p, 'currentPrice'), 0);
+  setInvestmentCashAmount(currentCash + total);
   sells.forEach(d => { d.cashApplied = true; });
   state.investment.alerts = buildInvestmentRiskAlerts(state.investment.positions, state.investment.rules);
   return true;

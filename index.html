@@ -21,7 +21,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260508-06" />
+  <link rel="stylesheet" href="style.css?v=20260508-07" />
 </head>
 <body>
   <!-- 앱 초기화 완료 전 FOUC 방지 스플래시 (JS가 render() 후 제거) -->
@@ -62,9 +62,11 @@
         <div class="nav-item" id="nav-invest" onclick="setView('investment')">
           <span class="nav-dot dot-invest">●</span> 투자
         </div>
+        <div class="sub-items" id="sub-invest"></div>
       </nav>
 
       <div class="sidebar-footer">
+        <button class="export-btn" onclick="openModal('reminder-settings')" title="기록 알림 설정">알림 설정</button>
         <button class="export-btn" onclick="exportData()" title="JSON 백업 다운로드">↓ 내보내기</button>
         <a href="/logout" class="logout-link">로그아웃</a>
       </div>
@@ -85,12 +87,11 @@
         </div>
         <div class="ctx-role-label" id="ctx-role-label"></div>
 
-        <!-- 오른쪽: 새 항목 버튼 + 모바일 AI 토글 -->
+        <!-- 오른쪽: 새 항목 버튼 -->
         <div class="main-header-right">
           <button class="btn-secondary" id="ns-btn" style="display:none;" onclick="handleNsBtn()">
             + 회기 추가
           </button>
-          <button class="header-panel-btn mobile-only" onclick="toggleAIPanel()" title="AI 도구">✦</button>
         </div>
 
         <!-- JS 호환용 히든 요소 -->
@@ -124,57 +125,6 @@
       </div>
     </main>
 
-    <!-- 오른쪽 패널 (데스크탑: 항상 고정, 모바일: 오버레이) -->
-    <aside class="right-panel ai-panel" id="right-panel">
-      <div class="ai-header">
-        <span id="ai-header-title">AI 도구</span>
-        <button class="panel-close-btn mobile-only" onclick="closePanels()" title="닫기">✕</button>
-      </div>
-
-      <!-- 현재 주제/내담자 -->
-      <div class="rp-section">
-        <div class="rp-label">현재</div>
-        <div class="rp-value" id="rp-topic" onclick="openTopicPicker()">주제 없음</div>
-      </div>
-
-      <!-- AI 역할 (나의 기록 전용) -->
-      <div class="rp-section" id="rp-role-section" style="display:none;">
-        <div class="rp-label">AI 역할</div>
-        <div class="role-pills" id="rp-role-pills"></div>
-      </div>
-
-      <!-- 기간 선택 (나의 기록 보고서 전용) -->
-      <div class="rp-section" id="rp-period-section" style="display:none;">
-        <div class="rp-label">보고서 기간</div>
-        <div class="period-btns" id="rp-period-btns"></div>
-      </div>
-
-      <div class="ai-content" id="ai-content">
-        <p class="ai-placeholder">항목을 선택하면<br>정보가 표시됩니다</p>
-      </div>
-
-      <!-- 도구 버튼 -->
-      <div class="ai-footer">
-        <!-- 상담 기록 전용 -->
-        <button class="analyze-btn" id="rp-report-btn" disabled onclick="runCurrentAI()">
-          슈퍼비전 보고서 ↗
-        </button>
-        <button class="transform-btn" id="rp-transform-btn" disabled onclick="handleTransform()" style="display:none;">
-          축어록 AI 정리 ↗
-        </button>
-        <!-- 공통 (뷰에 따라 활성 조건 분기) -->
-        <button class="ai-tool-btn-sm" id="rp-pattern-btn" disabled onclick="runCurrentPattern()">
-          패턴 분석 ↗
-        </button>
-        <button class="ai-tool-btn-sm" id="rp-deepq-btn" disabled onclick="runDeepQuestion()">
-          심층 질문 ↗
-        </button>
-        <button class="ai-tool-btn-sm" id="rp-timeline-btn" disabled onclick="runGrowthTimeline()">
-          성장 타임라인 ↗
-        </button>
-      </div>
-    </aside>
-
     <!-- 모바일 하단 내비게이션 -->
     <nav class="mobile-nav" id="mobile-nav">
       <button class="mnav-btn" id="mnav-list" onclick="toggleSidebar()">
@@ -184,10 +134,6 @@
       <button class="mnav-btn active" id="mnav-main" onclick="closePanels()">
         <span class="mnav-icon">◧</span>
         <span class="mnav-label">화면</span>
-      </button>
-      <button class="mnav-btn" id="mnav-ai" onclick="toggleAIPanel()">
-        <span class="mnav-icon">✦</span>
-        <span class="mnav-label">AI</span>
       </button>
     </nav>
 
@@ -226,35 +172,35 @@
   </div>
 
   <!-- 모듈 로드 순서: 의존성 순 -->
-  <script src="js/logger.js?v=20260508-06"></script>
-  <script src="js/state.js?v=20260508-06"></script>
-  <script src="js/utils.js?v=20260508-06"></script>
-  <script src="js/data.js?v=20260508-06"></script>
-  <script src="js/nav.js?v=20260508-06"></script>
-  <script src="js/crud.js?v=20260508-06"></script>
-  <script src="js/ai-counseling.js?v=20260508-06"></script>
-  <script src="js/ai-myrecords.js?v=20260508-06"></script>
-  <script src="js/ai-pattern.js?v=20260508-06"></script>
-  <script src="js/modal.js?v=20260508-06"></script>
-  <script src="js/panels.js?v=20260508-06"></script>
-  <script src="js/chat.js?v=20260508-06"></script>
-  <script src="js/reminders.js?v=20260508-06"></script>
-  <script src="js/investment-rules.js?v=20260508-06"></script>
-  <script src="js/investment-format.js?v=20260508-06"></script>
-  <script src="js/investment-portfolio.js?v=20260508-06"></script>
-  <script src="js/investment-desk.js?v=20260508-06"></script>
-  <script src="js/investment-api.js?v=20260508-06"></script>
-  <script src="js/market-data.js?v=20260508-06"></script>
-  <script src="js/render-sidebar.js?v=20260508-06"></script>
-  <script src="js/render-calendar.js?v=20260508-06"></script>
-  <script src="js/render-investment.js?v=20260508-06"></script>
-  <script src="js/investment-actions.js?v=20260508-06"></script>
-  <script src="js/verbatim-editor.js?v=20260508-06"></script>
-  <script src="js/render-aipanel.js?v=20260508-06"></script>
-  <script src="js/render-main.js?v=20260508-06"></script>
-  <script src="js/render-home.js?v=20260508-06"></script>
-  <script src="js/transform-text.js?v=20260508-06"></script>
-  <script src="app.js?v=20260508-06"></script>
+  <script src="js/logger.js?v=20260508-07"></script>
+  <script src="js/state.js?v=20260508-07"></script>
+  <script src="js/utils.js?v=20260508-07"></script>
+  <script src="js/data.js?v=20260508-07"></script>
+  <script src="js/nav.js?v=20260508-07"></script>
+  <script src="js/crud.js?v=20260508-07"></script>
+  <script src="js/ai-counseling.js?v=20260508-07"></script>
+  <script src="js/ai-myrecords.js?v=20260508-07"></script>
+  <script src="js/ai-pattern.js?v=20260508-07"></script>
+  <script src="js/modal.js?v=20260508-07"></script>
+  <script src="js/panels.js?v=20260508-07"></script>
+  <script src="js/chat.js?v=20260508-07"></script>
+  <script src="js/reminders.js?v=20260508-07"></script>
+  <script src="js/investment-rules.js?v=20260508-07"></script>
+  <script src="js/investment-format.js?v=20260508-07"></script>
+  <script src="js/investment-portfolio.js?v=20260508-07"></script>
+  <script src="js/investment-desk.js?v=20260508-07"></script>
+  <script src="js/investment-api.js?v=20260508-07"></script>
+  <script src="js/market-data.js?v=20260508-07"></script>
+  <script src="js/render-sidebar.js?v=20260508-07"></script>
+  <script src="js/render-calendar.js?v=20260508-07"></script>
+  <script src="js/render-investment.js?v=20260508-07"></script>
+  <script src="js/investment-actions.js?v=20260508-07"></script>
+  <script src="js/verbatim-editor.js?v=20260508-07"></script>
+  <script src="js/render-aipanel.js?v=20260508-07"></script>
+  <script src="js/render-main.js?v=20260508-07"></script>
+  <script src="js/render-home.js?v=20260508-07"></script>
+  <script src="js/transform-text.js?v=20260508-07"></script>
+  <script src="app.js?v=20260508-07"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

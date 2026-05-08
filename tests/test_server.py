@@ -481,6 +481,38 @@ class TestDataAPI:
         assert data['quotes'][0]['changePercent'] == 4.2
         assert data['quotes'][1]['symbol'] == '^GSPC'
 
+    def test_market_quote_endpoint_normalizes_usd_krw_alias(self, client, monkeypatch):
+        import server
+
+        class FakeResp:
+            ok = True
+            status_code = 200
+
+            def json(self):
+                return {
+                    'quoteResponse': {
+                        'result': [{
+                            'symbol': 'USDKRW=X',
+                            'shortName': 'USD/KRW',
+                            'regularMarketPrice': 1352.4,
+                            'regularMarketChangePercent': 0.12,
+                        }]
+                    }
+                }
+
+        def fake_get(url, params=None, headers=None, timeout=None):
+            assert params['symbols'] == 'USDKRW=X'
+            return FakeResp()
+
+        monkeypatch.setattr(server.requests, 'get', fake_get)
+        r = client.get('/api/market/quote?symbols=USD/KRW')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['requested'] == ['USDKRW=X']
+        assert data['quotes'][0]['symbol'] == 'USDKRW=X'
+        assert data['quotes'][0]['price'] == 1352.4
+
     def test_market_quote_endpoint_falls_back_to_yahoo_chart(self, client, monkeypatch):
         import server
 

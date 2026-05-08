@@ -1973,6 +1973,7 @@ button,
 a,
 .nav-item,
 .sub-item,
+.sub-action-btn,
 .session-card,
 .record-card,
 .list-item,
@@ -1995,6 +1996,7 @@ a,
 button,
 .nav-item,
 .sub-item,
+.sub-action-btn,
 .mnav-btn,
 .tab-btn,
 .context-chip {
@@ -3374,6 +3376,35 @@ body { height: var(--app-height, 100dvh); }
   margin: 0 8px 4px 28px;
   border-left: 0.5px solid var(--color-border);
   padding-left: 8px;
+}
+
+.sub-action-btn {
+  width: 100%;
+  display: block;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  text-align: left;
+  padding: 7px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.35;
+  cursor: pointer;
+}
+.sub-action-btn:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text);
+}
+.sub-action-btn.primary {
+  color: var(--color-text);
+  font-weight: 600;
+  background: var(--color-bg);
+}
+.sub-action-note {
+  margin: 5px 3px 10px;
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 /* 투자 파트너 */

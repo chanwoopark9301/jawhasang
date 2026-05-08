@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v96'; // Daily record reminders
+const CACHE_NAME = 'jip-v97'; // Sidebar cleanup and portfolio cash snapshot
 
 const STATIC_ASSETS = [
   '/style.css',

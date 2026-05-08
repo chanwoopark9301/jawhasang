@@ -87,6 +87,7 @@ async function continueContextChat(text) {
 
   let investmentNewsContext = '';
   let investmentMarketContext = '';
+  let investmentFxContext = '';
   if (isInvestment) {
     try {
       investmentNewsContext = await fetchInvestmentNewsContext(text);
@@ -98,10 +99,15 @@ async function continueContextChat(text) {
     } catch (e) {
       logger.warn('투자 시세 컨텍스트 생성 실패', e);
     }
+    try {
+      investmentFxContext = await fetchInvestmentFxContext(text);
+    } catch (e) {
+      logger.warn('투자 환율 컨텍스트 생성 실패', e);
+    }
   }
 
   // AI 역할: state.currentRole → AI_ROLE_PRESETS에서 prompt 조회. 없으면 topic.aiPrompt 폴백
-  const sysPrompt = _buildChatSysPrompt(isMyRecords, topic, student, [investmentNewsContext, investmentMarketContext].filter(Boolean).join('\n'));
+  const sysPrompt = _buildChatSysPrompt(isMyRecords, topic, student, [investmentNewsContext, investmentMarketContext, investmentFxContext].filter(Boolean).join('\n'));
 
   // 슬라이딩 윈도우: 최근 20개만 전송 (토큰 절약)
   // 장기 맥락은 topic.patternAnalysis(사용자가 저장한 분석)가 시스템 프롬프트로 대체
@@ -557,7 +563,7 @@ function shouldFetchInvestmentNews(text) {
 function shouldFetchInvestmentMarketContext(text) {
   const ask = String(text || '').toLowerCase();
   if (state.view === 'investment' && state.replyMode === 'invest-status') return true;
-  return /\uC0C1\uD0DC|\uC2DC\uC138|\uD604\uC7AC\uAC00|\uAC00\uACA9|\uC5B4\uB54C|\uD3C9\uAC00|\uC190\uC775|\uD3EC\uD2B8\uD3F4\uB9AC\uC624|status|price|quote|position|portfolio/.test(ask);
+  return /\uC0C1\uD0DC|\uC2DC\uC138|\uD604\uC7AC\uAC00|\uAC00\uACA9|\uC5B4\uB54C|\uD3C9\uAC00|\uC190\uC775|\uD3EC\uD2B8\uD3F4\uB9AC\uC624|\uD604\uAE08|\uC608\uC218\uAE08|\uC6D0\uD654|\uD658\uC728|\uB2EC\uB7EC|status|price|quote|position|portfolio|cash|krw|usd.?krw|exchange|fx/.test(ask);
 }
 
 function inferInvestmentMarketSymbols(text) {
@@ -642,6 +648,39 @@ async function fetchInvestmentMarketContext(text) {
   }).join('\n');
 
   return `\n\n[투자 시세/보유 상태 조회 결과]\n- 조회 기준일: ${today}\n- 조회 대상: ${symbols.join(', ')}\n- 시세 출처: ${source || (quoteError ? '조회 실패' : '기록된 현재가')}\n${quoteError ? `- 시세 조회 오류: ${quoteError}\n` : ''}${rows}\n\n시세 응답 규칙:\n- 위 [투자 시세/보유 상태 조회 결과]가 있으면 "실시간 시세 조회 기능이 없다"고 말하지 않는다.\n- 현재가가 조회되었으면 현재가, 평단, 손익, 목표가/손절가와의 거리, 원칙상 확인할 점을 짧게 답한다.\n- 현재가 조회가 실패했더라도 보유 기록의 현재가가 있으면 그 기준이라고 명시하고 해석한다.\n- 매수/매도 단정이나 수익률 보장은 하지 않는다.`;
+}
+
+function shouldFetchInvestmentFxContext(text) {
+  const ask = String(text || '').toLowerCase();
+  return /\uD658\uC728|\uC6D0\uD654|\uC6D0\uC73C\uB85C|\uB2EC\uB7EC|\uD604\uAE08|\uC608\uC218\uAE08|krw|usd.?krw|exchange|fx|cash/.test(ask);
+}
+
+async function fetchInvestmentFxContext(text) {
+  if (!shouldFetchInvestmentFxContext(text)) return '';
+  const inv = state.investment = normalizeInvestmentState(state.investment);
+  const today = new Date().toISOString().split('T')[0];
+  let rate = investmentUsdKrwRate();
+  let source = '기록된 환율';
+  let quoteError = '';
+  try {
+    const data = await fetchMarketQuoteData(['USDKRW=X']);
+    const quote = (data.quotes || []).find(q => String(q.symbol || '').toUpperCase() === 'USDKRW=X') || (data.quotes || [])[0];
+    if (quote?.price > 0) {
+      rate = Number(quote.price);
+      inv.usdKrwRate = rate;
+      source = data.source || 'market quote proxy';
+      saveData({ retries: 0 });
+    }
+  } catch (e) {
+    quoteError = e.message || String(e);
+    logger.warn('투자 대화 환율 조회 실패', e);
+  }
+
+  const totals = investmentTotals(inv.positions);
+  const cashValue = (inv.positions || [])
+    .filter(p => isCashInvestmentPosition(p))
+    .reduce((sum, p) => sum + investmentPositionValue(p, 'currentPrice'), 0);
+  return `\n\n[투자 환율 조회 결과]\n- 조회 기준일: ${today}\n- USD/KRW: ${Number(rate).toLocaleString(undefined, { maximumFractionDigits: 2 })}\n- 환율 출처: ${source}\n${quoteError ? `- 환율 조회 오류: ${quoteError}\n` : ''}- 현금: ${formatMoney(cashValue)} = 약 ₩${Math.round(cashValue * rate).toLocaleString('ko-KR')}\n- 총 평가액: ${formatMoney(totals.totalValue)} = 약 ₩${Math.round(totals.totalValue * rate).toLocaleString('ko-KR')}\n\n환율 응답 규칙:\n- 위 [투자 환율 조회 결과]가 있으면 "환율 조회 기능이 없다"고 말하지 않는다.\n- 원화 환산은 USD/KRW 기준과 조회 기준일을 함께 말한다.\n- 현금은 투자 가능한 예수금으로 설명하되, 세금 예비금이나 버퍼가 있으면 별도 분리 필요성을 짚는다.`;
 }
 
 function inferInvestmentNewsSymbols(text) {
@@ -763,6 +802,7 @@ function _buildChatSysPrompt(isMyRecords, topic, student, extraContext = '') {
 매수/매도 단정이나 수익률 보장은 금지하지만, 원칙 수립·비중 축소·손절 조건·추가매수 조건에 대해서는 앱의 기본 원칙과 보유 데이터에 근거한 "원칙 후보" 또는 "보수적 기본안"을 먼저 제시할 수 있습니다.
 사용자가 "너가 추천해줘", "알아서 정해줘", "어떻게 세우면 좋을까"처럼 원칙 설계를 요청하면 "제 역할 밖"이라고 말하지 말고, 단정적 투자 조언이 아닌 실행 가능한 원칙안으로 답합니다.
 앱은 '/api/market/quote'를 통해 보유 종목 현재가와 지수를 조회할 수 있습니다. 시세/상태 컨텍스트가 제공된 경우 절대 "실시간 시세 조회 기능이 없다"고 말하지 않습니다.
+앱은 같은 시세 API로 USD/KRW 환율도 조회할 수 있습니다. 환율 컨텍스트가 제공된 경우 절대 "환율 조회 기능이 없다"고 말하지 않습니다.
 사용자가 "상태 어때", "현재 어때", "시세", "가격", "보유 종목 어때"처럼 물으면 현재가, 평단, 평가손익, 목표가/손절가 거리, 원칙상 확인할 점을 우선 답합니다.
 사용자가 "뉴스 동향에 기록", "투자 원칙으로 저장", "매매 기록으로 남겨"처럼 말하면 저장될 수 있게 제목과 본문을 정돈해서 답합니다.
 사용자가 "포트폴리오 수정", "포트폴리오 반영", "다시 시도", "반영된 포트폴리오 보여줘"처럼 말하면 실제 앱 데이터에 반영될 수 있도록 종목, 매수/매도, 체결 수량, 체결가, 잔여 수량을 명확히 적습니다.

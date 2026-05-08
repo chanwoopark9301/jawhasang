@@ -2198,7 +2198,7 @@ class TestInvestmentPartner:
         assert '510' in modal_text
         assert '$66.38' in modal_text
 
-    def test_portfolio_reconciles_cash_from_previous_sell_decisions(self, logged_in_page):
+    def test_portfolio_open_does_not_reconstruct_cash_from_historical_sells(self, logged_in_page):
         self._open_investment(logged_in_page)
         logged_in_page.evaluate("""() => {
             state.investment.positions = [{
@@ -2224,23 +2224,74 @@ class TestInvestmentPartner:
         }""")
 
         logged_in_page.locator('#investment-menu-portfolio').click()
-        logged_in_page.wait_for_function(
-            "() => state.investment.positions.some(p => p.assetType === 'cash' && p.cashAmount === 71400)",
-            timeout=8_000,
-        )
+        logged_in_page.wait_for_selector('#investment-portfolio-modal', timeout=8_000)
         summary = logged_in_page.evaluate("""() => {
             const p = state.investment.positions.find(item => item.symbol === 'IREN');
             const total = investmentTotals(state.investment.positions).totalValue;
             return {
                 total,
                 weight: Math.round((investmentPositionValue(p, 'currentPrice') / total) * 1000) / 10,
-                cashApplied: state.investment.decisions[0].cashApplied,
+                cashApplied: !!state.investment.decisions[0].cashApplied,
+                cashCount: state.investment.positions.filter(item => item.assetType === 'cash').length,
             };
         }""")
         assert summary == {
-            'total': 102000,
-            'weight': 30,
-            'cashApplied': True,
+            'total': 30600,
+            'weight': 100,
+            'cashApplied': False,
+            'cashCount': 0,
+        }
+
+    def test_portfolio_open_preserves_current_cash_snapshot(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.investment.positions = [{
+                id: 'ip-iren-current-snapshot',
+                symbol: 'IREN',
+                name: 'Iris Energy',
+                shares: 510,
+                avgPrice: 66.38,
+                currentPrice: 64,
+            }, {
+                id: 'ip-cash-auto',
+                assetType: 'cash',
+                symbol: 'CASH',
+                name: 'Cash',
+                shares: 125000,
+                cashAmount: 125000,
+                avgPrice: 1,
+                currentPrice: 1,
+                currency: 'USD',
+                autoTradeCash: true,
+            }];
+            state.investment.decisions = [{
+                id: 'id-applied-sell',
+                createdAt: '2026-05-07T00:00:00',
+                symbol: 'IREN',
+                action: 'sell',
+                portfolioApplied: true,
+                cashApplied: true,
+                tradeShares: 1190,
+                tradePrice: 60,
+                summary: 'old sell',
+            }];
+            render();
+        }""")
+
+        for _ in range(2):
+            logged_in_page.locator('#investment-menu-portfolio').click()
+            logged_in_page.wait_for_selector('#investment-portfolio-modal', timeout=8_000)
+            logged_in_page.locator('.modal-close').click()
+        summary = logged_in_page.evaluate("""() => {
+            const cash = state.investment.positions.find(item => item.assetType === 'cash');
+            return {
+                cash: cash.cashAmount,
+                total: investmentTotals(state.investment.positions).totalValue,
+            };
+        }""")
+        assert summary == {
+            'cash': 125000,
+            'total': 157640,
         }
 
     def test_duplicate_sell_summary_does_not_zero_position_or_double_cash(self, logged_in_page):

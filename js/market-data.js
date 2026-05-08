@@ -19,6 +19,10 @@ const INVESTMENT_SYMBOL_ALIASES = {
   SOL: 'SOL-USD',
   SOLANA: 'SOL-USD',
   XRP: 'XRP-USD',
+  USDKRW: 'USDKRW=X',
+  'USD/KRW': 'USDKRW=X',
+  'USDKRW=X': 'USDKRW=X',
+  KRW: 'USDKRW=X',
 };
 
 function normalizeInvestmentMarketSymbol(symbol) {
