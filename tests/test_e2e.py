@@ -310,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260508-03');
+            const res = await fetch('/js/data.js?v=20260508-04');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -879,6 +879,55 @@ class TestInvestmentPartner:
         assert 'IREN' in labels
         assert desk['accountSnapshot']['cashValue'] == 71400
         assert desk['todayEvents'][0]['symbol'] == 'IREN'
+
+    def test_daily_investment_desk_notification_payload_and_controls(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            const today = new Date().toISOString().slice(0, 10);
+            state.investment.positions = [{
+                id: 'ip-alert-iren',
+                symbol: 'IREN',
+                name: 'Iris Energy',
+                shares: 1000,
+                avgPrice: 40,
+                currentPrice: 60,
+            }];
+            state.investment.rules.maxPositionWeight = 30;
+            state.investment.events = [{
+                id: 'evt-alert-iren',
+                type: 'earnings',
+                date: today,
+                symbol: 'IREN',
+                title: 'IREN earnings',
+                body: 'After market close',
+            }];
+            state.investment.notifications = {
+                ...state.investment.notifications,
+                enabled: true,
+                dailyTime: '08:30',
+                notifyDesk: true,
+                notifyEvents: true,
+                notifyRisks: true,
+            };
+            Object.defineProperty(window, 'Notification', {
+                configurable: true,
+                value: class {
+                    static permission = 'granted';
+                    static requestPermission = async () => 'granted';
+                    constructor(title, options) {
+                        window.__lastInvestmentNotification = { title, options };
+                    }
+                },
+            });
+            render();
+        }""")
+
+        logged_in_page.locator('#investment-menu-desk').click()
+        logged_in_page.wait_for_selector('#investment-desk-notification-permission', timeout=8_000)
+        assert logged_in_page.locator('#investment-desk-notification-test').is_visible()
+        payload = logged_in_page.evaluate("() => buildInvestmentDeskNotificationPayload()")
+        assert 'IREN' in payload['title'] or 'IREN' in payload['body']
+        assert logged_in_page.evaluate("() => scheduleInvestmentDeskNotifications()") is True
 
     def test_investment_prompt_includes_daily_desk_guardrails(self, logged_in_page):
         self._open_investment(logged_in_page)

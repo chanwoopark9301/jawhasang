@@ -147,6 +147,14 @@ function defaultInvestmentState() {
       keywords: ['IREN', 'CRCL', 'AI', 'data center', 'Microsoft', 'Anthropic', 'Bitcoin', 'GPU', 'power', 'earnings'],
       lastSyncedAt: null,
     },
+    notifications: {
+      enabled: false,
+      dailyTime: '08:30',
+      notifyDesk: true,
+      notifyEvents: true,
+      notifyRisks: true,
+      lastDeskNotifiedDate: null,
+    },
   };
 }
 
@@ -180,6 +188,7 @@ function normalizeInvestmentState(investment) {
     broker: src.broker && typeof src.broker === 'object' ? { ...base.broker, ...src.broker } : base.broker,
     calendar: src.calendar && typeof src.calendar === 'object' ? { ...base.calendar, ...src.calendar } : base.calendar,
     signals: src.signals && typeof src.signals === 'object' ? { ...base.signals, ...src.signals } : base.signals,
+    notifications: src.notifications && typeof src.notifications === 'object' ? { ...base.notifications, ...src.notifications } : base.notifications,
   };
 }
 

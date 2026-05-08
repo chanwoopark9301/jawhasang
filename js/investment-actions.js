@@ -232,9 +232,17 @@ async function syncInvestmentXSignals() {
 }
 
 async function requestInvestmentNotifications() {
-  if (!('Notification' in window)) return showToast('This browser does not support notifications.');
+  if (!('Notification' in window)) return showToast('이 브라우저는 알림을 지원하지 않아요.');
   const permission = await Notification.requestPermission();
-  showToast(permission === 'granted' ? 'Investment notifications enabled.' : 'Notification permission was not granted.');
+  state.investment = normalizeInvestmentState(state.investment);
+  state.investment.notifications.enabled = permission === 'granted';
+  if (permission === 'granted') {
+    state.investment.notifications.lastPermissionAt = new Date().toISOString();
+    scheduleInvestmentDeskNotifications();
+    sendInvestmentDeskNotification({ force: true, reason: 'enabled' });
+  }
+  saveData({ retries: 0 });
+  showToast(permission === 'granted' ? '투자 알림을 켰어요.' : '알림 권한이 허용되지 않았어요.');
 }
 
 function notifyInvestmentSignal(title, body) {
@@ -246,6 +254,113 @@ function notifyInvestmentSignal(title, body) {
     return;
   }
   new Notification(title, { body });
+}
+
+let _investmentNotificationTimer = null;
+
+function scheduleInvestmentDeskNotifications() {
+  if (_investmentNotificationTimer) {
+    clearTimeout(_investmentNotificationTimer);
+    _investmentNotificationTimer = null;
+  }
+  state.investment = normalizeInvestmentState(state.investment);
+  const prefs = state.investment.notifications || {};
+  if (!prefs.enabled || !('Notification' in window) || Notification.permission !== 'granted') return false;
+
+  const delay = nextInvestmentNotificationDelay(prefs.dailyTime || '08:30');
+  _investmentNotificationTimer = setTimeout(() => {
+    sendInvestmentDeskNotification({ reason: 'daily' });
+    scheduleInvestmentDeskNotifications();
+  }, delay);
+  return true;
+}
+
+function nextInvestmentNotificationDelay(timeText) {
+  const [hRaw, mRaw] = String(timeText || '08:30').split(':');
+  const hour = Math.min(23, Math.max(0, parseInt(hRaw, 10) || 8));
+  const minute = Math.min(59, Math.max(0, parseInt(mRaw, 10) || 30));
+  const now = new Date();
+  const next = new Date(now);
+  next.setHours(hour, minute, 0, 0);
+  if (next <= now) next.setDate(next.getDate() + 1);
+  return Math.max(1000, next.getTime() - now.getTime());
+}
+
+function sendInvestmentDeskNotification(options = {}) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return false;
+  state.investment = normalizeInvestmentState(state.investment);
+  const prefs = state.investment.notifications || {};
+  if (!prefs.enabled && !options.force) return false;
+  const today = new Date().toISOString().slice(0, 10);
+  if (!options.force && prefs.lastDeskNotifiedDate === today) return false;
+
+  const payload = buildInvestmentDeskNotificationPayload();
+  if (!payload) return false;
+  showInvestmentNotification(payload.title, payload.body, {
+    tag: `investment-desk-${today}`,
+    data: { url: '/?view=investment&modal=investment-desk', reason: options.reason || 'manual' },
+  });
+  state.investment.notifications.lastDeskNotifiedDate = today;
+  state.investment.notifications.lastSentAt = new Date().toISOString();
+  saveData({ retries: 0 });
+  return true;
+}
+
+function sendInvestmentDeskTestNotification() {
+  state.investment = normalizeInvestmentState(state.investment);
+  if (!state.investment.notifications.enabled) {
+    requestInvestmentNotifications();
+    return;
+  }
+  const sent = sendInvestmentDeskNotification({ force: true, reason: 'test' });
+  showToast(sent ? '오늘의 데스크 알림을 보냈어요.' : '알림을 보낼 수 없어요.');
+}
+
+function buildInvestmentDeskNotificationPayload() {
+  const desk = buildDailyInvestmentDesk(state.investment);
+  const prefs = state.investment.notifications || {};
+  const risk = prefs.notifyRisks ? (desk.riskSignals || [])[0] : null;
+  const event = prefs.notifyEvents ? (desk.todayEvents || [])[0] : null;
+  const forbidden = (desk.forbiddenActions || []).length;
+  if (risk) {
+    return {
+      title: `오늘의 데스크: ${risk.title || '위험 신호'}`,
+      body: [risk.body, forbidden ? `금지 행동 ${forbidden}개를 먼저 확인하세요.` : '매수 전 원칙을 확인하세요.']
+        .filter(Boolean)
+        .join(' '),
+    };
+  }
+  if (event) {
+    return {
+      title: `오늘 투자 일정: ${event.symbol || ''} ${event.title || investmentDeskEventTypeLabel(event.type)}`.trim(),
+      body: event.body || '발표 전후 행동 기준을 먼저 정하세요.',
+    };
+  }
+  if (prefs.notifyDesk !== false) {
+    const snapshot = desk.accountSnapshot || {};
+    return {
+      title: '오늘의 투자 데스크',
+      body: `총 평가액 ${formatMoney(snapshot.totalValue || 0)} · 금지 행동 ${forbidden}개 · 오늘 일정 ${(desk.todayEvents || []).length}개`,
+    };
+  }
+  return null;
+}
+
+function showInvestmentNotification(title, body, options = {}) {
+  const payload = {
+    body,
+    tag: options.tag || 'investment-desk',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    data: options.data || { url: '/?view=investment&modal=investment-desk' },
+  };
+  if (navigator.serviceWorker?.ready) {
+    navigator.serviceWorker.ready
+      .then(reg => reg.showNotification(title, payload))
+      .catch(() => new Notification(title, payload));
+    return;
+  }
+  new Notification(title, payload);
 }
 
 function clearInvestmentPositionForm() {

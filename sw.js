@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v93'; // Chat driven portfolio snapshot updates
+const CACHE_NAME = 'jip-v94'; // Investment desk local notifications
 
 const STATIC_ASSETS = [
   '/style.css',
@@ -85,11 +85,12 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('notificationclick', event => {
   event.notification.close();
+  const targetUrl = event.notification.data?.url || '/';
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
       const existing = clients.find(client => client.url.includes(self.location.origin));
       if (existing) return existing.focus();
-      return self.clients.openWindow('/');
+      return self.clients.openWindow(targetUrl);
     })
   );
 });

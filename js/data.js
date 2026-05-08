@@ -59,6 +59,9 @@ async function loadData() {
     if (!cached) _useSampleData();
   } finally {
     logger.info('초기 데이터 로드 완료: %dms', Math.round(performance.now() - startedAt));
+    if (typeof scheduleInvestmentDeskNotifications === 'function') {
+      scheduleInvestmentDeskNotifications();
+    }
   }
 }
 
@@ -87,6 +90,7 @@ async function refreshDataFromServer(options = {}) {
     _saveToLocalCache();
     const changed = before !== _dataSignature();
     if (changed && options.render !== false) render();
+    if (changed && typeof scheduleInvestmentDeskNotifications === 'function') scheduleInvestmentDeskNotifications();
     if (changed) logger.info('서버 최신 데이터로 동기화 완료');
     return changed;
   } catch (e) {

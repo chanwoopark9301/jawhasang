@@ -156,6 +156,8 @@ function renderModalInvestmentDesk() {
       <div class="investment-action-row">
         <button class="investment-refresh-btn investment-modal-refresh-btn" onclick="refreshInvestmentMarketData()">현재가 갱신</button>
         <button class="investment-refresh-btn investment-modal-refresh-btn" onclick="syncInvestmentCalendarData()">일정 동기화</button>
+        <button class="investment-refresh-btn investment-modal-refresh-btn" id="investment-desk-notification-permission" onclick="requestInvestmentNotifications()">알림 켜기</button>
+        <button class="investment-refresh-btn investment-modal-refresh-btn" id="investment-desk-notification-test" onclick="sendInvestmentDeskTestNotification()">테스트 알림</button>
       </div>
     </div>
     <div class="investment-desk-modal" id="investment-desk-modal">
