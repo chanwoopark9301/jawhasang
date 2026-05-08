@@ -530,7 +530,16 @@ async function runInvestmentGateFromForm(event) {
     nextSteps: verdict.nextSteps,
     tradeShares,
     tradePrice,
+    tradeKey: typeof buildInvestmentTradeArtifactKey === 'function'
+      ? buildInvestmentTradeArtifactKey(position.symbol, action, tradeShares, tradePrice)
+      : '',
   };
+  if (typeof isDuplicateInvestmentTradeArtifact === 'function' && isDuplicateInvestmentTradeArtifact(position.symbol, action, tradeShares, tradePrice, [reason, verdict.summary].join('\n'))) {
+    closeModal();
+    showToast('이미 반영된 매매 기록이라 중복 적용하지 않았어요.');
+    render();
+    return;
+  }
   state.investment.decisions.push(decision);
   if (decision.verdict === 'allow' && tradeShares > 0 && tradePrice > 0) {
     const tradeResult = applyTradeToPortfolio(position.id, action, tradeShares, tradePrice);

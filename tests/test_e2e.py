@@ -1183,6 +1183,15 @@ class TestInvestmentPartner:
         assert '매도 포인트 그래프' in timeline_text
         assert logged_in_page.locator('.investment-trade-point').count() == 1
         assert '71,400' in logged_in_page.locator('.investment-trade-tooltip').inner_text()
+        graph_bounds = logged_in_page.evaluate("""() => {
+            const modal = document.querySelector('#modal-box').getBoundingClientRect();
+            const graph = document.querySelector('#investment-trade-graph').getBoundingClientRect();
+            return {
+                left: graph.left >= modal.left,
+                right: graph.right <= modal.right + 1,
+            };
+        }""")
+        assert graph_bounds == {'left': True, 'right': True}
         titles = logged_in_page.evaluate("""() =>
             [...document.querySelectorAll('.investment-timeline-item strong')].map(el => el.textContent)
         """)
@@ -2067,6 +2076,22 @@ class TestInvestmentPartner:
             'tradeShares': 1190,
             'tradePrice': 60,
         }
+        before_duplicate = logged_in_page.evaluate("""() => ({
+            decisionCount: state.investment.decisions.length,
+            eventCount: state.investment.events.length,
+            shares: state.investment.positions.find(item => item.symbol === 'IREN').shares,
+            cash: state.investment.positions.find(item => item.assetType === 'cash')?.cashAmount,
+        })""")
+        logged_in_page.locator('#chat-input-bottom').fill('아까 IREN 60불대에 70프로 매도한 거 매매기록에 기록해줘')
+        logged_in_page.locator('#chat-input-bottom').press('Enter')
+        logged_in_page.wait_for_timeout(300)
+        after_duplicate = logged_in_page.evaluate("""() => ({
+            decisionCount: state.investment.decisions.length,
+            eventCount: state.investment.events.length,
+            shares: state.investment.positions.find(item => item.symbol === 'IREN').shares,
+            cash: state.investment.positions.find(item => item.assetType === 'cash')?.cashAmount,
+        })""")
+        assert after_duplicate == before_duplicate
 
         logged_in_page.locator('#investment-menu-portfolio').click()
         logged_in_page.wait_for_selector('#modal-box', timeout=8_000)

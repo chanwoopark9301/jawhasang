@@ -991,17 +991,19 @@ function renderInvestmentSellPointGraph(decisions) {
       <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
         <polyline points="${esc(polyline)}" fill="none" stroke="rgba(37,99,235,.72)" stroke-width="2.4" vector-effect="non-scaling-stroke"></polyline>
       </svg>
-      ${points.map(p => `<button type="button" class="investment-trade-point ${p.realizedGain >= 0 ? 'up' : 'down'}"
-        style="left:${p.x.toFixed(2)}%;top:${p.y.toFixed(2)}%;" aria-label="${esc(p.symbol || '매도')} 매도 포인트">
-        <span></span>
-        <div class="investment-trade-tooltip">
-          <strong>${esc(p.symbol || '-')} · ${formatShares(p.shares)}주 매도</strong>
-          <small>${esc(p.date || '')} · ${formatMoney(p.price)} 체결</small>
-          <small>매도대금 ${formatMoney(p.proceeds)}</small>
-          <small>실현손익 ${formatMoneySigned(p.realizedGain)}</small>
-          <small>Y값 ${formatMoney(p.value)}</small>
-        </div>
-      </button>`).join('')}
+      <div class="investment-trade-point-layer">
+        ${points.map(p => `<button type="button" class="investment-trade-point ${p.realizedGain >= 0 ? 'up' : 'down'}"
+          style="left:${p.x.toFixed(2)}%;top:${p.y.toFixed(2)}%;" aria-label="${esc(p.symbol || '매도')} 매도 포인트">
+          <span></span>
+          <div class="investment-trade-tooltip">
+            <strong>${esc(p.symbol || '-')} · ${formatShares(p.shares)}주 매도</strong>
+            <small>${esc(p.date || '')} · ${formatMoney(p.price)} 체결</small>
+            <small>매도대금 ${formatMoney(p.proceeds)}</small>
+            <small>실현손익 ${formatMoneySigned(p.realizedGain)}</small>
+            <small>Y값 ${formatMoney(p.value)}</small>
+          </div>
+        </button>`).join('')}
+      </div>
       <div class="investment-trade-x-label">매도 포인트</div>
     </div>
   </section>`;

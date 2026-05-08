@@ -250,6 +250,12 @@ function saveInvestmentChatArtifacts(userText, aiText) {
     const action = inferInvestmentAction(combined);
     const position = findInvestmentPositionFromText(combined, symbol);
     const trade = inferInvestmentTradeFill(ask, combined, action, position);
+    if (isDuplicateInvestmentTradeArtifact(position?.symbol || symbol || '', action, trade.shares, trade.price, combined)) {
+      showToast('이미 반영된 매매 기록이라 중복 적용하지 않았어요.');
+      render();
+      renderRightPanel();
+      return;
+    }
     const decision = {
       id: 'id' + Date.now(),
       createdAt: new Date().toISOString(),
@@ -272,6 +278,7 @@ function saveInvestmentChatArtifacts(userText, aiText) {
       nextSteps: [],
       tradeShares: trade.shares,
       tradePrice: trade.price,
+      tradeKey: buildInvestmentTradeArtifactKey(position?.symbol || symbol || '', action, trade.shares, trade.price),
     };
     state.investment.decisions.push(decision);
     if (position && (action === 'buy' || action === 'add' || action === 'sell') && trade.shares > 0 && trade.price > 0) {
@@ -307,6 +314,39 @@ function saveInvestmentChatArtifacts(userText, aiText) {
     render();
     renderRightPanel();
   }
+}
+
+function buildInvestmentTradeArtifactKey(symbol, action, shares, price) {
+  const sym = String(symbol || '').trim().toUpperCase();
+  const act = String(action || '').trim().toLowerCase();
+  const qty = parseInvestmentNumber(shares);
+  const px = parseInvestmentNumber(price);
+  if (!sym || !act || qty <= 0 || px <= 0) return '';
+  return [sym, act, qty.toFixed(4), px.toFixed(2)].join('|');
+}
+
+function isDuplicateInvestmentTradeArtifact(symbol, action, shares, price, text = '') {
+  const key = buildInvestmentTradeArtifactKey(symbol, action, shares, price);
+  if (!key) return false;
+  const normalizedText = normalizeInvestmentTradeText(text);
+  return (state.investment?.decisions || []).some(d => {
+    if (d.tradeKey && d.tradeKey === key) return true;
+    const existingKey = buildInvestmentTradeArtifactKey(d.symbol, d.action, d.tradeShares, d.tradePrice);
+    if (existingKey === key) return true;
+    if (!normalizedText) return false;
+    const existingReason = normalizeInvestmentTradeText(d.reason || '');
+    if (existingReason && (normalizedText.includes(existingReason) || existingReason.includes(normalizedText))) return true;
+    const existingText = normalizeInvestmentTradeText([d.reason, d.summary].filter(Boolean).join('\n'));
+    return existingText && (existingText === normalizedText || existingText.includes(normalizedText) || normalizedText.includes(existingText));
+  });
+}
+
+function normalizeInvestmentTradeText(text) {
+  return String(text || '')
+    .replace(/\s+/g, ' ')
+    .replace(/[₩$,\s]/g, '')
+    .toLowerCase()
+    .slice(0, 500);
 }
 
 function applyInvestmentPortfolioSnapshotFromChat(text) {
