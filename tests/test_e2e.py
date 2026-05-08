@@ -310,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260508-04');
+            const res = await fetch('/js/data.js?v=20260508-05');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -674,6 +674,81 @@ class TestInvestmentPartner:
         page.wait_for_selector('#nav-invest', timeout=8_000)
         page.click('#nav-invest')
         page.wait_for_selector('#investment-view', timeout=8_000)
+
+    def test_investment_chat_persists_by_market_session(self, logged_in_page):
+        self._open_investment(logged_in_page)
+
+        result = logged_in_page.evaluate("""() => {
+            state.investment.chat = [];
+            state.investment.chatSessions = [];
+            state.investment.activeChatSessionId = null;
+            state.currentChatMessages = [
+                { role: 'user', text: 'IREN risk check' },
+                { role: 'ai', text: 'Hold the desk context.' },
+            ];
+            const session = ensureInvestmentChatSession();
+            saveChatHistory();
+            const key = _chatStorageKey();
+            state.currentChatMessages = [];
+            state.investment.chat = [];
+            const restored = loadChatHistory();
+            return {
+                restored,
+                key,
+                sessionId: session.id,
+                activeId: state.investment.activeChatSessionId,
+                text: state.currentChatMessages[0]?.text,
+                storedCount: state.investment.chatSessions.find(s => s.id === session.id)?.messages.length,
+            };
+        }""")
+
+        assert result['restored'] is True
+        assert result['key'].startswith('jip_chat_v2_investment_market-')
+        assert result['sessionId'] == result['activeId']
+        assert result['text'] == 'IREN risk check'
+        assert result['storedCount'] == 2
+
+    def test_investment_market_close_saves_chat_summary_event(self, logged_in_page):
+        self._open_investment(logged_in_page)
+
+        result = logged_in_page.evaluate("""() => {
+            saveData = () => Promise.resolve(true);
+            state.investment = normalizeInvestmentState({
+                events: [],
+                chatSessions: [{
+                    id: 'market-2026-05-07',
+                    date: '2026-05-07',
+                    market: 'US',
+                    startedAt: '2026-05-07T14:00:00.000Z',
+                    updatedAt: '2026-05-07T20:30:00.000Z',
+                    messages: [
+                        { role: 'user', text: 'IREN earnings and sell rule check' },
+                        { role: 'ai', text: 'Keep a risk desk note and watch position size.' },
+                    ],
+                }],
+                activeChatSessionId: 'market-2026-05-07',
+            });
+            const changed = maybeFinalizeInvestmentMarketChatSession(new Date('2026-05-08T21:01:00Z'));
+            const session = state.investment.chatSessions[0];
+            const event = state.investment.events[0];
+            return {
+                changed,
+                eventId: event?.id,
+                eventType: event?.type,
+                source: event?.source,
+                body: event?.body,
+                summarizedAt: session.summarizedAt,
+                summaryEventId: session.summaryEventId,
+            };
+        }""")
+
+        assert result['changed'] is True
+        assert result['eventId'] == 'market-chat-summary-market-2026-05-07'
+        assert result['eventType'] == 'review'
+        assert result['source'] == 'market-chat-session'
+        assert 'IREN' in result['body']
+        assert result['summarizedAt']
+        assert result['summaryEventId'] == result['eventId']
 
     def test_investment_nav_renders_chat_first_layout(self, logged_in_page):
         self._open_investment(logged_in_page)

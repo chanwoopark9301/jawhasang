@@ -62,6 +62,9 @@ async function loadData() {
     if (typeof scheduleInvestmentDeskNotifications === 'function') {
       scheduleInvestmentDeskNotifications();
     }
+    if (typeof maybeFinalizeInvestmentMarketChatSession === 'function') {
+      maybeFinalizeInvestmentMarketChatSession();
+    }
   }
 }
 

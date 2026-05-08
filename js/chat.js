@@ -945,9 +945,92 @@ function _replyModePrompt(mode) {
 // 대화 내용 localStorage 저장/복원 (새로고침·탭 전환 후에도 유지)
 // ---------------------------------------------------------------------------
 
+function investmentNewYorkParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    weekday: 'short',
+  }).formatToParts(date).reduce((acc, part) => {
+    acc[part.type] = part.value;
+    return acc;
+  }, {});
+  return {
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    weekday: parts.weekday,
+    hour: Number(parts.hour || 0),
+    minute: Number(parts.minute || 0),
+  };
+}
+
+function previousInvestmentWeekday(dateText) {
+  const d = new Date(`${dateText}T12:00:00Z`);
+  do {
+    d.setUTCDate(d.getUTCDate() - 1);
+  } while ([0, 6].includes(d.getUTCDay()));
+  return d.toISOString().slice(0, 10);
+}
+
+function investmentMarketSessionDate(date = new Date()) {
+  const ny = investmentNewYorkParts(date);
+  if (ny.weekday === 'Sat' || ny.weekday === 'Sun') return previousInvestmentWeekday(ny.date);
+  return ny.date;
+}
+
+function isAfterInvestmentMarketClose(date = new Date()) {
+  const ny = investmentNewYorkParts(date);
+  if (ny.weekday === 'Sat' || ny.weekday === 'Sun') return true;
+  return ny.hour > 16 || (ny.hour === 16 && ny.minute >= 0);
+}
+
+function investmentChatSessionId(date = investmentMarketSessionDate()) {
+  return `market-${date}`;
+}
+
+function ensureInvestmentChatSession(date = new Date()) {
+  state.investment = normalizeInvestmentState(state.investment);
+  const sessionDate = investmentMarketSessionDate(date);
+  const sessionId = investmentChatSessionId(sessionDate);
+  let session = state.investment.chatSessions.find(s => s.id === sessionId);
+
+  if (!session) {
+    session = {
+      id: sessionId,
+      date: sessionDate,
+      market: 'US',
+      startedAt: new Date().toISOString(),
+      updatedAt: null,
+      closedAt: null,
+      summarizedAt: null,
+      summaryEventId: null,
+      messages: [],
+    };
+    if (!state.investment.chatSessions.length && Array.isArray(state.investment.chat) && state.investment.chat.length) {
+      session.messages = _sanitizeChatHistory(state.investment.chat);
+      session.updatedAt = new Date().toISOString();
+    }
+    state.investment.chatSessions.push(session);
+  }
+
+  state.investment.activeChatSessionId = session.id;
+  return session;
+}
+
+function getActiveInvestmentChatSession() {
+  state.investment = normalizeInvestmentState(state.investment);
+  return state.investment.chatSessions.find(s => s.id === state.investment.activeChatSessionId) || ensureInvestmentChatSession();
+}
+
 function _chatStorageKey() {
   const id = state.selTopic || state.selStudent;
-  if (state.view === 'investment') return 'jip_chat_v2_investment';
+  if (state.view === 'investment') {
+    const session = ensureInvestmentChatSession();
+    return `jip_chat_v2_investment_${session.id}`;
+  }
   return id ? `jip_chat_v2_${id}` : null;
 }
 
@@ -958,9 +1041,13 @@ function saveChatHistory() {
     localStorage.setItem(key, JSON.stringify(state.currentChatMessages));
     if (state.view === 'investment') {
       state.investment = normalizeInvestmentState(state.investment);
-      state.investment.chat = [...state.currentChatMessages];
+      const session = getActiveInvestmentChatSession();
+      session.messages = _sanitizeChatHistory(state.currentChatMessages || []);
+      session.updatedAt = new Date().toISOString();
+      state.investment.chat = [...session.messages];
       if (typeof _saveToLocalCache === 'function') _saveToLocalCache();
       saveData();
+      maybeFinalizeInvestmentMarketChatSession();
     }
   } catch (e) { /* 용량 초과 무시 */ }
 }
@@ -970,8 +1057,11 @@ function loadChatHistory() {
   if (!key) return false;
   if (state.view === 'investment') {
     state.investment = normalizeInvestmentState(state.investment);
-    if (state.investment.chat.length) {
-      state.currentChatMessages = _sanitizeChatHistory(state.investment.chat);
+    const session = getActiveInvestmentChatSession();
+    if (Array.isArray(session.messages) && session.messages.length) {
+      state.currentChatMessages = _sanitizeChatHistory(session.messages);
+      state.investment.chat = [...state.currentChatMessages];
+      maybeFinalizeInvestmentMarketChatSession();
       return state.currentChatMessages.length > 0;
     }
   }
@@ -983,12 +1073,29 @@ function loadChatHistory() {
       const sanitized = _sanitizeChatHistory(msgs);
       if (sanitized.length) {
         state.currentChatMessages = sanitized;
+        if (state.view === 'investment') {
+          const session = getActiveInvestmentChatSession();
+          session.messages = [...sanitized];
+          session.updatedAt = new Date().toISOString();
+          state.investment.chat = [...sanitized];
+          maybeFinalizeInvestmentMarketChatSession();
+        }
         if (sanitized.length !== msgs.length) saveChatHistory();
         return true;
       }
       localStorage.removeItem(key);
     }
   } catch (e) { /* 파싱 오류 무시 */ }
+  if (state.view === 'investment' && state.investment.chat.length) {
+    const legacy = _sanitizeChatHistory(state.investment.chat);
+    if (legacy.length) {
+      const session = getActiveInvestmentChatSession();
+      session.messages = [...legacy];
+      session.updatedAt = new Date().toISOString();
+      state.currentChatMessages = legacy;
+      return true;
+    }
+  }
   return false;
 }
 
@@ -997,11 +1104,81 @@ function _sanitizeChatHistory(msgs) {
     '대화 준비가 되었어요!',
     '받아쓰기 모드예요. 정리 안 된 말 그대로 남겨도 괜찮아요.',
   ];
-  const cleaned = msgs
+  const cleaned = (Array.isArray(msgs) ? msgs : [])
     .filter(m => m && typeof m.text === 'string')
     .filter(m => !(m.role === 'system' && starterTexts.includes(m.text.trim())));
   while (cleaned.length && cleaned[0].role !== 'user') cleaned.shift();
   return cleaned;
+}
+
+function maybeFinalizeInvestmentMarketChatSession(date = new Date()) {
+  if (!state.investment) return false;
+  state.investment = normalizeInvestmentState(state.investment);
+  const currentSessionDate = investmentMarketSessionDate(date);
+  const afterClose = isAfterInvestmentMarketClose(date);
+  let changed = false;
+
+  state.investment.chatSessions.forEach(session => {
+    const canClose = session.date < currentSessionDate || (session.date === currentSessionDate && afterClose);
+    const messages = _sanitizeChatHistory(session.messages || []);
+    const hasNewMessages = !session.summarizedAt || (session.updatedAt && new Date(session.updatedAt) > new Date(session.summarizedAt));
+    if (!canClose || !hasNewMessages || messages.filter(m => m.role !== 'system').length < 2) return;
+
+    const eventId = session.summaryEventId || `market-chat-summary-${session.id}`;
+    const exists = state.investment.events.some(e => e.id === eventId);
+    const nextEvent = {
+      id: eventId,
+      date: session.date,
+      type: 'review',
+      symbol: inferInvestmentSymbol(messages.map(m => m.text).join('\n')),
+      title: `${session.date} 장 마감 대화 요약`,
+      body: buildInvestmentChatSessionSummary(messages, session.date),
+      severity: 'info',
+      source: 'market-chat-session',
+    };
+    if (!exists) state.investment.events.push(nextEvent);
+    else state.investment.events = state.investment.events.map(e => e.id === eventId ? { ...e, ...nextEvent } : e);
+    session.closedAt = session.closedAt || date.toISOString();
+    session.summarizedAt = date.toISOString();
+    session.summaryEventId = eventId;
+    changed = true;
+  });
+
+  if (changed) {
+    if (typeof _saveToLocalCache === 'function') _saveToLocalCache();
+    saveData();
+    if (typeof renderRightPanel === 'function') renderRightPanel();
+    if (typeof showToast === 'function') showToast('장 마감 대화를 투자 타임라인에 정리했어요.');
+  }
+  return changed;
+}
+
+function buildInvestmentChatSessionSummary(messages, dateText) {
+  const userLines = messages
+    .filter(m => m.role === 'user')
+    .map(m => String(m.text || '').trim())
+    .filter(Boolean);
+  const aiLines = messages
+    .filter(m => m.role === 'ai')
+    .map(m => String(m.text || '').trim())
+    .filter(Boolean);
+  const keywordRe = /매수|매도|손절|익절|원칙|뉴스|공시|실적|포트폴리오|현금|비중|리스크|IREN|CRCL|QQQM|ETH|BTC|FOMC|CPI/i;
+  const candidates = userLines.filter(line => keywordRe.test(line)).slice(-8);
+  const lastAi = aiLines.slice(-3).map(line => line.split(/\n+/).slice(0, 4).join('\n')).join('\n\n');
+  const summaryLines = [
+    `## ${dateText} 장중 대화 요약`,
+    '',
+    `- 사용자 발화 ${userLines.length}개, AI 응답 ${aiLines.length}개를 기준으로 정리했습니다.`,
+  ];
+  if (candidates.length) {
+    summaryLines.push('', '### 저장 후보 발화');
+    candidates.forEach(line => summaryLines.push(`- ${line.replace(/\s+/g, ' ').slice(0, 180)}`));
+  }
+  if (lastAi) {
+    summaryLines.push('', '### 마지막 판단 맥락', lastAi.slice(0, 1200));
+  }
+  summaryLines.push('', '> 이 항목은 장 마감 후 자동 생성된 대화 세션 요약입니다. 실제 매매 반영은 매매기록/포트폴리오 이벤트를 기준으로 다시 확인하세요.');
+  return summaryLines.join('\n');
 }
 
 // ---------------------------------------------------------------------------

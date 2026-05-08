@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v94'; // Investment desk local notifications
+const CACHE_NAME = 'jip-v95'; // Investment market session chat continuity
 
 const STATIC_ASSETS = [
   '/style.css',
