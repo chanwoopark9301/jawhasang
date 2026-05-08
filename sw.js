@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v91'; // Unified investment timeline and sell graph
+const CACHE_NAME = 'jip-v92'; // Desk rules integration and timeline menu
 
 const STATIC_ASSETS = [
   '/style.css',

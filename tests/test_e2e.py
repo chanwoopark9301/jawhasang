@@ -310,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260508-01');
+            const res = await fetch('/js/data.js?v=20260508-02');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -715,6 +715,7 @@ class TestInvestmentPartner:
         self._open_investment(logged_in_page)
 
         logged_in_page.evaluate("""() => {
+            const today = new Date().toISOString().slice(0, 10);
             state.investment.positions = [{
                 id: 'ip-chart-1',
                 symbol: 'IREN',
@@ -733,6 +734,8 @@ class TestInvestmentPartner:
             }];
             render();
         }""")
+        assert logged_in_page.locator('#investment-menu-plan').count() == 0
+        assert logged_in_page.locator('#investment-menu-timeline').is_visible()
 
         logged_in_page.locator('#investment-menu-portfolio').click()
         logged_in_page.wait_for_selector('#investment-portfolio-modal', timeout=8_000)
@@ -785,11 +788,11 @@ class TestInvestmentPartner:
         assert logged_in_page.locator('.investment-timeline-item.news .chat-markdown a').get_attribute('href') == 'https://example.com/news'
         logged_in_page.locator('.modal-close').click()
 
-        logged_in_page.locator('#investment-menu-plan').click()
-        logged_in_page.locator('#investment-hub-rules').click()
+        logged_in_page.locator('#investment-menu-desk').click()
         logged_in_page.wait_for_selector('#investment-save-rules', state='attached', timeout=8_000)
         rules_text = logged_in_page.locator('#modal-box').inner_text()
-        assert '트레이딩 플랜' in rules_text
+        assert '오늘의 투자 데스크' in rules_text
+        assert '오늘 적용할 투자 원칙' in rules_text
         assert '하루 손실' in rules_text
         assert '핵심 원칙' in rules_text
         assert logged_in_page.locator('.investment-rules-overview').is_visible()
@@ -803,8 +806,7 @@ class TestInvestmentPartner:
         logged_in_page.locator('#investment-save-rules').click()
         logged_in_page.wait_for_function("() => state.investment.rules.riskPerTrade === 0.8", timeout=8_000)
 
-        logged_in_page.locator('#investment-menu-plan').click()
-        logged_in_page.locator('#investment-hub-decisions').click()
+        logged_in_page.locator('#investment-menu-timeline').click()
         logged_in_page.wait_for_selector('#investment-gate-form', state='attached', timeout=8_000)
         journal_text = logged_in_page.locator('#modal-box').inner_text()
         assert '투자 타임라인' in journal_text
@@ -820,6 +822,7 @@ class TestInvestmentPartner:
         self._open_investment(logged_in_page)
 
         logged_in_page.evaluate("""() => {
+            const today = new Date().toISOString().slice(0, 10);
             state.investment.positions = [{
                 id: 'ip-iren',
                 symbol: 'IREN',
@@ -843,7 +846,7 @@ class TestInvestmentPartner:
             state.investment.events = [{
                 id: 'evt-iren-earnings',
                 type: 'earnings',
-                date: '2026-05-07',
+                date: today,
                 symbol: 'IREN',
                 title: 'IREN earnings',
                 body: 'Q3 FY26 after market close',
@@ -871,10 +874,7 @@ class TestInvestmentPartner:
         assert 'Cash' in modal_text or '$71,400' in modal_text
         assert logged_in_page.locator('#investment-desk-modal .investment-alert.block').count() >= 1
 
-        desk = logged_in_page.evaluate("""() => buildDailyInvestmentDesk(
-            state.investment,
-            new Date('2026-05-07T00:00:00.000Z')
-        )""")
+        desk = logged_in_page.evaluate("() => buildDailyInvestmentDesk(state.investment)")
         labels = ' '.join(item['label'] for item in desk['forbiddenActions'])
         assert 'IREN' in labels
         assert desk['accountSnapshot']['cashValue'] == 71400
@@ -1467,8 +1467,7 @@ class TestInvestmentPartner:
 
         logged_in_page.evaluate("() => { state.investment.rules.maxPositionWeight = 30; render(); }")
 
-        logged_in_page.locator('#investment-menu-plan').click()
-        logged_in_page.locator('#investment-hub-decisions').click()
+        logged_in_page.locator('#investment-menu-timeline').click()
         position_id = logged_in_page.evaluate("() => state.investment.positions.at(-1).id")
         logged_in_page.locator('#ig-position').select_option(position_id)
         logged_in_page.locator('#ig-action').select_option('add')
@@ -1509,8 +1508,7 @@ class TestInvestmentPartner:
             render();
         }""")
 
-        logged_in_page.locator('#investment-menu-plan').click()
-        logged_in_page.locator('#investment-hub-decisions').click()
+        logged_in_page.locator('#investment-menu-timeline').click()
         logged_in_page.locator('#investment-gate-tools summary').click()
         logged_in_page.locator('#ig-position').select_option('ip-trade-sync')
         logged_in_page.locator('#ig-action').select_option('add')
@@ -1911,8 +1909,7 @@ class TestInvestmentPartner:
         assert '510' in logged_in_page.locator('#modal-box').inner_text()
         logged_in_page.locator('.modal-close').click()
 
-        logged_in_page.locator('#investment-menu-plan').click()
-        logged_in_page.locator('#investment-hub-decisions').click()
+        logged_in_page.locator('#investment-menu-timeline').click()
         logged_in_page.wait_for_selector('.investment-timeline-item.decision .chat-markdown table', timeout=8_000)
         assert logged_in_page.locator('.investment-timeline-item.decision .chat-markdown h5').inner_text() == 'IREN 매매 기록'
         assert '약 2,500만원' in logged_in_page.locator('.investment-timeline-item.decision .chat-markdown table').inner_text()

@@ -162,7 +162,7 @@ class TestServiceWorker:
     def test_sw_cache_version_updated_for_reply_mode_ui(self):
         """새 UI 배포 시 오래된 JS/CSS 캐시가 남지 않도록 캐시 버전을 올려야 함."""
         sw = self._sw()
-        assert "CACHE_NAME = 'jip-v91'" in sw, "서비스워커 캐시 버전이 최신이 아님"
+        assert "CACHE_NAME = 'jip-v92'" in sw, "서비스워커 캐시 버전이 최신이 아님"
 
     def test_sw_bypasses_api_routes(self):
         """/api/ 경로는 캐시 없이 네트워크로 처리해야 함."""
@@ -189,14 +189,14 @@ class TestIndexHTML:
     def test_static_assets_have_cache_busting_version(self):
         """PWA/Safari가 오래된 JS/CSS를 계속 쓰지 않도록 정적 자산에 버전을 붙인다."""
         html = read_html()
-        assert 'style.css?v=20260508-01' in html, "CSS 캐시 버스터 없음"
-        assert 'js/data.js?v=20260508-01' in html, "data.js 캐시 버스터 없음"
-        assert 'js/chat.js?v=20260508-01' in html, "chat.js 캐시 버스터 없음"
-        assert 'js/investment-format.js?v=20260508-01' in html, "investment-format.js 캐시 버스터 없음"
-        assert 'js/investment-portfolio.js?v=20260508-01' in html, "investment-portfolio.js 캐시 버스터 없음"
-        assert 'js/investment-desk.js?v=20260508-01' in html, "investment-desk.js 캐시 버스터 없음"
-        assert 'js/investment-actions.js?v=20260508-01' in html, "investment-actions.js 캐시 버스터 없음"
-        assert 'js/investment-api.js?v=20260508-01' in html, "investment-api.js 캐시 버스터 없음"
+        assert 'style.css?v=20260508-02' in html, "CSS 캐시 버스터 없음"
+        assert 'js/data.js?v=20260508-02' in html, "data.js 캐시 버스터 없음"
+        assert 'js/chat.js?v=20260508-02' in html, "chat.js 캐시 버스터 없음"
+        assert 'js/investment-format.js?v=20260508-02' in html, "investment-format.js 캐시 버스터 없음"
+        assert 'js/investment-portfolio.js?v=20260508-02' in html, "investment-portfolio.js 캐시 버스터 없음"
+        assert 'js/investment-desk.js?v=20260508-02' in html, "investment-desk.js 캐시 버스터 없음"
+        assert 'js/investment-actions.js?v=20260508-02' in html, "investment-actions.js 캐시 버스터 없음"
+        assert 'js/investment-api.js?v=20260508-02' in html, "investment-api.js 캐시 버스터 없음"
 
     def test_sw_registration_in_html(self):
         """index.html 에 SW 등록 코드가 있어야 함."""

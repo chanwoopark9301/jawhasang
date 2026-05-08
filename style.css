@@ -3977,12 +3977,12 @@ body { height: var(--app-height, 100dvh); }
   align-items: center;
 }
 
-.modal-box.modal-investment-portfolio,
-.modal-box.modal-investment-desk {
+.modal-box.modal-investment-portfolio {
   width: min(1080px, 95vw);
   padding: 26px;
 }
 
+.modal-box.modal-investment-desk,
 .modal-box.modal-investment-rules,
 .modal-box.modal-investment-news,
 .modal-box.modal-investment-decisions,

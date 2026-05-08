@@ -174,6 +174,21 @@ function renderModalInvestmentDesk() {
         <p>${esc((desk.riskSignals || [])[0]?.body || '기록된 계좌 기준으로 즉시 차단할 위험은 크지 않습니다.')}</p>
       </section>
 
+      <section class="investment-portfolio-alerts">
+        <div class="investment-portfolio-list-head">
+          <strong>오늘 적용할 투자 원칙</strong>
+          <span>대화에서 정한 원칙을 오늘의 판단 기준으로 바로 확인합니다.</span>
+        </div>
+        ${renderInvestmentRulesSummary(inv.rules)}
+        <details class="investment-manage-tools investment-manual-tools" id="investment-rules-edit-tools">
+          <summary>
+            <span>원칙 수동 편집</span>
+            <small>숫자와 원칙을 직접 수정</small>
+          </summary>
+          ${renderInvestmentRulesForm(inv.rules)}
+        </details>
+      </section>
+
       <section class="investment-portfolio-status">
         <div>
           <h4>금지 행동</h4>
@@ -590,18 +605,7 @@ function renderModalInvestmentResearch() {
 }
 
 function renderModalInvestmentRules() {
-  return `
-    <button class="modal-close" onclick="closeModal()">×</button>
-    <div class="modal-title">트레이딩 플랜</div>
-    <div class="investment-modal-note">대화창에서 정한 원칙을 읽고 확인하는 화면입니다. 숫자와 문장을 직접 고쳐야 할 때만 수동 편집을 열어주세요.</div>
-    ${renderInvestmentRulesSummary(state.investment.rules)}
-    <details class="investment-manage-tools investment-manual-tools" id="investment-rules-edit-tools">
-      <summary>
-        <span>수동 편집</span>
-        <small>숫자와 원칙을 직접 수정</small>
-      </summary>
-      ${renderInvestmentRulesForm(state.investment.rules)}
-    </details>`;
+  return renderModalInvestmentDesk();
 }
 
 function renderInvestmentGateForm(positions) {
