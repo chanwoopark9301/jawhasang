@@ -685,41 +685,38 @@ body {
 
 .cal-events {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px;
   min-width: 0;
+  min-height: 12px;
+  margin-top: auto;
 }
 
-.cal-event,
+.cal-event-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.cal-event-dot-record {
+  background: #1D9E75;
+}
+
+.cal-event-dot-session {
+  background: #EF9F27;
+}
+
+.cal-event-dot-invest {
+  background: #2563EB;
+}
+
 .cal-event-more {
-  border-radius: 3px;
   font-size: 10px;
-  line-height: 1.35;
-  padding: 1px 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1;
   white-space: nowrap;
-  color: var(--color-text-secondary);
-}
-
-.cal-event-record {
-  background: rgba(29, 158, 117, 0.12);
-  color: #0F6E56;
-}
-
-.cal-event-session {
-  background: rgba(239, 159, 39, 0.16);
-  color: #9A5D00;
-}
-
-.cal-event-invest {
-  background: rgba(37, 99, 235, 0.12);
-  color: #1D4ED8;
-}
-
-.cal-event-more {
   color: var(--color-text-tertiary);
-  padding-left: 2px;
 }
 
 .chat-markdown {
@@ -1980,7 +1977,6 @@ a,
 .tab-btn,
 .context-chip,
 .cal-day,
-.mnav-btn,
 .role-pill,
 .reply-mode-option,
 .analyze-btn,
@@ -1997,7 +1993,6 @@ button,
 .nav-item,
 .sub-item,
 .sub-action-btn,
-.mnav-btn,
 .tab-btn,
 .context-chip {
   -webkit-user-select: none;
@@ -2012,54 +2007,6 @@ body { height: var(--app-height, 100dvh); }
 .app { height: var(--app-height, 100dvh); }
 .chat-wrap {
   height: calc(var(--app-height, 100dvh) - 280px);
-}
-
-/* =============================================
-   모바일 하단 내비게이션
-   ============================================= */
-.mobile-nav {
-  display: none;
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 90;
-  height: calc(52px + env(safe-area-inset-bottom));
-  padding-bottom: env(safe-area-inset-bottom);
-  border-top: 0.5px solid var(--color-border);
-  background: var(--color-bg-secondary);
-}
-
-.mnav-btn {
-  flex: 1;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-family: var(--font);
-  color: var(--color-text-secondary);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  padding: 6px 4px;
-  transition: color 0.15s;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.mnav-btn.active {
-  color: var(--color-accent);
-  font-weight: 600;
-}
-
-.mnav-icon {
-  font-size: 17px;
-  line-height: 1;
-}
-
-.mnav-label {
-  font-size: 10px;
-  letter-spacing: 0.02em;
 }
 
 /* =============================================
@@ -2103,20 +2050,9 @@ body { height: var(--app-height, 100dvh); }
   /* 모바일에서 헤더 토글 버튼 표시 */
   .mobile-only { display: flex !important; }
 
-  /* 하단 내비게이션 표시 */
-  .mobile-nav {
-    display: flex;
-    flex-shrink: 0;
-  }
-
-  /* 메인에 하단 내비게이션 높이만큼 패딩 */
-  .main {
-    padding-bottom: calc(52px + env(safe-area-inset-bottom));
-  }
-
-  /* 채팅 높이 — 하단 내비게이션(52px) 고려 (키보드는 transform으로 처리) */
+  /* 채팅 높이 — 키보드는 transform으로 처리 */
   .chat-wrap {
-    height: calc(var(--app-height, 100dvh) - 52px - 280px);
+    height: calc(var(--app-height, 100dvh) - 280px);
     min-height: 200px;
   }
 

@@ -22,8 +22,6 @@ function renderCalendar() {
   state.myRecords.forEach(r => { recordCnt[r.date] = (recordCnt[r.date] || 0) + 1; });
   const investCnt = {};
   (state.investment?.events || []).forEach(e => { investCnt[e.date] = (investCnt[e.date] || 0) + 1; });
-  const topicById = Object.fromEntries((state.myTopics || []).map(t => [t.id, t]));
-  const studentById = Object.fromEntries((state.students || []).map(s => [s.id, s]));
 
   const days = [];
   for (let i = firstDay - 1; i >= 0; i--) {
@@ -44,24 +42,15 @@ function renderCalendar() {
     const rc = recordCnt[d.ds]  || 0;
     const ic = investCnt[d.ds]  || 0;
     const items = [
-      ...state.myRecords.filter(r => r.date === d.ds).map(r => ({
-        cls: 'record',
-        text: `${topicById[r.topicId]?.title || '일상'} ${r.recordNum || ''}`.trim(),
-      })),
-      ...state.sessions.filter(s => s.date === d.ds).map(s => ({
-        cls: 'session',
-        text: `${studentById[s.studentId]?.alias || '상담'} ${s.sessionNum || ''}회기`,
-      })),
-      ...(state.investment?.events || []).filter(e => e.date === d.ds).map(e => ({
-        cls: 'invest',
-        text: `${e.symbol || '투자'} ${e.title || '점검'}`,
-      })),
+      ...state.myRecords.filter(r => r.date === d.ds).map(r => ({ cls: 'record' })),
+      ...state.sessions.filter(s => s.date === d.ds).map(s => ({ cls: 'session' })),
+      ...(state.investment?.events || []).filter(e => e.date === d.ds).map(e => ({ cls: 'invest' })),
     ];
-    const visibleItems = items.slice(0, 3).map(item =>
-      `<div class="cal-event cal-event-${item.cls}" title="${esc(item.text)}">${esc(item.text)}</div>`
+    const dots = items.slice(0, 6).map(item =>
+      `<span class="cal-event-dot cal-event-dot-${item.cls}"></span>`
     ).join('');
-    const more = items.length > 3 ? `<div class="cal-event-more">+${items.length - 3}</div>` : '';
-    const eventsHTML = items.length ? `<div class="cal-events">${visibleItems}${more}</div>` : '';
+    const more = items.length > 6 ? `<span class="cal-event-more">+${items.length - 6}</span>` : '';
+    const eventsHTML = items.length ? `<div class="cal-events" title="${sc} 상담 · ${rc} 일상 · ${ic} 투자">${dots}${more}</div>` : '';
     return `<div class="cal-day${d.other?' other-month':''}${d.ds===today?' today':''}${d.ds===state.calDate?' selected':''}"
       onclick="openCalPopup('${d.ds}')">
       <div class="cal-day-num">${d.day}</div>${eventsHTML}
@@ -153,7 +142,7 @@ function buildCalPopupHTML(date) {
     : '<div class="popup-item-empty">없음</div>';
 
   const investItems = dayInvests.length
-    ? dayInvests.map(e => `<div class="popup-item popup-item-invest" onclick="calPopupGoInvestment('${e.id}')">· ${esc(e.symbol || '')} ${esc(e.title || '투자 이벤트')}</div>`).join('')
+    ? dayInvests.map(e => `<div class="popup-item popup-item-invest" onclick="calPopupGoInvestment('${e.id}')">· ${esc(calendarInvestmentEventLabel(e))}</div>`).join('')
     : '<div class="popup-item-empty">없음</div>';
 
   return `
@@ -185,6 +174,25 @@ function buildCalPopupHTML(date) {
       <button class="popup-add-btn popup-add-session" onclick="calPopupAddSession('${date}')">+ 상담</button>
       <button class="popup-add-btn popup-add-invest" onclick="calPopupAddInvestment('${date}')">+ 투자 점검</button>
     </div>`;
+}
+
+function calendarInvestmentEventLabel(event) {
+  const symbol = String(event?.symbol || '').trim();
+  const title = String(event?.title || '투자 이벤트').trim();
+  if (!symbol) return title;
+  if (!title) return symbol;
+  let clean = title;
+  for (let i = 0; i < 4; i++) {
+    const upper = clean.toUpperCase();
+    const sym = symbol.toUpperCase();
+    if (upper === sym) return symbol;
+    if (upper.startsWith(`${sym} · `)) clean = clean.slice(sym.length + 3).trim();
+    else if (upper.startsWith(`${sym} - `)) clean = clean.slice(sym.length + 3).trim();
+    else if (upper.startsWith(`${sym}-`)) clean = clean.slice(sym.length + 1).trim();
+    else if (upper.startsWith(`${sym} `)) clean = clean.slice(sym.length).trim();
+    else break;
+  }
+  return clean ? `${symbol} ${clean}` : symbol;
 }
 
 function calPopupGoSession(id) {

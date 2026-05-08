@@ -129,11 +129,7 @@ function closePanels() {
 }
 
 function _updateMobileNavActive() {
-  const sbOpen = document.getElementById('sidebar')?.classList.contains('panel-open');
-  const aiOpen = document.getElementById('right-panel')?.classList.contains('panel-open');
-  document.getElementById('mnav-list')?.classList.toggle('active', !!sbOpen);
-  document.getElementById('mnav-main')?.classList.toggle('active', !sbOpen && !aiOpen);
-  document.getElementById('mnav-ai')?.classList.toggle('active', !!aiOpen);
+  // 모바일 하단 상태바는 제거됨. 패널 상태는 backdrop/sidebar class만으로 관리한다.
 }
 
 // ---------------------------------------------------------------------------
@@ -163,10 +159,6 @@ function _initVisualViewport() {
 
     // --kb-offset → CSS에서 input-area transform + chat-messages padding에 사용
     document.documentElement.style.setProperty('--kb-offset', hasKeyboard ? kbHeight + 'px' : '0px');
-
-    // 모바일 하단 내비게이션은 키보드가 올라오면 숨김 (transform으로 처리됨)
-    const mobileNav = document.getElementById('mobile-nav');
-    if (mobileNav) mobileNav.style.opacity = hasKeyboard ? '0' : '';
 
     // 키보드 완전히 올라온 후 대화창 맨 아래로 (iOS 키보드 애니메이션 ~300ms)
     if (hasKeyboard) {

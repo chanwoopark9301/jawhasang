@@ -577,7 +577,7 @@ async function runInvestmentGateFromForm(event) {
     date: new Date().toISOString().split('T')[0],
     type: decision.verdict === 'allow' ? 'trade' : 'alert',
     symbol: position.symbol,
-    title: `${position.symbol} ${decision.label}`,
+    title: stripLeadingInvestmentSymbol(decision.label || investmentActionLabel(action), position.symbol) || investmentActionLabel(action),
     body: decision.summary,
     severity: decision.verdict === 'block' ? 'block' : decision.verdict === 'cooldown' ? 'watch' : 'info',
     linkedDecisionId: decision.id,

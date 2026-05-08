@@ -69,6 +69,7 @@ class TestHomePage:
         """초기 메인 화면은 캘린더이고 상단 모드 허브는 없어야 함."""
         logged_in_page.wait_for_selector('.cal-grid', timeout=8_000)
         assert logged_in_page.locator('.calendar-hub').count() == 0
+        assert logged_in_page.locator('#mobile-nav').count() == 0
 
     def test_logo_returns_to_calendar_home(self, logged_in_page):
         logged_in_page.click('#nav-invest')
@@ -1141,7 +1142,7 @@ class TestInvestmentPartner:
                 date: '2026-05-06',
                 type: 'event',
                 symbol: 'IREN',
-                title: 'IREN earnings',
+                title: 'IREN IREN 매도',
                 body: 'Q3 earnings call',
                 severity: 'info',
             }];
@@ -1185,8 +1186,9 @@ class TestInvestmentPartner:
         titles = logged_in_page.evaluate("""() =>
             [...document.querySelectorAll('.investment-timeline-item strong')].map(el => el.textContent)
         """)
-        assert 'IREN earnings' in titles
-        assert 'IREN · IREN earnings' not in titles
+        assert 'IREN 매도' in titles
+        assert 'IREN IREN 매도' not in titles
+        assert 'IREN · IREN IREN 매도' not in titles
 
     def test_investment_ai_compare_modal_renders_two_provider_cards(self, logged_in_page):
         self._open_investment(logged_in_page)
@@ -1520,10 +1522,12 @@ class TestInvestmentPartner:
             timeout=8_000,
         )
         logged_in_page.evaluate("() => setView('calendar')")
-        logged_in_page.wait_for_selector('.cal-event-invest', timeout=8_000)
+        logged_in_page.wait_for_selector('.cal-event-dot-invest', timeout=8_000)
         calendar_text = logged_in_page.locator('.calendar').inner_text()
-        assert 'IREN 실적 발표' in calendar_text
-        assert 'CPI' in calendar_text
+        assert 'IREN 실적 발표' not in calendar_text
+        assert 'CPI' not in calendar_text
+        assert logged_in_page.locator('.cal-event').count() == 0
+        assert logged_in_page.locator('.cal-event-dot-invest').count() >= 2
 
     def test_refresh_data_from_server_updates_investment_positions(self, logged_in_page):
         self._open_investment(logged_in_page)
@@ -1627,6 +1631,7 @@ class TestInvestmentPartner:
         logged_in_page.evaluate("() => { state.investment.rules.maxPositionWeight = 30; render(); }")
 
         logged_in_page.locator('#investment-menu-timeline').click()
+        logged_in_page.locator('#investment-gate-tools summary').click()
         position_id = logged_in_page.evaluate("() => state.investment.positions.at(-1).id")
         logged_in_page.locator('#ig-position').select_option(position_id)
         logged_in_page.locator('#ig-action').select_option('add')
@@ -1648,7 +1653,7 @@ class TestInvestmentPartner:
         assert result['eventType'] == 'alert'
 
         logged_in_page.evaluate("() => setView('calendar')")
-        logged_in_page.wait_for_selector('.cal-event-invest', timeout=8_000)
+        logged_in_page.wait_for_selector('.cal-event-dot-invest', timeout=8_000)
 
     def test_allowed_trade_updates_portfolio_position(self, logged_in_page):
         self._open_investment(logged_in_page)

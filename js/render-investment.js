@@ -830,7 +830,7 @@ function renderModalInvestmentTimeline() {
     date: (d.createdAt || '').slice(0, 10) || '',
     type: 'decision',
     symbol: d.symbol || '',
-    title: `${investmentActionLabel(d.action)} · ${d.label || '판단'}`,
+    title: `${investmentActionLabel(d.action)} · ${stripLeadingInvestmentSymbol(d.label || '판단', d.symbol || '') || '판단'}`,
     body: d.summary || d.reason || '',
     severity: d.verdict || 'info',
   }));
@@ -876,12 +876,32 @@ function investmentTimelineDisplayTitle(item) {
   const title = String(item?.title || '').trim();
   if (!symbol) return title || '투자 이벤트';
   if (!title) return symbol;
-  const normalizedTitle = title.toUpperCase();
-  const normalizedSymbol = symbol.toUpperCase();
-  if (normalizedTitle === normalizedSymbol || normalizedTitle.startsWith(`${normalizedSymbol} `) || normalizedTitle.startsWith(`${normalizedSymbol} · `)) {
-    return title;
+  const cleanTitle = stripLeadingInvestmentSymbol(title, symbol);
+  if (!cleanTitle) return symbol;
+  if (cleanTitle !== title) return `${symbol} ${cleanTitle}`;
+  return `${symbol} · ${cleanTitle}`;
+}
+
+function stripLeadingInvestmentSymbol(title, symbol) {
+  let clean = String(title || '').trim();
+  const normalizedSymbol = String(symbol || '').trim().toUpperCase();
+  if (!clean || !normalizedSymbol) return clean;
+  for (let i = 0; i < 4; i++) {
+    const normalizedTitle = clean.toUpperCase();
+    if (normalizedTitle === normalizedSymbol) return '';
+    if (normalizedTitle.startsWith(`${normalizedSymbol} · `)) {
+      clean = clean.slice(normalizedSymbol.length + 3).trim();
+    } else if (normalizedTitle.startsWith(`${normalizedSymbol} - `)) {
+      clean = clean.slice(normalizedSymbol.length + 3).trim();
+    } else if (normalizedTitle.startsWith(`${normalizedSymbol}-`)) {
+      clean = clean.slice(normalizedSymbol.length + 1).trim();
+    } else if (normalizedTitle.startsWith(`${normalizedSymbol} `)) {
+      clean = clean.slice(normalizedSymbol.length).trim();
+    } else {
+      break;
+    }
   }
-  return `${symbol} · ${title}`;
+  return clean;
 }
 
 function buildUnifiedInvestmentTimelineRows(inv) {
@@ -902,7 +922,7 @@ function buildUnifiedInvestmentTimelineRows(inv) {
     type: 'decision',
     symbol: d.symbol || '',
     action: d.action || '',
-    title: `${investmentActionLabel(d.action)} · ${d.label || '판단'}`,
+    title: `${investmentActionLabel(d.action)} · ${stripLeadingInvestmentSymbol(d.label || '판단', d.symbol || '') || '판단'}`,
     body: d.summary || d.reason || '',
     severity: d.verdict || 'info',
     tradeShares: parseInvestmentNumber(d.tradeShares),

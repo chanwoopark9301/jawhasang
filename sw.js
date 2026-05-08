@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v98'; // Disable service worker auto reload
+const CACHE_NAME = 'jip-v99'; // Calendar dots and no mobile status bar
 
 const STATIC_ASSETS = [
   '/style.css',
