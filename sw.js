@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v97'; // Sidebar cleanup and portfolio cash snapshot
+const CACHE_NAME = 'jip-v98'; // Disable service worker auto reload
 
 const STATIC_ASSETS = [
   '/style.css',
@@ -78,8 +78,8 @@ self.addEventListener('activate', event => {
         keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
       ))
       .then(() => self.clients.claim())
-      // clients.claim() 이후 브라우저가 controllerchange 이벤트를 페이지에 자동 발화
-      // → index.html의 controllerchange 리스너가 자동 새로고침 처리
+      // clients.claim() 이후 controllerchange가 발화될 수 있지만
+      // 페이지는 작성 중인 대화/입력을 보존하기 위해 자동 새로고침하지 않는다.
   );
 });
 

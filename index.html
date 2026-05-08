@@ -207,14 +207,8 @@
         navigator.serviceWorker.register('/sw.js')
           .catch(err => console.warn('SW 등록 실패:', err));
       });
-      // SW 업데이트 감지 → 자동 새로고침
-      // prevController: 이전 SW가 있었을 때만 reload (첫 설치는 무시)
-      const _swPrev = navigator.serviceWorker.controller;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (!_swPrev) return;                          // 첫 설치 — 리로드 불필요
-        if (sessionStorage.getItem('sw_reloaded')) return; // 무한루프 방지
-        sessionStorage.setItem('sw_reloaded', '1');
-        window.location.reload();
+        console.info('SW updated; keeping current app session without auto reload.');
       });
     }
   </script>
