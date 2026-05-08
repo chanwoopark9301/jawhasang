@@ -219,6 +219,27 @@ function saveInvestmentChatArtifacts(userText, aiText) {
     return;
   }
 
+  const portfolioUpdate = applyInvestmentPortfolioSnapshotFromChat(combined);
+  if (portfolioUpdate.changed) {
+    state.investment.events.push({
+      id: 'ie' + Date.now(),
+      date: today,
+      type: 'portfolio',
+      symbol: portfolioUpdate.symbols.join(', '),
+      title: '포트폴리오 자동 갱신',
+      body: portfolioUpdate.summary,
+      severity: 'info',
+      linkedDecisionId: null,
+      linkedRecordId: null,
+    });
+    saveData();
+    showToast('포트폴리오에 반영했어요.');
+    if (state.activeModal === 'investment-portfolio') openModal('investment-portfolio');
+    render();
+    renderRightPanel();
+    return;
+  }
+
   if (/(?:\uB9E4\uB9E4|\uAC70\uB798|\uB9E4\uC218|\uB9E4\uB3C4|\uCD94\uAC00\uB9E4\uC218|\uBD84\uD560|\uC9C4\uC785|\uCCAD\uC0B0|\uC775\uC808|\uC190\uC808|\uD314\uC558|\uD314\uC544|\uC218\uC775\s*\uC2E4\uD604|trade|buy|sell)/i.test(combined)) {
     const action = inferInvestmentAction(combined);
     const position = findInvestmentPositionFromText(combined, symbol);
@@ -280,6 +301,123 @@ function saveInvestmentChatArtifacts(userText, aiText) {
     render();
     renderRightPanel();
   }
+}
+
+function applyInvestmentPortfolioSnapshotFromChat(text) {
+  const raw = String(text || '');
+  const intent = /(?:\uD3EC\uD2B8\uD3F4\uB9AC\uC624|\uBCF4\uC720\s*\uC218\uB7C9|\uC218\uB7C9|\uD3C9\uB2E8|\uD3C9\uADE0\s*\uB2E8\uAC00|\uD604\uC7AC\uAC00|\uD604\uAE08|\uC608\uC218\uAE08|portfolio|position|cash|avg|average)/i.test(raw);
+  if (!intent || /(?:\uB9E4\uB9E4|\uAC70\uB798|\uB9E4\uC218|\uB9E4\uB3C4|\uC775\uC808|\uC190\uC808|trade|buy|sell)/i.test(raw)) {
+    return { changed: false, symbols: [], summary: '' };
+  }
+
+  state.investment = normalizeInvestmentState(state.investment);
+  const changed = [];
+  const cashUsd = inferInvestmentCashUsdFromText(raw);
+  if (cashUsd > 0) {
+    setInvestmentCashAmount(cashUsd);
+    changed.push(`현금 ${formatMoney(cashUsd)} 반영`);
+  }
+
+  (state.investment.positions || []).forEach(position => {
+    if (isCashInvestmentPosition(position)) return;
+    if (!investmentTextMentionsPosition(raw, position)) return;
+    const patch = inferInvestmentPositionSnapshot(raw);
+    if (!Object.keys(patch).length) return;
+    Object.assign(position, patch, {
+      manualPrice: patch.currentPrice != null ? true : position.manualPrice,
+      marketUpdatedAt: new Date().toISOString(),
+    });
+    changed.push(`${position.symbol || position.name} ${Object.entries(patch).map(([key, value]) => `${key}=${value}`).join(', ')}`);
+  });
+
+  if (!changed.length) return { changed: false, symbols: [], summary: '' };
+  state.investment.alerts = buildInvestmentRiskAlerts(state.investment.positions, state.investment.rules);
+  const symbols = (state.investment.positions || [])
+    .filter(p => !isCashInvestmentPosition(p) && investmentTextMentionsPosition(raw, p))
+    .map(p => p.symbol || p.name)
+    .filter(Boolean);
+  if (cashUsd > 0) symbols.push('CASH');
+  return {
+    changed: true,
+    symbols: [...new Set(symbols)],
+    summary: `대화에서 포트폴리오 값을 추출해 자동 반영했습니다.\n\n${changed.map(item => `- ${item}`).join('\n')}`,
+  };
+}
+
+function investmentTextMentionsPosition(text, position) {
+  const upper = String(text || '').toUpperCase();
+  const lower = String(text || '').toLowerCase();
+  const symbol = String(position?.symbol || '').toUpperCase();
+  const name = String(position?.name || '').toLowerCase();
+  if (symbol && upper.includes(symbol)) return true;
+  if (name && lower.includes(name)) return true;
+  const aliases = {
+    IREN: ['\uC544\uC774\uB80C', 'iris energy'],
+    CRCL: ['\uC368\uD074', 'circle'],
+    QQQM: ['qqqm', '\uB098\uC2A4\uB2E5'],
+    'ETH-USD': ['\uC774\uB354\uB9AC\uC6C0', 'ethereum', 'ether'],
+    ETH: ['\uC774\uB354\uB9AC\uC6C0', 'ethereum', 'ether'],
+    'BTC-USD': ['\uBE44\uD2B8\uCF54\uC778', 'bitcoin'],
+    BTC: ['\uBE44\uD2B8\uCF54\uC778', 'bitcoin'],
+  };
+  return (aliases[symbol] || []).some(term => lower.includes(term));
+}
+
+function inferInvestmentPositionSnapshot(text) {
+  const raw = String(text || '');
+  const patch = {};
+  const shares = extractSnapshotNumber(raw, [
+    /(?:\uBCF4\uC720\s*)?\uC218\uB7C9[^0-9]{0,24}([0-9][0-9,.]*)\s*(?:\uC8FC|\uAC1C|shares?)/i,
+    /(?:\uC794\uC5EC|\uB0A8\uC740)[^0-9]{0,24}([0-9][0-9,.]*)\s*(?:\uC8FC|\uAC1C|shares?)/i,
+    /([0-9][0-9,.]*)\s*(?:\uC8FC|shares?)\s*(?:\uBCF4\uC720|\uB0A8)/i,
+  ]);
+  const avgPrice = extractSnapshotNumber(raw, [
+    /(?:\uD3C9\uB2E8|\uD3C9\uADE0\s*\uB2E8\uAC00|avg|average)[^0-9]{0,24}\$?\s*([0-9][0-9,.]*)/i,
+  ]);
+  const currentPrice = extractSnapshotNumber(raw, [
+    /(?:\uD604\uC7AC\uAC00|\uD604\uC7AC\s*\uAC00\uACA9|current)[^0-9]{0,24}\$?\s*([0-9][0-9,.]*)/i,
+  ]);
+  if (shares > 0) patch.shares = shares;
+  if (avgPrice > 0) patch.avgPrice = avgPrice;
+  if (currentPrice > 0) patch.currentPrice = currentPrice;
+  return patch;
+}
+
+function extractSnapshotNumber(text, patterns) {
+  for (const pattern of patterns) {
+    const m = String(text || '').match(pattern);
+    if (m) return parseInvestmentNumber(m[1]);
+  }
+  return 0;
+}
+
+function inferInvestmentCashUsdFromText(text) {
+  const raw = String(text || '');
+  const cashMatch = raw.match(/(?:\uD604\uAE08|\uC608\uC218\uAE08|cash)[^\n]{0,80}/i);
+  if (!cashMatch) return 0;
+  const fragment = cashMatch[0];
+  const usd = fragment.match(/(?:\$|USD\s*)([0-9][0-9,.]*)|([0-9][0-9,.]*)\s*(?:USD|\uB2EC\uB7EC|\uBD88)/i);
+  if (usd) return parseInvestmentNumber(usd[1] || usd[2]);
+  const krw = parseKoreanKrwAmount(fragment);
+  if (krw > 0) return Math.round((krw / investmentUsdKrwRate()) * 100) / 100;
+  const n = parseInvestmentNumber((fragment.match(/([0-9][0-9,.]*)/) || [])[1]);
+  return n > 0 ? n : 0;
+}
+
+function parseKoreanKrwAmount(text) {
+  const raw = String(text || '').replace(/,/g, '');
+  let total = 0;
+  const addUnit = (regex, multiplier) => {
+    const m = raw.match(regex);
+    if (m) total += parseInvestmentNumber(m[1]) * multiplier;
+  };
+  addUnit(/([0-9]+(?:\.[0-9]+)?)\s*\uC5B5/, 100000000);
+  addUnit(/([0-9]+(?:\.[0-9]+)?)\s*\uCC9C/, raw.includes('\uC5B5') ? 10000000 : 1000);
+  addUnit(/([0-9]+(?:\.[0-9]+)?)\s*\uBC31/, raw.includes('\uC5B5') ? 1000000 : 100);
+  addUnit(/([0-9]+(?:\.[0-9]+)?)\s*\uB9CC/, 10000);
+  if (total > 0) return total;
+  const won = raw.match(/([0-9][0-9.]*)\s*(?:\uC6D0|KRW)/i);
+  return won ? parseInvestmentNumber(won[1]) : 0;
 }
 
 function inferInvestmentTradeFill(userText, combinedText, action, position) {

@@ -310,7 +310,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260508-02');
+            const res = await fetch('/js/data.js?v=20260508-03');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")
@@ -1978,6 +1978,66 @@ class TestInvestmentPartner:
             'tradePrice': 61.07,
             'applied': True,
         }
+
+    def test_investment_chat_updates_portfolio_snapshot_and_cash(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.currentChatMessages = [];
+            state.investment.chat = [];
+            state.investment.decisions = [];
+            state.investment.events = [];
+            state.investment.usdKrwRate = 1350;
+            state.investment.positions = [{
+                id: 'ip-iren-snapshot',
+                symbol: 'IREN',
+                name: 'Iris Energy',
+                shares: 1700,
+                avgPrice: 46.06,
+                currentPrice: 60,
+            }];
+            render();
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = (url, opts) => {
+                if (String(url).includes('/api/analyze')) {
+                    return Promise.resolve(new Response(JSON.stringify({
+                        content: [{ text: '포트폴리오 스냅샷으로 반영할게요. IREN 보유 수량 510주, 평단 66.38, 현금 1억 2천 5백입니다.' }],
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                return originalFetch(url, opts);
+            };
+            setReplyMode('invest-summary');
+        }""")
+
+        logged_in_page.locator('#chat-input-bottom').fill('포트폴리오 갱신해줘. 아이렌 보유 수량 510주이고 평단 66.38이야. 현금은 1억 2천 5백 있어.')
+        logged_in_page.locator('#chat-input-bottom').press('Enter')
+        logged_in_page.wait_for_function(
+            "() => state.investment.positions.find(p => p.symbol === 'IREN')?.avgPrice === 66.38",
+            timeout=8_000,
+        )
+        snapshot = logged_in_page.evaluate("""() => {
+            const iren = state.investment.positions.find(p => p.symbol === 'IREN');
+            const cash = state.investment.positions.find(p => p.assetType === 'cash');
+            return {
+                shares: iren.shares,
+                avgPrice: iren.avgPrice,
+                cash: Math.round(cash.cashAmount * 100) / 100,
+                eventType: state.investment.events.at(-1).type,
+                eventTitle: state.investment.events.at(-1).title,
+            };
+        }""")
+        assert snapshot == {
+            'shares': 510,
+            'avgPrice': 66.38,
+            'cash': 92592.59,
+            'eventType': 'portfolio',
+            'eventTitle': '포트폴리오 자동 갱신',
+        }
+
+        logged_in_page.locator('#investment-menu-portfolio').click()
+        logged_in_page.wait_for_selector('#investment-portfolio-modal', timeout=8_000)
+        modal_text = logged_in_page.locator('#modal-box').inner_text()
+        assert '510' in modal_text
+        assert '$66.38' in modal_text
 
     def test_portfolio_reconciles_cash_from_previous_sell_decisions(self, logged_in_page):
         self._open_investment(logged_in_page)

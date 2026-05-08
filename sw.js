@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v92'; // Desk rules integration and timeline menu
+const CACHE_NAME = 'jip-v93'; // Chat driven portfolio snapshot updates
 
 const STATIC_ASSETS = [
   '/style.css',
