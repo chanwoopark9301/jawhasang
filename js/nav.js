@@ -30,6 +30,22 @@ function setView(view) {
   render();
 }
 
+let _launchParamsHandled = false;
+
+function handleLaunchParams() {
+  if (_launchParamsHandled) return;
+  _launchParamsHandled = true;
+  const params = new URLSearchParams(window.location.search || '');
+  const view = params.get('view');
+  const modal = params.get('modal');
+  if (view && ['calendar', 'myrecords', 'student', 'investment'].includes(view)) {
+    setView(view);
+  }
+  if (modal) {
+    setTimeout(() => openModal(modal), 80);
+  }
+}
+
 function handleAdd() {
   if (state.view === 'myrecords') state.myMode = 'new-topic';
   else if (state.view === 'investment') state.view = 'investment';

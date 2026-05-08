@@ -181,6 +181,8 @@ def _empty_investment():
         'decisions': [],
         'orderIntents': [],
         'chat': [],
+        'chatSessions': [],
+        'activeChatSessionId': None,
         'market': {
             'indexes': [],
             'fetchedAt': None,
@@ -219,6 +221,18 @@ EMPTY = lambda: {
     'my_topics': [],
     'my_records': [],
     'investment': _empty_investment(),
+    'app_settings': {
+        'reminders': {
+            'enabled': False,
+            'dailyTime': '21:30',
+            'remindMyRecords': True,
+            'remindCounseling': True,
+            'onlyWhenEmpty': True,
+            'lastSentDate': None,
+            'lastSentAt': None,
+            'lastPermissionAt': None,
+        }
+    },
 }
 
 def _normalize_data(data: dict) -> dict:
@@ -229,6 +243,16 @@ def _normalize_data(data: dict) -> dict:
     data.setdefault('aiResults', {})
     data.setdefault('my_topics', [])
     data.setdefault('my_records', [])
+    app_settings = data.get('app_settings')
+    base_settings = EMPTY()['app_settings']
+    if not isinstance(app_settings, dict):
+        app_settings = base_settings
+    else:
+        reminders = app_settings.get('reminders') if isinstance(app_settings.get('reminders'), dict) else {}
+        app_settings = {
+            'reminders': {**base_settings['reminders'], **reminders},
+        }
+    data['app_settings'] = app_settings
     inv = data.get('investment')
     if not isinstance(inv, dict):
         inv = _empty_investment()
@@ -243,12 +267,15 @@ def _normalize_data(data: dict) -> dict:
             'decisions': inv.get('decisions') if isinstance(inv.get('decisions'), list) else [],
             'orderIntents': inv.get('orderIntents') if isinstance(inv.get('orderIntents'), list) else [],
             'chat': inv.get('chat') if isinstance(inv.get('chat'), list) else [],
+            'chatSessions': inv.get('chatSessions') if isinstance(inv.get('chatSessions'), list) else [],
+            'activeChatSessionId': inv.get('activeChatSessionId'),
             'market': inv.get('market') if isinstance(inv.get('market'), dict) else base['market'],
             'alerts': inv.get('alerts') if isinstance(inv.get('alerts'), list) else [],
             'usdKrwRate': inv.get('usdKrwRate') or base['usdKrwRate'],
             'broker': {**base['broker'], **(inv.get('broker') if isinstance(inv.get('broker'), dict) else {})},
             'calendar': {**base['calendar'], **(inv.get('calendar') if isinstance(inv.get('calendar'), dict) else {})},
             'signals': {**base['signals'], **(inv.get('signals') if isinstance(inv.get('signals'), dict) else {})},
+            'notifications': {**base.get('notifications', {}), **(inv.get('notifications') if isinstance(inv.get('notifications'), dict) else {})},
         }
     data['investment'] = inv
     return data

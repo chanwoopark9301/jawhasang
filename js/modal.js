@@ -57,6 +57,7 @@ function buildModalHTML(id, data) {
     case 'pattern':       return renderModalPattern(data.result);
     case 'chat-summary':  return renderModalChatSummary(data);
     case 'custom-role':   return renderModalCustomRole(data);
+    case 'reminder-settings': return renderModalReminderSettings();
     case 'investment-desk':      return renderModalInvestmentDesk();
     case 'investment-portfolio': return renderModalInvestmentPortfolio();
     case 'investment-plan':      return renderModalInvestmentPlan();
@@ -74,6 +75,52 @@ function buildModalHTML(id, data) {
 // ---------------------------------------------------------------------------
 // 각 모달 렌더러
 // ---------------------------------------------------------------------------
+
+function renderModalReminderSettings() {
+  state.appSettings = normalizeAppSettings(state.appSettings);
+  const prefs = state.appSettings.reminders;
+  const permission = ('Notification' in window) ? Notification.permission : 'unsupported';
+  const enabledText = prefs.enabled ? '켜짐' : '꺼짐';
+  const permissionText = permission === 'granted' ? '허용됨' : permission === 'denied' ? '차단됨' : permission === 'unsupported' ? '미지원' : '미설정';
+  return `
+    <button class="modal-close" onclick="closeModal()">×</button>
+    <div class="modal-title">기록 알림</div>
+    <div class="modal-subtitle">일상과 상담 기록을 놓치지 않도록 원하는 시간에 한 번 알려줘요.</div>
+
+    <div class="investment-form-grid compact">
+      <label class="investment-field">
+        <span>알림 시간</span>
+        <input id="record-reminder-time" type="time" value="${esc(prefs.dailyTime || '21:30')}"
+          onchange="updateRecordReminderSetting('dailyTime', this.value)" />
+      </label>
+      <label class="investment-field checkbox-field">
+        <input id="record-reminder-my" type="checkbox" ${prefs.remindMyRecords !== false ? 'checked' : ''}
+          onchange="updateRecordReminderSetting('remindMyRecords', this.checked)" />
+        <span>일상 기록</span>
+      </label>
+      <label class="investment-field checkbox-field">
+        <input id="record-reminder-counseling" type="checkbox" ${prefs.remindCounseling !== false ? 'checked' : ''}
+          onchange="updateRecordReminderSetting('remindCounseling', this.checked)" />
+        <span>상담 기록</span>
+      </label>
+      <label class="investment-field checkbox-field">
+        <input id="record-reminder-empty-only" type="checkbox" ${prefs.onlyWhenEmpty !== false ? 'checked' : ''}
+          onchange="updateRecordReminderSetting('onlyWhenEmpty', this.checked)" />
+        <span>오늘 기록이 비어 있을 때만</span>
+      </label>
+    </div>
+
+    <div class="ctx-block" style="margin-top:14px;">
+      <div class="ctx-lbl">상태</div>
+      <div class="ctx-txt">기록 알림 ${enabledText} · 브라우저 권한 ${permissionText}${prefs.lastSentAt ? ` · 마지막 발송 ${esc(new Date(prefs.lastSentAt).toLocaleString())}` : ''}</div>
+    </div>
+
+    <div class="investment-modal-actions">
+      <button class="investment-refresh-btn investment-modal-refresh-btn" id="record-reminder-permission" onclick="requestRecordReminderNotifications()">알림 켜기</button>
+      <button class="investment-refresh-btn investment-modal-refresh-btn" id="record-reminder-test" onclick="sendRecordReminderTestNotification()">테스트 알림</button>
+    </div>
+  `;
+}
 
 function renderModalNewTopic() {
   const presetBtns = AI_ROLE_PRESETS.map(p => `

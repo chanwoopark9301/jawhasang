@@ -21,6 +21,7 @@ async function loadData() {
     state.myTopics  = cached.my_topics  || [];
     state.myRecords = cached.my_records || [];
     state.investment = normalizeInvestmentState(cached.investment);
+    state.appSettings = normalizeAppSettings(cached.app_settings);
     logger.info('로컬 캐시로 즉시 렌더 (학생 %d명)', state.students.length);
   } else {
     _useSampleData();
@@ -62,8 +63,14 @@ async function loadData() {
     if (typeof scheduleInvestmentDeskNotifications === 'function') {
       scheduleInvestmentDeskNotifications();
     }
+    if (typeof scheduleRecordReminderNotifications === 'function') {
+      scheduleRecordReminderNotifications();
+    }
     if (typeof maybeFinalizeInvestmentMarketChatSession === 'function') {
       maybeFinalizeInvestmentMarketChatSession();
+    }
+    if (typeof handleLaunchParams === 'function') {
+      handleLaunchParams();
     }
   }
 }
@@ -94,6 +101,7 @@ async function refreshDataFromServer(options = {}) {
     const changed = before !== _dataSignature();
     if (changed && options.render !== false) render();
     if (changed && typeof scheduleInvestmentDeskNotifications === 'function') scheduleInvestmentDeskNotifications();
+    if (changed && typeof scheduleRecordReminderNotifications === 'function') scheduleRecordReminderNotifications();
     if (changed) logger.info('서버 최신 데이터로 동기화 완료');
     return changed;
   } catch (e) {
@@ -131,6 +139,7 @@ function _applyServerData(data) {
   state.myTopics  = data.my_topics  && data.my_topics.length  ? data.my_topics  : SAMPLE_TOPICS;
   state.myRecords = data.my_records && data.my_records.length ? data.my_records : SAMPLE_RECORDS;
   state.investment = _mergeIncomingInvestmentState(data.investment);
+  state.appSettings = normalizeAppSettings(data.app_settings);
 }
 
 function _mergeIncomingInvestmentState(incomingInvestment) {
@@ -140,6 +149,10 @@ function _mergeIncomingInvestmentState(incomingInvestment) {
 
   if ((current.chat || []).length > (incoming.chat || []).length) {
     merged.chat = current.chat;
+  }
+  if ((current.chatSessions || []).length > (incoming.chatSessions || []).length) {
+    merged.chatSessions = current.chatSessions;
+    merged.activeChatSessionId = current.activeChatSessionId;
   }
   if ((current.decisions || []).length > (incoming.decisions || []).length) {
     merged.decisions = current.decisions;
@@ -168,6 +181,9 @@ function _dataSignature() {
     inv.events?.length || 0,
     inv.decisions?.length || 0,
     inv.chat?.length || 0,
+    state.appSettings?.reminders?.enabled ? 1 : 0,
+    state.appSettings?.reminders?.dailyTime || '',
+    state.appSettings?.reminders?.lastSentDate || '',
     lastOf(state.students, s => s.id || s.createdAt || ''),
     lastOf(state.sessions, s => s.id || s.date || ''),
     lastOf(state.myTopics, t => t.id || t.createdAt || ''),
@@ -196,6 +212,7 @@ function _saveToLocalCache() {
       my_topics:  state.myTopics,
       my_records: state.myRecords,
       investment: state.investment,
+      app_settings: state.appSettings,
     }));
     return true;
   } catch (e) {
@@ -210,6 +227,7 @@ function _useSampleData() {
   state.myTopics  = SAMPLE_TOPICS;
   state.myRecords = SAMPLE_RECORDS;
   state.investment = defaultInvestmentState();
+  state.appSettings = defaultAppSettings();
 }
 
 async function saveData(options = {}) {
@@ -227,6 +245,7 @@ async function _saveDataNow(options = {}) {
     my_topics:  state.myTopics,
     my_records: state.myRecords,
     investment: state.investment,
+    app_settings: state.appSettings,
   };
   logger.debug('데이터 저장 요청 (학생 %d명, 회기 %d건)',
     payload.students.length, payload.sessions.length);
@@ -297,6 +316,7 @@ function exportData() {
     my_topics:   state.myTopics,
     my_records:  state.myRecords,
     investment:  state.investment,
+    app_settings: state.appSettings,
   };
   let url;
   try {

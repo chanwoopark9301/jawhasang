@@ -76,6 +76,41 @@ class TestHomePage:
         logged_in_page.click('.sidebar-logo')
         logged_in_page.wait_for_selector('.cal-grid', timeout=8_000)
         assert logged_in_page.evaluate("() => state.view") == 'calendar'
+
+    def test_record_reminder_modal_payload_and_schedule(self, logged_in_page):
+        logged_in_page.evaluate("""() => {
+            state.myRecords = [];
+            state.sessions = [];
+            state.appSettings = normalizeAppSettings({
+                reminders: {
+                    enabled: true,
+                    dailyTime: '21:30',
+                    remindMyRecords: true,
+                    remindCounseling: true,
+                    onlyWhenEmpty: true,
+                },
+            });
+            Object.defineProperty(window, 'Notification', {
+                configurable: true,
+                value: class {
+                    static permission = 'granted';
+                    static requestPermission = async () => 'granted';
+                    constructor(title, options) {
+                        window.__lastRecordReminder = { title, options };
+                    }
+                },
+            });
+            openModal('reminder-settings');
+        }""")
+
+        logged_in_page.wait_for_selector('#record-reminder-permission', timeout=8_000)
+        assert logged_in_page.locator('#record-reminder-test').is_visible()
+        payload = logged_in_page.evaluate("() => buildRecordReminderNotificationPayload()")
+        assert payload['title']
+        assert '일상' in payload['body']
+        assert '상담' in payload['body']
+        assert logged_in_page.evaluate("() => scheduleRecordReminderNotifications()") is True
+
     def test_calendar_has_date_cells(self, logged_in_page):
         """캘린더에 날짜 셀이 존재해야 함."""
         self._go_to_calendar(logged_in_page)
@@ -310,7 +345,7 @@ class TestDataPersistence:
     def test_save_error_toast_code_removed(self, logged_in_page):
         """구버전 서버 연결 실패 토스트 코드가 배포 JS에 남아있지 않아야 함."""
         has_old_toast = logged_in_page.evaluate("""async () => {
-            const res = await fetch('/js/data.js?v=20260508-05');
+            const res = await fetch('/js/data.js?v=20260508-06');
             const text = await res.text();
             return text.includes('save-error-toast') || text.includes('서버 연결을 확인');
         }""")

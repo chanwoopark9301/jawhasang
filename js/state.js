@@ -160,6 +160,31 @@ function defaultInvestmentState() {
   };
 }
 
+function defaultAppSettings() {
+  return {
+    reminders: {
+      enabled: false,
+      dailyTime: '21:30',
+      remindMyRecords: true,
+      remindCounseling: true,
+      onlyWhenEmpty: true,
+      lastSentDate: null,
+      lastSentAt: null,
+      lastPermissionAt: null,
+    },
+  };
+}
+
+function normalizeAppSettings(settings) {
+  const base = defaultAppSettings();
+  const src = settings && typeof settings === 'object' ? settings : {};
+  return {
+    reminders: src.reminders && typeof src.reminders === 'object'
+      ? { ...base.reminders, ...src.reminders }
+      : base.reminders,
+  };
+}
+
 function normalizeInvestmentState(investment) {
   const base = defaultInvestmentState();
   const src = investment && typeof investment === 'object' ? investment : {};
@@ -252,6 +277,7 @@ const state = {
   activeModal:         null,       // 현재 열린 모달 ID
 
   investment:          defaultInvestmentState(),
+  appSettings:         defaultAppSettings(),
   selInvestmentPosition: null,
 };
 

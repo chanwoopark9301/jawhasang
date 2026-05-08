@@ -162,6 +162,22 @@ function _updateRpContent() {
 
   // 상담 기록 뷰
   const session = state.selSession ? state.sessions.find(s => s.id === state.selSession) : null;
+  if (state.view === 'calendar') {
+    state.appSettings = normalizeAppSettings(state.appSettings);
+    const prefs = state.appSettings.reminders;
+    content.innerHTML = `
+      <div class="ctx-alias">기록 루틴</div>
+      <div class="ctx-meta">일상·상담 알림 ${prefs.enabled ? '켜짐' : '꺼짐'} · ${esc(prefs.dailyTime || '21:30')}</div>
+      <div class="ctx-block">
+        <div class="ctx-lbl">오늘</div>
+        <div class="ctx-txt">정해둔 시간에 오늘 기록이 비어 있는지 확인하고 가볍게 알려줘요.</div>
+      </div>
+      <div class="investment-side-menu">
+        <button id="record-reminder-settings-open" onclick="openModal('reminder-settings')">기록 알림 설정</button>
+      </div>`;
+    return;
+  }
+
   const student = session ? state.students.find(s => s.id === session.studentId) : null;
 
   if (!session || !student) {

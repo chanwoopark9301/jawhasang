@@ -55,6 +55,11 @@ function renderHomeGreeting() {
           <div class="quick-card-title">투자</div>
           <div>원칙·뉴스·매매 점검</div>
         </div>
+        <div class="quick-card" id="home-reminder-settings" onclick="openModal('reminder-settings')">
+          <div class="quick-card-icon">⏰</div>
+          <div class="quick-card-title">알림</div>
+          <div>일상·상담 기록 루틴</div>
+        </div>
       </div>
       ${countNote}
       ${_renderRecentItems()}
