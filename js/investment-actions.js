@@ -919,6 +919,21 @@ async function runInvestmentGateFromForm(event) {
     size: !!document.getElementById('ig-check-size')?.checked,
     cooldown: !!document.getElementById('ig-check-cooldown')?.checked,
   };
+  let serverGate = null;
+  try {
+    const gateRes = await apiEvaluateInvestmentTradeGate({
+      symbol: position.symbol,
+      action,
+      quantity: tradeShares,
+      price: tradePrice,
+      orderType,
+      reason,
+      date: new Date().toISOString().slice(0, 10),
+    });
+    serverGate = gateRes.gate || null;
+  } catch (e) {
+    logger.warn('Python trade gate failed; falling back to browser rule gate', e);
+  }
   const verdict = evaluateInvestmentDecision({
     position,
     rules: state.investment.rules,
@@ -949,12 +964,29 @@ async function runInvestmentGateFromForm(event) {
     summary: verdict.summary,
     findings: verdict.findings,
     nextSteps: verdict.nextSteps,
+    serverGate,
     tradeShares,
     tradePrice,
     tradeKey: typeof buildInvestmentTradeArtifactKey === 'function'
       ? buildInvestmentTradeArtifactKey(position.symbol, action, tradeShares, tradePrice)
       : '',
   };
+  if (serverGate?.status === 'block') {
+    decision.verdict = 'block';
+    decision.label = '서버 게이트 차단';
+    decision.findings = [
+      ...(serverGate.reasons || []),
+      ...(serverGate.blockedActions || []).map(item => `금지 행동: ${item}`),
+    ];
+    decision.nextSteps = serverGate.requiredEvidence || decision.nextSteps;
+    decision.summary = `Python 투자 게이트가 이 행동을 막았습니다. ${(serverGate.reasons || [])[0] || ''}`;
+  } else if (serverGate?.status === 'review' && decision.verdict === 'allow') {
+    decision.verdict = 'cooldown';
+    decision.label = '검토 필요';
+    decision.findings = [...(decision.findings || []), ...(serverGate.reasons || [])];
+    decision.nextSteps = serverGate.requiredEvidence || decision.nextSteps;
+    decision.summary = `Python 투자 게이트가 검토를 요구합니다. ${(serverGate.reasons || [])[0] || decision.summary}`;
+  }
   if (typeof isDuplicateInvestmentTradeArtifact === 'function' && isDuplicateInvestmentTradeArtifact(position.symbol, action, tradeShares, tradePrice, [reason, verdict.summary].join('\n'))) {
     closeModal();
     showToast('이미 반영된 매매 기록이라 중복 적용하지 않았어요.');

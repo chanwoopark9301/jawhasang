@@ -95,7 +95,7 @@ CRCL
 
 ### Phase 4. Conversation Gate
 
-상태: 예정
+상태: 1차 구현 완료
 
 역할:
 
@@ -109,6 +109,20 @@ CRCL
 - `gateResult`
 - `overrideReason`
 - `reviewItem`
+
+현재 구현:
+
+- `/api/investment/trade-gate` 서버 API를 추가했다.
+- Python 엔진이 trade intent를 받아 `block`, `review`, `allow` 상태를 반환한다.
+- 수동 투자 점검 폼은 포트폴리오 반영/주문 초안 생성 전에 서버 게이트를 먼저 확인한다.
+- 루머 기반 매수, thesis 검토 전 추가매수, 최근 매도 직후 재진입은 차단된다.
+- thesis 압박 상태에서의 매도/축소는 차단이 아니라 검토 필요로 표시한다.
+
+남은 작업:
+
+- 자유 대화창의 매수/추매/손절 의도 감지와 trade gate 자동 호출
+- 사용자가 차단을 넘기려는 경우 예외 사유 기록
+- 예외 기록을 주간 복기/패턴 분석에 연결
 
 ### Phase 5. Thesis Revision History
 

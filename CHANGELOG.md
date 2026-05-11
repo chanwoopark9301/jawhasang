@@ -8,6 +8,15 @@
 
 ## 2026-05-08
 
+### 서버 측 투자 Trade Gate
+
+- Python 투자 판단 엔진에 `evaluate_trade_intent_gate()`를 추가해 매수/추매/매도/보유 의도를 엔진 기준으로 차단, 검토, 허용 상태로 판정한다.
+- `/api/investment/trade-gate` API를 추가해 원장 스냅샷 기준으로 trade intent를 평가한다.
+- 루머 기반 CRCL 매수는 `block`, thesis 압박 상태의 IREN 매도/축소는 `review`로 분리하는 서버 테스트를 추가했다.
+- 수동 투자 점검 폼은 포트폴리오 반영과 주문 초안 생성 전에 서버 trade gate를 먼저 호출한다.
+- 서버 게이트가 `block`이면 브라우저 규칙이 허용해도 매매 반영으로 넘어가지 않고, `review`이면 검토 필요 상태로 저장한다.
+- `INVESTMENT_ENGINE_IMPLEMENTATION_PLAN.md`의 Conversation Gate 단계를 1차 구현 완료 상태로 갱신했다.
+
 ### 투자 엔진 구현 계획서와 시나리오 엔진
 
 - `INVESTMENT_ENGINE_IMPLEMENTATION_PLAN.md`를 추가해 투자 엔진 완성 단계, 행동 통제 흐름, 가계부/전체 자산 확장 구조를 문서화했다.

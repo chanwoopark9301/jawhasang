@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v137'; // Add investment scenario engine
+const CACHE_NAME = 'jip-v138'; // Add server-side trade gate
 
 const STATIC_ASSETS = [
   '/style.css',

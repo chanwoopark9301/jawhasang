@@ -21,7 +21,7 @@ from functools import wraps
 from investment_backend import normalize_position, upsert_position
 from investment_broker import build_order_intent
 from investment_calendar import sync_investment_calendar
-from investment_desk_engine import build_investment_desk_engine
+from investment_desk_engine import build_investment_desk_engine, evaluate_trade_intent_gate
 from kis_broker import sync_kis_account
 from flask import (
     Flask, request, jsonify, send_from_directory,
@@ -1278,6 +1278,40 @@ def investment_order_intent_route():
     except Exception as e:
         log.error('POST /api/investment/order-intent failed: %s', e, exc_info=True)
         return jsonify({'ok': False, 'error': 'order intent failed'}), 500
+
+@app.route('/api/investment/trade-gate', methods=['POST'])
+@require_auth
+def investment_trade_gate_route():
+    request_id = f"igate-{int(time.time() * 1000)}"
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({'ok': False, 'error': 'trade gate payload must be an object', 'requestId': request_id}), 400
+    try:
+        data = _normalize_data(read_data())
+        inv = data['investment']
+        ledger = _read_investment_snapshot_from_tables(inv)
+        if ledger and ledger.get('positions'):
+            inv = _normalize_data({
+                'investment': {
+                    **inv,
+                    'account': { **(inv.get('account') or {}), **(ledger.get('account') or {}) },
+                    'positions': ledger['positions'],
+                    'ledgerSource': ledger.get('ledgerSource'),
+                    'ledgerSyncedAt': datetime.now().isoformat(),
+                }
+            })['investment']
+        gate = evaluate_trade_intent_gate(inv, payload, payload.get('date'))
+        log.info('POST /api/investment/trade-gate [%s] %s %s -> %s',
+                 request_id, gate.get('symbol'), gate.get('action'), gate.get('status'))
+        return jsonify({'ok': True, 'gate': gate, 'requestId': request_id})
+    except Exception as e:
+        log.error('POST /api/investment/trade-gate [%s] failed: %s', request_id, e, exc_info=True)
+        return jsonify({
+            'ok': False,
+            'error': 'investment trade gate failed',
+            'requestId': request_id,
+            'errorDetail': _safe_error_detail(e),
+        }), 500
 
 @app.route('/api/investment/broker/sync', methods=['POST'])
 @require_auth

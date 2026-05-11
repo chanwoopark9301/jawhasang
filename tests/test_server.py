@@ -338,6 +338,64 @@ class TestDataAPI:
         assert loaded['investment']['orderIntents'][0]['symbol'] == 'IREN'
         assert loaded['investment']['broker']['status'] == 'not_connected'
 
+    def test_investment_trade_gate_blocks_rumor_driven_buy(self, client, monkeypatch):
+        import server
+
+        monkeypatch.setattr(server, '_read_investment_snapshot_from_tables', lambda inv: None)
+        client.post('/api/data',
+                    data=json.dumps({'investment': {
+                        'positions': [
+                            {'id': 'ip-crcl', 'symbol': 'CRCL', 'name': 'Circle', 'shares': 113, 'avgPrice': 128.91, 'currentPrice': 113.67, 'changePercent': 5.5},
+                            {'id': 'ip-cash', 'symbol': 'CASH', 'assetType': 'cash', 'shares': 42135, 'cashAmount': 42135},
+                        ],
+                        'rules': {'maxPositionWeight': 25, 'chaseLimit': 3},
+                        'events': [
+                            {'id': 'crcl-rumor', 'date': '2026-05-11', 'type': 'signal', 'symbol': 'CRCL', 'title': 'X rumor says stablecoin bill may pass', 'source': 'x.com'},
+                        ],
+                    }}),
+                    content_type='application/json')
+
+        r = client.post('/api/investment/trade-gate',
+                        data=json.dumps({'date': '2026-05-11', 'symbol': 'CRCL', 'action': 'buy', 'quantity': 10, 'orderType': 'market', 'reason': 'policy rumor looks good'}),
+                        content_type='application/json')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['ok'] is True
+        gate = data['gate']
+        assert gate['status'] == 'block'
+        assert gate['canCreateOrderIntent'] is False
+        assert 'act on rumor' in gate['blockedActions']
+        assert any('A/B evidence' in item for item in gate['requiredEvidence'])
+        assert gate['scenario']['baseCase']['action'] == 'wait_for_confirmation'
+
+    def test_investment_trade_gate_allows_sell_review_when_thesis_under_pressure(self, client, monkeypatch):
+        import server
+
+        monkeypatch.setattr(server, '_read_investment_snapshot_from_tables', lambda inv: None)
+        client.post('/api/data',
+                    data=json.dumps({'investment': {
+                        'positions': [
+                            {'id': 'ip-iren', 'symbol': 'IREN', 'name': 'Iris Energy', 'shares': 510, 'avgPrice': 66.38, 'currentPrice': 61.20},
+                        ],
+                        'rules': {'maxPositionWeight': 25, 'chaseLimit': 3},
+                        'events': [
+                            {'id': 'iren-dilution', 'date': '2026-05-11', 'type': 'news', 'symbol': 'IREN', 'title': 'IREN ATM offering dilution risk', 'source': 'sec-edgar'},
+                        ],
+                    }}),
+                    content_type='application/json')
+
+        r = client.post('/api/investment/trade-gate',
+                        data=json.dumps({'date': '2026-05-11', 'symbol': 'IREN', 'action': 'sell', 'quantity': 100, 'price': 64, 'reason': 'reduce after dilution risk'}),
+                        content_type='application/json')
+
+        assert r.status_code == 200
+        gate = r.get_json()['gate']
+        assert gate['status'] == 'review'
+        assert gate['canCreateOrderIntent'] is True
+        assert gate['scenario']['bearCase']['action'] == 'reduce_or_exit_review'
+        assert any('bearish evidence' in item.lower() for item in gate['requiredEvidence'])
+
     def test_investment_broker_sync_requires_kis_credentials(self, client, monkeypatch):
         monkeypatch.delenv('KIS_APP_KEY', raising=False)
         monkeypatch.delenv('KIS_APP_SECRET', raising=False)

@@ -746,6 +746,87 @@ def build_investment_desk_engine(investment: Dict[str, Any], today_value: Any = 
     }
 
 
+def evaluate_trade_intent_gate(investment: Dict[str, Any], intent: Dict[str, Any], today_value: Any = None) -> Dict[str, Any]:
+    inv = investment if isinstance(investment, dict) else {}
+    raw_intent = intent if isinstance(intent, dict) else {}
+    symbol = str(raw_intent.get("symbol") or "").strip().upper()
+    action = str(raw_intent.get("action") or "buy").strip().lower()
+    if action == "add":
+        action = "buy"
+    engine = build_investment_desk_engine(inv, today_value or raw_intent.get("date"))
+    controls = {item.get("symbol"): item for item in engine.get("behaviorControls") or []}
+    scenarios = {item.get("symbol"): item for item in engine.get("scenarios") or []}
+    thesis_evidence = (engine.get("thesisEvidence") or {}).get(symbol) or {}
+    control = controls.get(symbol)
+    scenario = scenarios.get(symbol)
+
+    if not symbol:
+        return _trade_gate_result(engine, symbol, action, "block", ["Symbol is required."], ["select symbol"], [], None)
+    if not control and action in {"sell", "hold"}:
+        return _trade_gate_result(engine, symbol, action, "block", ["No existing position found for this action."], ["sync ledger"], [], scenario)
+
+    reasons: List[str] = []
+    required: List[str] = []
+    blocked_actions: List[str] = []
+    if control:
+        reasons.extend(control.get("reasons") or [])
+        required.extend(control.get("requiredBeforeAction") or [])
+        blocked_actions.extend(control.get("blockedActions") or [])
+
+    status = "allow"
+    if action in {"buy", "add"}:
+        hard_blocks = {
+            "buy/add",
+            "market buy",
+            "impulse trade",
+            "immediate re-entry",
+            "act on rumor",
+            "add before thesis review",
+        }
+        if hard_blocks.intersection(set(blocked_actions)):
+            status = "block"
+        if scenario and (scenario.get("baseCase") or {}).get("action") in {"wait_for_confirmation", "review_before_hold_or_add", "write_plan_before_trade"}:
+            status = "block"
+            required.extend((scenario.get("baseCase") or {}).get("requiredEvidence") or [])
+            reasons.extend((scenario.get("baseCase") or {}).get("rationale") or [])
+    elif action == "sell":
+        if thesis_evidence.get("status") == "under_pressure":
+            status = "review"
+            if scenario:
+                required.extend((scenario.get("bearCase") or {}).get("requiredEvidence") or [])
+                reasons.extend((scenario.get("bearCase") or {}).get("rationale") or [])
+        elif control and control.get("severity") == "block":
+            status = "review"
+    elif action == "hold":
+        status = "review" if thesis_evidence.get("status") in {"under_pressure", "needs_confirmation"} else "allow"
+
+    if not reasons:
+        reasons.append("No active block from the server-side investment gate.")
+    if not required:
+        required.append("confirm size, price, thesis, and invalidation before order")
+    return _trade_gate_result(engine, symbol, action, status, reasons, required, blocked_actions, scenario)
+
+
+def _trade_gate_result(engine: Dict[str, Any], symbol: str, action: str, status: str, reasons: List[str], required: List[str], blocked_actions: List[str], scenario: Dict[str, Any] | None) -> Dict[str, Any]:
+    return {
+        "symbol": symbol,
+        "action": action,
+        "status": status,
+        "label": {
+            "block": "blocked",
+            "review": "review required",
+            "allow": "allowed with plan",
+        }.get(status, status),
+        "canCreateOrderIntent": status in {"allow", "review"},
+        "reasons": list(dict.fromkeys([str(item) for item in reasons if item])),
+        "requiredEvidence": list(dict.fromkeys([str(item) for item in required if item])),
+        "blockedActions": sorted(set(str(item) for item in blocked_actions if item)),
+        "scenario": scenario or {},
+        "engineVersion": engine.get("version"),
+        "engineDate": engine.get("date"),
+    }
+
+
 def render_engine_brief(engine: Dict[str, Any]) -> str:
     view = engine.get("marketView") or {}
     controls = engine.get("behaviorControls") or []
