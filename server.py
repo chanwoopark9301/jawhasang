@@ -21,6 +21,7 @@ from functools import wraps
 from investment_backend import normalize_position, upsert_position
 from investment_broker import build_order_intent
 from investment_calendar import sync_investment_calendar
+from investment_desk_engine import build_investment_desk_engine
 from kis_broker import sync_kis_account
 from flask import (
     Flask, request, jsonify, send_from_directory,
@@ -229,7 +230,10 @@ def _empty_investment():
             'status': 'idle',
             'steps': [],
             'errors': [],
+            'engine': None,
         },
+        'theses': {},
+        'deskSnapshots': [],
     }
 
 EMPTY = lambda: {
@@ -295,6 +299,8 @@ def _normalize_data(data: dict) -> dict:
             'signals': {**base['signals'], **(inv.get('signals') if isinstance(inv.get('signals'), dict) else {})},
             'notifications': {**base.get('notifications', {}), **(inv.get('notifications') if isinstance(inv.get('notifications'), dict) else {})},
             'desk': {**base.get('desk', {}), **(inv.get('desk') if isinstance(inv.get('desk'), dict) else {})},
+            'theses': inv.get('theses') if isinstance(inv.get('theses'), (dict, list)) else base['theses'],
+            'deskSnapshots': inv.get('deskSnapshots') if isinstance(inv.get('deskSnapshots'), list) else [],
         }
     data['investment'] = inv
     return data
@@ -998,6 +1004,63 @@ def investment_ledger_snapshot_route():
         return jsonify({
             'ok': False,
             'error': 'investment ledger snapshot failed',
+            'requestId': request_id,
+            'errorDetail': _safe_error_detail(e),
+        }), 500
+
+@app.route('/api/investment/desk/engine', methods=['POST'])
+@require_auth
+def investment_desk_engine_route():
+    request_id = f"idesk-{int(time.time() * 1000)}"
+    payload = request.get_json(silent=True) or {}
+    try:
+        data = _normalize_data(read_data())
+        inv = data['investment']
+        ledger = _read_investment_snapshot_from_tables(inv)
+        if ledger and ledger.get('positions'):
+            inv = _normalize_data({
+                'investment': {
+                    **inv,
+                    'account': { **(inv.get('account') or {}), **(ledger.get('account') or {}) },
+                    'positions': ledger['positions'],
+                    'ledgerSource': ledger.get('ledgerSource'),
+                    'ledgerSyncedAt': datetime.now().isoformat(),
+                }
+            })['investment']
+            data['investment'] = inv
+
+        today = str(payload.get('date') or '')[:10] or None
+        engine = build_investment_desk_engine(inv, today)
+        inv['theses'] = {item['symbol']: item for item in engine.get('theses') or [] if item.get('symbol')}
+        inv['desk'] = {
+            **(inv.get('desk') if isinstance(inv.get('desk'), dict) else {}),
+            'engine': engine,
+            'status': 'ready',
+            'lastEngineAt': engine.get('generatedAt'),
+            'lastPreparedDate': engine.get('date'),
+            'lastPreparedAt': datetime.now().isoformat(),
+        }
+        snapshots = inv.get('deskSnapshots') if isinstance(inv.get('deskSnapshots'), list) else []
+        snapshot = {
+            'id': f"desk-{engine.get('date')}-{request_id}",
+            'date': engine.get('date'),
+            'generatedAt': engine.get('generatedAt'),
+            'topLine': (engine.get('marketView') or {}).get('topLine'),
+            'engine': engine,
+        }
+        snapshots = [s for s in snapshots if str(s.get('date')) != str(engine.get('date'))]
+        snapshots.append(snapshot)
+        inv['deskSnapshots'] = snapshots[-20:]
+        data['investment'] = inv
+        write_data(data)
+        log.info('POST /api/investment/desk/engine [%s] generated positions=%d controls=%d',
+                 request_id, len(inv.get('positions') or []), len(engine.get('behaviorControls') or []))
+        return jsonify({'ok': True, 'investment': inv, 'engine': engine, 'requestId': request_id})
+    except Exception as e:
+        log.error('POST /api/investment/desk/engine [%s] failed: %s', request_id, e, exc_info=True)
+        return jsonify({
+            'ok': False,
+            'error': 'investment desk engine failed',
             'requestId': request_id,
             'errorDetail': _safe_error_detail(e),
         }), 500

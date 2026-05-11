@@ -152,6 +152,24 @@ async function apiFetchInvestmentLedgerSnapshot() {
   return data;
 }
 
+async function apiBuildInvestmentDeskEngine(payload = {}) {
+  const res = await fetch('/api/investment/desk/engine', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const text = await res.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch (e) {
+    throw new Error(`investment desk engine returned non-json: ${res.status}`);
+  }
+  if (!res.ok || !data.ok) throw new Error(data?.error || `investment desk engine failed: ${res.status}`);
+  return data;
+}
+
 async function apiSyncKisBroker(days = 30) {
   const res = await fetch('/api/investment/broker/sync', {
     method: 'POST',

@@ -199,7 +199,7 @@ function buildDailyInvestmentDesk(investment = state.investment, date = new Date
     dataGaps,
   });
 
-  return {
+  const baseDesk = {
     date: today,
     generatedAt: new Date().toISOString(),
     accountSnapshot: {
@@ -225,10 +225,80 @@ function buildDailyInvestmentDesk(investment = state.investment, date = new Date
     recentDecisions,
     checklist: Array.from(new Set(checklist)),
   };
+  return applyInvestmentServerDeskEngine(baseDesk, inv);
+}
+
+function applyInvestmentServerDeskEngine(baseDesk, investment) {
+  const engine = investment?.desk?.engine;
+  if (!engine || String(engine.date || '') !== String(baseDesk.date || '')) return baseDesk;
+  const view = engine.marketView || {};
+  const controls = Array.isArray(engine.behaviorControls) ? engine.behaviorControls : [];
+  const keyIssues = Array.isArray(view.keyIssues) ? view.keyIssues : [];
+  const evidence = Array.isArray(view.evidence) ? view.evidence : [];
+  const doNotDo = Array.isArray(view.doNotDo) ? view.doNotDo : [];
+
+  const riskSignals = controls.map(control => ({
+    id: `server-control-${control.symbol}-${control.state}`,
+    severity: control.severity || 'watch',
+    symbol: control.symbol || '',
+    title: `${control.symbol || 'Portfolio'} ${control.state || 'control'}`,
+    body: (control.reasons || []).join(' '),
+    source: 'python-desk-engine',
+    evidence: (control.requiredBeforeAction || []).join(', '),
+  }));
+  const forbiddenActions = controls
+    .filter(control => (control.blockedActions || []).length)
+    .flatMap(control => (control.blockedActions || []).map(action => ({
+      id: `server-block-${control.symbol}-${action}`,
+      symbol: control.symbol || '',
+      action,
+      label: `${control.symbol || 'Portfolio'} ${action} blocked`,
+      reason: (control.reasons || [])[0] || 'Python behavior-control engine blocked this action.',
+    })));
+
+  const marketBriefing = {
+    ...(baseDesk.marketBriefing || {}),
+    headline: view.topLine || baseDesk.marketBriefing?.headline,
+    macroItems: evidence.length ? evidence.slice(0, 6).map(item => ({
+      id: item.id || `${item.symbol}-${item.title}`,
+      title: `${item.evidenceLevel || 'E'} · ${item.title || item.type || 'market evidence'}`,
+      body: `${item.date || ''} ${item.symbol || ''} ${item.type || ''}`.trim(),
+      source: 'python-desk-engine',
+    })) : baseDesk.marketBriefing?.macroItems,
+    microItems: keyIssues.length ? keyIssues.map(item => ({
+      id: `server-issue-${item.symbol}`,
+      title: `${item.symbol} · ${item.profile || 'thesis'}`,
+      body: item.whyItMatters || item.view || '',
+      source: 'python-desk-engine',
+    })) : baseDesk.marketBriefing?.microItems,
+    portfolioImplications: keyIssues.length ? keyIssues.map(item => ({
+      symbol: item.symbol,
+      title: item.controlState || 'observe',
+      body: item.view || '',
+      tone: item.controlState === 'blocked' ? 'block' : 'watch',
+    })) : baseDesk.marketBriefing?.portfolioImplications,
+    dataRequests: (engine.researchQueue || []).slice(0, 6).map(item => `${item.symbol}: ${item.driver} - ${item.evidenceNeeded}`),
+  };
+
+  return {
+    ...baseDesk,
+    serverEngine: engine,
+    marketBriefing,
+    riskSignals: riskSignals.length ? riskSignals : baseDesk.riskSignals,
+    forbiddenActions: forbiddenActions.length ? forbiddenActions : baseDesk.forbiddenActions,
+    primaryAction: {
+      tone: forbiddenActions.length ? 'block' : (riskSignals[0]?.severity || baseDesk.primaryAction?.tone || 'allow'),
+      title: view.topLine || baseDesk.primaryAction?.title || 'Server desk engine ready',
+      body: doNotDo[0] || baseDesk.primaryAction?.body || '',
+    },
+  };
 }
 
 function renderDailyDeskBrief(desk) {
   if (!desk) return 'Daily Investment Desk: unavailable';
+  if (desk.serverEngine?.summary) {
+    return `Daily Investment Desk (server engine)\n${desk.serverEngine.summary}`;
+  }
   const snapshot = desk.accountSnapshot || {};
   const briefing = desk.marketBriefing || {};
   const risks = (desk.riskSignals || []).slice(0, 5)

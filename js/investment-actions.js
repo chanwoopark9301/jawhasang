@@ -410,6 +410,14 @@ async function prepareDailyInvestmentDesk(options = {}) {
       markStep('news-signal-sync', false, e.message || 'news sync failed');
     }
 
+    try {
+      const data = await apiBuildInvestmentDeskEngine({ date: today });
+      if (data.investment) state.investment = normalizeInvestmentState(data.investment);
+      markStep('desk-engine', true, `${(data.engine?.behaviorControls || []).length} controls`);
+    } catch (e) {
+      markStep('desk-engine', false, e.message || 'desk engine failed');
+    }
+
     state.investment = normalizeInvestmentState(state.investment);
     state.investment.alerts = buildInvestmentRiskAlerts(state.investment.positions, state.investment.rules);
     state.investment.desk = {

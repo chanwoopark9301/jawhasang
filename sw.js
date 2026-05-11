@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v134'; // Route investment chats by cost tier
+const CACHE_NAME = 'jip-v135'; // Move investment desk judgement to Python engine
 
 const STATIC_ASSETS = [
   '/style.css',
@@ -27,6 +27,7 @@ const STATIC_ASSETS = [
   '/js/investment-rules.js',
   '/js/investment-format.js',
   '/js/investment-portfolio.js',
+  '/js/investment-desk.js',
   '/js/investment-api.js',
   '/js/market-data.js',
   '/js/render-sidebar.js',

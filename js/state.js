@@ -165,7 +165,10 @@ function defaultInvestmentState() {
       status: 'idle',
       steps: [],
       errors: [],
+      engine: null,
     },
+    theses: {},
+    deskSnapshots: [],
   };
 }
 
@@ -240,6 +243,8 @@ function normalizeInvestmentState(investment) {
     signals: src.signals && typeof src.signals === 'object' ? { ...base.signals, ...src.signals } : base.signals,
     notifications: src.notifications && typeof src.notifications === 'object' ? { ...base.notifications, ...src.notifications } : base.notifications,
     desk: src.desk && typeof src.desk === 'object' ? { ...base.desk, ...src.desk } : base.desk,
+    theses: src.theses && typeof src.theses === 'object' ? src.theses : base.theses,
+    deskSnapshots: Array.isArray(src.deskSnapshots) ? src.deskSnapshots : [],
   };
 }
 

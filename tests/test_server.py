@@ -235,6 +235,69 @@ class TestDataAPI:
         assert data['investment']['positions'][0]['shares'] == 510
         assert data['investment']['positions'][1]['cashAmount'] == 125000
 
+    def test_investment_desk_engine_endpoint_generates_theses_controls_and_snapshot(self, client, monkeypatch):
+        import server
+
+        monkeypatch.setattr(server, '_read_investment_snapshot_from_tables', lambda inv: None)
+        client.post('/api/data',
+                    data=json.dumps({'investment': {
+                        'positions': [
+                            {'id': 'ip-crcl', 'symbol': 'CRCL', 'name': 'Circle Internet Group', 'shares': 113, 'avgPrice': 128.91, 'currentPrice': 113.67, 'changePercent': 5.5},
+                            {'id': 'ip-iren', 'symbol': 'IREN', 'name': 'Iris Energy', 'shares': 510, 'avgPrice': 66.38, 'currentPrice': 61.20},
+                            {'id': 'ip-cash', 'symbol': 'CASH', 'assetType': 'cash', 'shares': 42135, 'cashAmount': 42135},
+                        ],
+                        'rules': {'maxPositionWeight': 25, 'chaseLimit': 3},
+                        'events': [
+                            {'id': 'earnings-crcl', 'date': '2026-05-11', 'type': 'earnings', 'symbol': 'CRCL', 'title': 'CRCL earnings'},
+                            {'id': 'macro-cpi', 'date': '2026-05-12', 'type': 'macro', 'symbol': 'MACRO', 'title': 'CPI'},
+                        ],
+                        'decisions': [
+                            {'id': 'sell-iren', 'date': '2026-05-11', 'symbol': 'IREN', 'action': 'sell', 'tradeShares': 1190, 'tradePrice': 60},
+                        ],
+                    }}),
+                    content_type='application/json')
+
+        r = client.post('/api/investment/desk/engine',
+                        data=json.dumps({'date': '2026-05-11'}),
+                        content_type='application/json')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['ok'] is True
+        engine = data['engine']
+        assert engine['version'].startswith('2026-05-11.py-engine')
+        thesis = {item['symbol']: item for item in engine['theses']}
+        assert thesis['CRCL']['profile'] == 'stablecoin_issuer'
+        assert 'stablecoin legislation' in thesis['CRCL']['drivers']
+        assert thesis['IREN']['profile'] == 'ai_miner_infrastructure'
+        controls = {item['symbol']: item for item in engine['behaviorControls']}
+        assert 'market buy' in controls['CRCL']['blockedActions']
+        assert 'impulse trade' in controls['CRCL']['blockedActions']
+        assert 'immediate re-entry' in controls['IREN']['blockedActions']
+        assert engine['marketView']['topLine']
+        assert any(item['symbol'] == 'CRCL' and item['driver'] == 'stablecoin legislation'
+                   for item in engine['researchQueue'])
+
+        loaded = client.get('/api/data').get_json()['investment']
+        assert loaded['desk']['engine']['date'] == '2026-05-11'
+        assert loaded['deskSnapshots'][0]['topLine'] == engine['marketView']['topLine']
+
+    def test_investment_desk_engine_is_dynamic_for_unknown_symbol(self):
+        from investment_desk_engine import build_investment_desk_engine
+
+        engine = build_investment_desk_engine({
+            'positions': [
+                {'symbol': 'UEC', 'name': 'Uranium Energy', 'shares': 100, 'avgPrice': 5, 'currentPrice': 6},
+            ],
+            'events': [],
+            'rules': {},
+        }, '2026-05-11')
+
+        thesis = engine['theses'][0]
+        assert thesis['symbol'] == 'UEC'
+        assert thesis['profile'] == 'single_equity'
+        assert any('UEC' in item['query'] for item in engine['researchQueue'])
+
     def test_investment_order_intent_endpoint_creates_draft(self, client):
         payload = {
             'symbol': 'IREN',

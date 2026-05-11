@@ -8,6 +8,15 @@
 
 ## 2026-05-08
 
+### Python 투자 판단 엔진 분리
+
+- 투자 데스크의 핵심 판단을 브라우저 JS가 아니라 `investment_desk_engine.py` 순수 Python 모듈로 분리했다.
+- 새 엔진은 보유 종목별 thesis/profile/driver, 행동 통제 상태, 금지 행동, 확인해야 할 증거, 리서치 큐를 외부 AI 호출 없이 계산한다.
+- `/api/investment/desk/engine` 서버 API를 추가해 원장 스냅샷 기준으로 엔진 결과를 만들고 `investment.desk.engine`, `investment.theses`, `investment.deskSnapshots`에 저장한다.
+- 아침 데스크 준비 흐름에서 시세/일정/뉴스 동기화 후 Python 엔진을 호출하도록 연결하고, 기존 JS 데스크는 서버 엔진 결과가 없을 때의 폴백으로 유지했다.
+- 투자 AI 프롬프트가 `renderDailyDeskBrief()`를 통해 서버 엔진 요약을 우선 사용하도록 바꿔, AI가 포트폴리오 표 반복보다 행동 통제와 thesis driver를 먼저 보게 했다.
+- 서버 테스트에 CRCL/IREN/CASH 사례와 알 수 없는 신규 종목 사례를 추가해, 엔진이 특정 현재 보유 종목에만 하드코딩되지 않고 동적으로 작동하는지 검증했다.
+
 ### 투자 브리핑 비용 절약 모드
 
 - 투자 채팅 모델 라우팅을 추가해 일반 투자 대화와 짧은 브리핑은 `claude-haiku-4-5`, 실적·컨센서스·중요 매매 판단 같은 심층 분석은 `claude-sonnet-4-5-20250929`를 쓰게 했다.
