@@ -126,11 +126,12 @@ async function continueContextChat(text) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6', max_tokens: 600,
+        model: 'claude-sonnet-4-6', max_tokens: isInvestment ? 1600 : 800,
         system: [{ type: 'text', text: sysPrompt, cache_control: { type: 'ephemeral' } }],
         messages,
       }),
     });
+    if (!res.ok) throw new Error(`AI HTTP ${res.status}`);
     const data = await res.json();
     const reply = data.content?.map(c => c.text || '').join('').trim();
     if (reply) {
@@ -138,7 +139,7 @@ async function continueContextChat(text) {
       saveSummaryReplyAsRecord(reply);
       await saveInvestmentChatArtifacts(text, reply);
     } else {
-      hideTypingIndicator();
+      appendMessage('ai', '응답이 비어 있었어요. 방금 질문을 한 번만 다시 보내주세요.');
     }
   } catch (e) {
     appendMessage('ai', '죄송해요, 오류가 발생했어요. 다시 시도해주세요.');
@@ -685,7 +686,8 @@ function inferInvestmentCashUsdFromText(text) {
 
 function extractInvestmentUsdKrwRateFromText(text) {
   const raw = String(text || '');
-  const m = raw.match(/USD\s*\/\s*KRW[^0-9]{0,20}([0-9][0-9,]*(?:\.[0-9]+)?)/i) ||
+  const m = raw.match(/1\s*(?:\uB2EC\uB7EC|USD|dollar)[^\n0-9]{0,20}([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:\uC6D0|KRW)/i) ||
+    raw.match(/USD\s*\/\s*KRW[^0-9]{0,20}([0-9][0-9,]*(?:\.[0-9]+)?)/i) ||
     raw.match(/(?:\uD658\uC728|\uC6D0\/\uB2EC\uB7EC|\uB2EC\uB7EC\/\uC6D0)[^0-9]{0,20}([0-9][0-9,]*(?:\.[0-9]+)?)/i);
   return m ? parseInvestmentNumber(m[1]) : 0;
 }
@@ -939,21 +941,29 @@ async function fetchInvestmentFxContext(text) {
   if (!shouldFetchInvestmentFxContext(text)) return '';
   const inv = state.investment = normalizeInvestmentState(state.investment);
   const today = new Date().toISOString().split('T')[0];
-  let rate = investmentUsdKrwRate();
+  const explicitRate = extractInvestmentUsdKrwRateFromText(text);
+  let rate = explicitRate || investmentUsdKrwRate();
   let source = '기록된 환율';
   let quoteError = '';
   try {
     const data = await fetchMarketQuoteData(['USDKRW=X']);
     const quote = (data.quotes || []).find(q => String(q.symbol || '').toUpperCase() === 'USDKRW=X') || (data.quotes || [])[0];
-    if (quote?.price > 0) {
+    if (!explicitRate && quote?.price > 0) {
       rate = Number(quote.price);
-      inv.usdKrwRate = rate;
       source = data.source || 'market quote proxy';
-      saveData({ retries: 0 });
     }
   } catch (e) {
     quoteError = e.message || String(e);
     logger.warn('투자 대화 환율 조회 실패', e);
+  }
+
+  if (explicitRate) source = '사용자 입력';
+  if (rate > 0 && Math.abs(parseInvestmentNumber(inv.usdKrwRate) - rate) > 0.0001) {
+    inv.usdKrwRate = rate;
+    inv.usdKrwUpdatedAt = new Date().toISOString();
+    inv.usdKrwSource = source;
+    saveData({ retries: 0 });
+    if (typeof refreshInvestmentSurfaces === 'function') refreshInvestmentSurfaces();
   }
 
   const totals = investmentTotals(inv.positions);

@@ -67,7 +67,7 @@ async function refreshInvestmentMarketData() {
     .filter(p => !isCashInvestmentPosition(p))
     .map(p => p.symbol)
     .filter(Boolean);
-  const symbols = [...positionSymbols, ...INVESTMENT_INDEX_SYMBOLS];
+  const symbols = [...positionSymbols, ...INVESTMENT_INDEX_SYMBOLS, 'USDKRW=X'];
   if (!symbols.length) {
     showToast('조회할 종목이 없습니다.');
     buttons.forEach(btn => {
@@ -105,6 +105,12 @@ function applyInvestmentQuotes(quotes, options = {}) {
   const inv = state.investment = normalizeInvestmentState(state.investment);
   const map = {};
   (quotes || []).forEach(q => { if (q.symbol) map[String(q.symbol).toUpperCase()] = q; });
+  const fxQuote = map['USDKRW=X'];
+  if (fxQuote?.price > 0) {
+    inv.usdKrwRate = Number(fxQuote.price);
+    inv.usdKrwUpdatedAt = new Date().toISOString();
+    inv.usdKrwSource = 'yahoo-finance';
+  }
 
   inv.positions.forEach(p => {
     if (isCashInvestmentPosition(p)) return;

@@ -233,6 +233,8 @@ function normalizeInvestmentState(investment) {
     market: src.market && typeof src.market === 'object' ? src.market : base.market,
     alerts: Array.isArray(src.alerts) ? src.alerts : [],
     usdKrwRate: parseInvestmentNumber(src.usdKrwRate) || base.usdKrwRate,
+    usdKrwUpdatedAt: src.usdKrwUpdatedAt || null,
+    usdKrwSource: src.usdKrwSource || '',
     broker: src.broker && typeof src.broker === 'object' ? { ...base.broker, ...src.broker } : base.broker,
     calendar: src.calendar && typeof src.calendar === 'object' ? { ...base.calendar, ...src.calendar } : base.calendar,
     signals: src.signals && typeof src.signals === 'object' ? { ...base.signals, ...src.signals } : base.signals,

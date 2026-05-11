@@ -1459,6 +1459,64 @@ class TestInvestmentPartner:
             timeout=8_000,
         )
 
+    def test_investment_market_refresh_updates_usdkrw_rate_for_portfolio_krw(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.investment.usdKrwRate = 1350;
+            state.investment.positions = [{
+                id: 'ip-cash-fx',
+                assetType: 'cash',
+                symbol: 'CASH',
+                name: 'Cash',
+                shares: 42135,
+                cashAmount: 42135,
+                avgPrice: 1,
+                currentPrice: 1,
+                currency: 'USD',
+            }];
+            window.fetchMarketQuoteData = async (symbols) => ({
+                requested: symbols,
+                source: 'test-fx',
+                quotes: [{ symbol: 'USDKRW=X', price: 1472 }],
+            });
+            window.saveData = async () => true;
+            render();
+        }""")
+
+        logged_in_page.evaluate("() => refreshInvestmentMarketData()")
+        logged_in_page.wait_for_function("() => state.investment.usdKrwRate === 1472", timeout=8_000)
+        logged_in_page.locator('#investment-menu-portfolio').click()
+        logged_in_page.wait_for_selector('#investment-portfolio-modal', timeout=8_000)
+        modal_text = logged_in_page.locator('#investment-portfolio-modal').inner_text()
+        assert '62,022,720' in modal_text
+
+    def test_investment_chat_explicit_usdkrw_rate_updates_portfolio_display(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.investment.usdKrwRate = 1350;
+            state.investment.positions = [{
+                id: 'ip-cash-chat-fx',
+                assetType: 'cash',
+                symbol: 'CASH',
+                name: 'Cash',
+                shares: 42135,
+                cashAmount: 42135,
+                avgPrice: 1,
+                currentPrice: 1,
+                currency: 'USD',
+            }];
+            window.fetchMarketQuoteData = async () => { throw new Error('offline quote'); };
+            window.saveData = async () => true;
+            render();
+        }""")
+
+        context = logged_in_page.evaluate("() => fetchInvestmentFxContext('현재 환율은 1달러당 1472원이야. 현금 원화 환산해줘')")
+        assert '1472' in context.replace(',', '')
+        assert logged_in_page.evaluate("() => state.investment.usdKrwRate") == 1472
+        logged_in_page.locator('#investment-menu-portfolio').click()
+        logged_in_page.wait_for_selector('#investment-portfolio-modal', timeout=8_000)
+        assert '62,022,720' in logged_in_page.locator('#investment-portfolio-modal').inner_text()
+
     def test_investment_timeline_modal_lists_events_and_decisions(self, logged_in_page):
         self._open_investment(logged_in_page)
         logged_in_page.evaluate("""() => {

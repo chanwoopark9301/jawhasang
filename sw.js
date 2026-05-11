@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v117'; // Wider draggable investment timeline
+const CACHE_NAME = 'jip-v118'; // Keep portfolio FX in sync
 
 const STATIC_ASSETS = [
   '/style.css',
