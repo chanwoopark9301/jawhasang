@@ -600,6 +600,96 @@ def _upsert_investment_event_row(cur, account_id, event):
     ))
     return True
 
+def _position_from_ledger_row(row):
+    if not row:
+        return None
+    (pos_id, symbol, name, asset_type, quantity, avg_price, current_price,
+     currency, metadata, updated_at) = row
+    meta = metadata if isinstance(metadata, dict) else {}
+    position = dict(meta or {})
+    asset_type = str(asset_type or position.get('assetType') or 'stock').lower()
+    quantity = _num(quantity, 0)
+    position.update({
+        'id': str(pos_id or position.get('id') or f"ip-{str(symbol or 'asset').lower()}"),
+        'symbol': str(symbol or position.get('symbol') or '').upper(),
+        'name': name or position.get('name') or str(symbol or '').upper(),
+        'assetType': asset_type,
+        'shares': quantity,
+        'avgPrice': _num(avg_price, 1 if asset_type == 'cash' else 0),
+        'currentPrice': _num(current_price, 1 if asset_type == 'cash' else 0),
+        'currency': currency or position.get('currency') or 'USD',
+        'ledgerUpdatedAt': updated_at.isoformat() if hasattr(updated_at, 'isoformat') else str(updated_at or ''),
+        'ledgerSource': 'investment_positions',
+    })
+    if asset_type == 'cash' or position['symbol'] == 'CASH':
+        position['assetType'] = 'cash'
+        position['symbol'] = 'CASH'
+        position['cashAmount'] = quantity
+        position['avgPrice'] = 1.0
+        position['currentPrice'] = 1.0
+    return position
+
+def _read_investment_snapshot_from_tables(inv=None):
+    if not DATABASE_URL:
+        return None
+    conn = _get_db_conn()
+    try:
+        _ensure_investment_tables(conn)
+        account_id = _investment_account_id(inv)
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, name, base_currency, cash_balance, total_capital, updated_at
+                FROM investment_accounts
+                WHERE id = %s
+            """, (account_id,))
+            account_row = cur.fetchone()
+            cur.execute("""
+                SELECT id, symbol, name, asset_type, quantity, avg_price, current_price,
+                       currency, metadata, updated_at
+                FROM investment_positions
+                WHERE account_id = %s
+                ORDER BY CASE WHEN symbol = 'CASH' THEN 1 ELSE 0 END, symbol
+            """, (account_id,))
+            position_rows = cur.fetchall()
+
+        if not account_row and not position_rows:
+            return None
+
+        positions = [_position_from_ledger_row(row) for row in position_rows]
+        positions = [p for p in positions if p and p.get('symbol')]
+        account = {}
+        if account_row:
+            account = {
+                'id': account_row[0],
+                'name': account_row[1],
+                'baseCurrency': account_row[2],
+                'cashBalance': _num(account_row[3], 0),
+                'totalCapital': _num(account_row[4], 0) if account_row[4] is not None else None,
+                'ledgerUpdatedAt': account_row[5].isoformat() if hasattr(account_row[5], 'isoformat') else str(account_row[5] or ''),
+            }
+            has_cash = any(str(p.get('symbol') or '').upper() == 'CASH' or str(p.get('assetType') or '').lower() == 'cash' for p in positions)
+            if not has_cash and account['cashBalance'] > 0:
+                positions.append({
+                    'id': 'ip-cash-ledger',
+                    'assetType': 'cash',
+                    'symbol': 'CASH',
+                    'name': 'Cash',
+                    'shares': account['cashBalance'],
+                    'cashAmount': account['cashBalance'],
+                    'avgPrice': 1.0,
+                    'currentPrice': 1.0,
+                    'currency': account['baseCurrency'] or 'USD',
+                    'ledgerSource': 'investment_accounts',
+                    'ledgerUpdatedAt': account.get('ledgerUpdatedAt') or '',
+                })
+        return {
+            'account': account,
+            'positions': positions,
+            'ledgerSource': 'normalized-tables',
+        }
+    finally:
+        conn.close()
+
 def _decode_stored_data(raw):
     if raw is None:
         return EMPTY()
@@ -865,6 +955,51 @@ def save_data_route():
     except Exception as e:
         log.error('POST /api/data 저장 실패: %s', e, exc_info=True)
         return jsonify({'error': '데이터 저장 실패'}), 500
+
+@app.route('/api/investment/ledger', methods=['GET'])
+@require_auth
+def investment_ledger_snapshot_route():
+    request_id = f"iledger-{int(time.time() * 1000)}"
+    try:
+        data = _normalize_data(read_data())
+        inv = data['investment']
+        ledger = _read_investment_snapshot_from_tables(inv)
+        if ledger and ledger.get('positions'):
+            inv = _normalize_data({
+                'investment': {
+                    **inv,
+                    'account': { **(inv.get('account') or {}), **(ledger.get('account') or {}) },
+                    'positions': ledger['positions'],
+                    'ledgerSource': ledger.get('ledgerSource'),
+                    'ledgerSyncedAt': datetime.now().isoformat(),
+                }
+            })['investment']
+            log.info('GET /api/investment/ledger [%s] normalized positions=%d source=%s',
+                     request_id, len(inv.get('positions') or []), ledger.get('ledgerSource'))
+            return jsonify({
+                'ok': True,
+                'investment': inv,
+                'positions': inv.get('positions') or [],
+                'source': ledger.get('ledgerSource'),
+                'requestId': request_id,
+            })
+        log.info('GET /api/investment/ledger [%s] fallback positions=%d',
+                 request_id, len(inv.get('positions') or []))
+        return jsonify({
+            'ok': True,
+            'investment': inv,
+            'positions': inv.get('positions') or [],
+            'source': 'app-storage',
+            'requestId': request_id,
+        })
+    except Exception as e:
+        log.error('GET /api/investment/ledger [%s] failed: %s', request_id, e, exc_info=True)
+        return jsonify({
+            'ok': False,
+            'error': 'investment ledger snapshot failed',
+            'requestId': request_id,
+            'errorDetail': _safe_error_detail(e),
+        }), 500
 
 @app.route('/api/investment/positions', methods=['POST'])
 @require_auth

@@ -135,6 +135,23 @@ async function apiCreateInvestmentTransaction(transaction) {
   return data;
 }
 
+async function apiFetchInvestmentLedgerSnapshot() {
+  const res = await fetch('/api/investment/ledger', {
+    credentials: 'same-origin',
+    headers: { 'Accept': 'application/json' },
+    cache: 'no-store',
+  });
+  const text = await res.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch (e) {
+    throw new Error(`investment ledger returned non-json: ${res.status}`);
+  }
+  if (!res.ok || !data.ok) throw new Error(data?.error || `investment ledger failed: ${res.status}`);
+  return data;
+}
+
 async function apiSyncKisBroker(days = 30) {
   const res = await fetch('/api/investment/broker/sync', {
     method: 'POST',

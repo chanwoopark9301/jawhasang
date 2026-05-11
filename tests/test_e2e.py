@@ -1410,6 +1410,58 @@ class TestInvestmentPartner:
         assert 'IREN' in prompt
         assert 'scenario/action plan' in prompt
 
+    def test_investment_chat_prompt_uses_server_ledger_snapshot(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        prompt = logged_in_page.evaluate("""async () => {
+            state.currentChatMessages = [];
+            state.investment.positions = [{
+                id: 'ip-stale-local',
+                symbol: 'IREN',
+                name: 'Iris Energy',
+                shares: 1700,
+                avgPrice: 46.06,
+                currentPrice: 60,
+            }];
+            state.investment.events = [];
+            state.investment.decisions = [];
+            state.investment.chat = [];
+            state.investment.chatSessions = [];
+            window.__analyzePayload = null;
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = (url, opts) => {
+                const target = String(url);
+                if (target.includes('/api/investment/ledger')) {
+                    return Promise.resolve(new Response(JSON.stringify({
+                        ok: true,
+                        source: 'normalized-tables',
+                        investment: {
+                            ...state.investment,
+                            positions: [
+                                { id: 'ip-iren-ledger', symbol: 'IREN', name: 'Iris Energy', assetType: 'stock', shares: 510, avgPrice: 66.38, currentPrice: 64 },
+                                { id: 'ip-cash-ledger', symbol: 'CASH', name: 'Cash', assetType: 'cash', shares: 125000, cashAmount: 125000, avgPrice: 1, currentPrice: 1 },
+                            ],
+                        },
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                if (target.includes('/api/analyze')) {
+                    window.__analyzePayload = JSON.parse(opts.body);
+                    return Promise.resolve(new Response(JSON.stringify({
+                        content: [{ text: 'ledger based answer' }],
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                return originalFetch(url, opts);
+            };
+            await continueContextChat('tell me my account risk');
+            return window.__analyzePayload.system[0].text;
+        }""")
+
+        assert 'normalized-tables' not in prompt
+        assert 'IREN' in prompt
+        assert '510' in prompt
+        assert '66.38' in prompt
+        assert '125000' in prompt
+        assert '1700' not in prompt
+
     def test_investment_krw_auxiliary_display_keeps_usd_inputs(self, logged_in_page):
         self._open_investment(logged_in_page)
         logged_in_page.evaluate("""() => {

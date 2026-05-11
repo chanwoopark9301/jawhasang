@@ -117,6 +117,10 @@ async function continueContextChat(text) {
     }
   }
 
+  if (isInvestment) {
+    await syncInvestmentLedgerForChatPrompt();
+  }
+
   let investmentNewsContext = '';
   let investmentMarketContext = '';
   let investmentFxContext = '';
@@ -390,6 +394,40 @@ function persistInvestmentChangesInBackground(label = 'investment change') {
       logger.warn('투자 변경 백그라운드 저장 실패', { label, error });
       if (typeof showToast === 'function') showToast('화면에는 반영했지만 서버 저장이 지연됐어요. 잠시 후 다시 동기화합니다.');
     });
+}
+
+let _investmentLedgerPromptSyncAt = 0;
+
+async function syncInvestmentLedgerForChatPrompt() {
+  if (typeof apiFetchInvestmentLedgerSnapshot !== 'function') return false;
+  const now = Date.now();
+  if (now - _investmentLedgerPromptSyncAt < 2000) return false;
+  _investmentLedgerPromptSyncAt = now;
+  try {
+    const data = await apiFetchInvestmentLedgerSnapshot();
+    if (!data?.investment || !Array.isArray(data.investment.positions)) return false;
+    const incoming = normalizeInvestmentState(data.investment);
+    if (!incoming.positions.length) return false;
+    state.investment = normalizeInvestmentState({
+      ...state.investment,
+      ...incoming,
+      positions: incoming.positions,
+      events: incoming.events?.length ? incoming.events : state.investment.events,
+      decisions: incoming.decisions?.length ? incoming.decisions : state.investment.decisions,
+      chat: state.investment.chat,
+      chatSessions: state.investment.chatSessions,
+      activeChatSessionId: state.investment.activeChatSessionId,
+    });
+    if (typeof _saveToLocalCache === 'function') _saveToLocalCache();
+    logger.info('AI 투자 대화 원장 스냅샷 동기화 완료', {
+      source: data.source,
+      positions: state.investment.positions.length,
+    });
+    return true;
+  } catch (error) {
+    logger.warn('AI 투자 대화 원장 스냅샷 동기화 실패', error);
+    return false;
+  }
 }
 
 function buildInvestmentTradeArtifactKey(symbol, action, shares, price) {

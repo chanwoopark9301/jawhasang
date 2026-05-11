@@ -200,6 +200,41 @@ class TestDataAPI:
         assert cash2['cashAmount'] == 71400
         assert len(inv2['decisions']) == 1
 
+    def test_investment_ledger_endpoint_prefers_normalized_table_snapshot(self, client, monkeypatch):
+        import server
+
+        client.post('/api/data',
+                    data=json.dumps({'investment': {
+                        'positions': [{'id': 'ip-stale', 'symbol': 'CASH', 'assetType': 'cash', 'shares': 1, 'cashAmount': 1}],
+                        'rules': {},
+                        'journal': [],
+                        'events': [],
+                        'decisions': [],
+                    }}),
+                    content_type='application/json')
+
+        def fake_ledger(inv):
+            return {
+                'ledgerSource': 'normalized-tables',
+                'account': {'id': 'primary', 'baseCurrency': 'USD', 'cashBalance': 125000},
+                'positions': [
+                    {'id': 'ip-iren-ledger', 'symbol': 'IREN', 'name': 'Iris Energy', 'assetType': 'stock', 'shares': 510, 'avgPrice': 66.38, 'currentPrice': 64},
+                    {'id': 'ip-cash-ledger', 'symbol': 'CASH', 'name': 'Cash', 'assetType': 'cash', 'shares': 125000, 'cashAmount': 125000, 'avgPrice': 1, 'currentPrice': 1},
+                ],
+            }
+
+        monkeypatch.setattr(server, '_read_investment_snapshot_from_tables', fake_ledger)
+
+        r = client.get('/api/investment/ledger')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['ok'] is True
+        assert data['source'] == 'normalized-tables'
+        assert data['investment']['positions'][0]['symbol'] == 'IREN'
+        assert data['investment']['positions'][0]['shares'] == 510
+        assert data['investment']['positions'][1]['cashAmount'] == 125000
+
     def test_investment_order_intent_endpoint_creates_draft(self, client):
         payload = {
             'symbol': 'IREN',
