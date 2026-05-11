@@ -181,12 +181,14 @@ async function continueContextChat(text) {
     });
     if (!res.ok) {
       let detail = '';
+      let friendly = '';
       try {
-        detail = (await res.text()).slice(0, 400);
+        detail = (await res.text()).slice(0, 1200);
+        friendly = friendlyAiHttpError(res.status, detail);
       } catch (_) {
         detail = '';
       }
-      throw new Error(`AI HTTP ${res.status}${detail ? ` ${detail}` : ''}`);
+      throw new Error(friendly || `AI HTTP ${res.status}${detail ? ` ${detail.slice(0, 240)}` : ''}`);
     }
     const data = await res.json();
     const reply = data.content?.map(c => c.text || '').join('').trim();
@@ -229,6 +231,26 @@ function isInvestmentBriefingIntent(text) {
   return /브리핑|시황|오늘\s*중요|데스크|시장\s*정리|morning|briefing|market\s*brief/i.test(String(text || ''));
 }
 
+function friendlyAiHttpError(status, detail = '') {
+  const raw = String(detail || '');
+  let parsed = null;
+  try { parsed = JSON.parse(raw); } catch (_) { parsed = null; }
+  const joined = [
+    raw,
+    parsed?.error,
+    parsed?.errorDetail,
+    parsed?.providerReason,
+  ].filter(Boolean).join(' ').toLowerCase();
+  if (joined.includes('credit balance') || joined.includes('insufficient credit') || joined.includes('anthropic_credit')) {
+    return `Claude 크레딧 부족으로 AI 호출이 실패했습니다. HTTP ${status}`;
+  }
+  if (status === 429) return 'AI 호출 한도가 잠시 걸렸습니다. 잠시 후 다시 시도하면 됩니다.';
+  if (status === 504) return 'AI 응답 시간이 초과됐습니다.';
+  if (status >= 500) return `AI 서버 오류가 발생했습니다. HTTP ${status}`;
+  if (status >= 400) return `AI 요청이 거부됐습니다. HTTP ${status}`;
+  return '';
+}
+
 function buildInvestmentBriefingFallbackReply(userText, error) {
   try {
     const inv = state.investment = normalizeInvestmentState(state.investment);
@@ -260,12 +282,24 @@ function buildInvestmentBriefingFallbackReply(userText, error) {
     }
     if (cash > 0) riskLines.push(`- 현금 ${formatMoney(cash)}(약 ₩${Math.round(cash * rate).toLocaleString('ko-KR')})는 추격매수 대기 자금으로 쓰지 말고, 진입 조건이 맞을 때만 분할 집행합니다.`);
     riskLines.push('- 뉴스나 X 흐름만 보고 즉시 매수하지 않습니다. 공식 공시·회사 IR·신뢰 가능한 금융매체·가격/거래량 확인 전까지는 약한 신호입니다.');
-    const trace = error?.message ? `\n\n> AI 호출은 실패했지만 원장 기준 로컬 브리핑으로 대체했습니다. 콘솔/서버 로그에서 오류 추적 ID를 확인하세요. (${String(error.message).slice(0, 160)})` : '';
+    const reason = friendlyAiFallbackReason(error);
+    const trace = reason ? `\n\n> AI 호출은 실패했지만 원장 기준 로컬 브리핑으로 대체했습니다. 원인: ${reason}. 자세한 내용은 콘솔/서버 로그의 추적 ID를 확인하세요.` : '';
     return `## 오늘의 투자 데스크 임시 브리핑\n\n### 계좌 기준\n- 총 평가액: ${formatMoney(totals.totalValue)} (약 ₩${Math.round(totals.totalValue * rate).toLocaleString('ko-KR')})\n- 현금: ${formatMoney(cash)}\n- 투자 수익률: ${totals.totalGainPercent >= 0 ? '+' : ''}${totals.totalGainPercent.toFixed(2)}%\n\n### 거시 변수\n${macro}\n\n### 보유 종목별 확인 지점\n${micro}\n\n### 오늘 하지 말아야 할 행동\n${riskLines.join('\n')}${trace}`;
   } catch (fallbackError) {
     logger.error('Investment briefing fallback failed', fallbackError);
     return '';
   }
+}
+
+function friendlyAiFallbackReason(error) {
+  const message = String(error?.message || error || '');
+  if (!message) return '';
+  if (/credit|크레딧|잔액|billing/i.test(message)) return 'Claude 크레딧 부족';
+  if (/429|한도|rate/i.test(message)) return 'AI 호출 한도 초과';
+  if (/timeout|초과|504/i.test(message)) return 'AI 응답 시간 초과';
+  if (/400/.test(message)) return 'AI 요청 거부';
+  if (/500|502|503/.test(message)) return 'AI 서버 오류';
+  return 'AI 호출 실패';
 }
 
 function saveSummaryReplyAsRecord(text) {

@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v131'; // Trace investment briefing AI failures
+const CACHE_NAME = 'jip-v132'; // Fall back to OpenAI when Claude credit is empty
 
 const STATIC_ASSETS = [
   '/style.css',

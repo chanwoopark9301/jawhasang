@@ -2222,6 +2222,17 @@ def _should_retry_anthropic_model(resp, body: str) -> bool:
     lowered = (body or '').lower()
     return 'model' in lowered and ('not found' in lowered or 'invalid' in lowered or 'does not exist' in lowered)
 
+def _is_anthropic_credit_error(body: str) -> bool:
+    lowered = (body or '').lower()
+    return 'credit balance' in lowered or 'insufficient credit' in lowered or 'billing' in lowered
+
+def _should_fallback_to_openai(resp, body: str, use_stream: bool) -> bool:
+    if use_stream or not OPENAI_API_KEY:
+        return False
+    if _is_anthropic_credit_error(body):
+        return True
+    return resp.status_code in {402, 429, 529}
+
 # ---------------------------------------------------------------------------
 # 축어록 요약 엔드포인트 (긴 축어록 2단계 처리용)
 # ---------------------------------------------------------------------------
@@ -2505,6 +2516,27 @@ def analyze():
             except requests.RequestException as e:
                 log.error('POST /api/analyze [%s] fallback AI 네트워크 오류: %s', request_id, e, exc_info=True)
                 return jsonify({'error': f'네트워크 오류: {e}', 'requestId': request_id, 'errorDetail': _safe_error_detail(e)}), 502
+        if not resp.ok and _should_fallback_to_openai(resp, error_body, use_stream):
+            log.warning('POST /api/analyze [%s] Anthropic unavailable, trying OpenAI fallback. status=%d reason=%s',
+                        request_id, resp.status_code, 'credit' if _is_anthropic_credit_error(error_body) else 'provider')
+            openai_result = _call_openai_for_compare({
+                'system': payload.get('system') or [],
+                'messages': payload.get('messages') or [],
+                'max_tokens': payload.get('max_tokens') or 700,
+                'openaiModel': OPENAI_MODEL,
+            })
+            if openai_result.get('ok') and openai_result.get('text'):
+                log.info('POST /api/analyze [%s] OpenAI fallback complete model=%s chars=%d',
+                         request_id, openai_result.get('model'), len(openai_result.get('text') or ''))
+                return jsonify({
+                    'content': [{'type': 'text', 'text': openai_result['text']}],
+                    'provider': 'openai',
+                    'model': openai_result.get('model'),
+                    'fallbackFrom': 'anthropic',
+                    'requestId': request_id,
+                }), 200
+            log.warning('POST /api/analyze [%s] OpenAI fallback failed: %s',
+                        request_id, openai_result.get('error') or openai_result)
 
     if use_stream:
         log.debug('POST /api/analyze [%s] AI 스트리밍 응답 시작 status=%d', request_id, resp.status_code)
@@ -2524,6 +2556,7 @@ def analyze():
             'requestId': request_id,
             'status': resp.status_code,
             'model': payload.get('model'),
+            'providerReason': 'anthropic_credit' if _is_anthropic_credit_error(_anthropic_error_text(resp)) else 'anthropic_error',
             'errorDetail': _anthropic_error_text(resp),
         }), resp.status_code
     return (resp.content, resp.status_code, {'Content-Type': 'application/json', 'X-Request-Id': request_id})

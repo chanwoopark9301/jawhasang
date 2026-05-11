@@ -548,6 +548,54 @@ class TestDataAPI:
         assert calls[0]['model'] == 'claude-sonnet-4-6'
         assert calls[1]['model'] == 'claude-sonnet-4-5-20250929'
 
+    def test_analyze_endpoint_falls_back_to_openai_when_anthropic_credit_empty(self, client, monkeypatch):
+        import server
+
+        monkeypatch.setattr(server, 'ANTHROPIC_API_KEY', 'test-anthropic')
+        monkeypatch.setattr(server, 'OPENAI_API_KEY', 'test-openai')
+        monkeypatch.setattr(server, 'OPENAI_MODEL', 'gpt-test')
+
+        class FakeResp:
+            def __init__(self, status_code, body):
+                self.status_code = status_code
+                self._body = body
+                self.content = json.dumps(body).encode('utf-8')
+                self.text = json.dumps(body)
+                self.ok = 200 <= status_code < 300
+
+            def json(self):
+                return self._body
+
+        calls = []
+
+        def fake_post(url, headers=None, json=None, timeout=None, stream=False):
+            calls.append((url, json))
+            if 'anthropic.com' in url:
+                return FakeResp(400, {'error': {'message': 'Your credit balance is too low'}})
+            if 'openai.com' in url:
+                return FakeResp(200, {'choices': [{'message': {'content': 'OpenAI fallback briefing'}}]})
+            raise AssertionError(url)
+
+        monkeypatch.setattr(server.requests, 'post', fake_post)
+
+        r = client.post('/api/analyze',
+                        data=json.dumps({
+                            'clientRequestId': 'chat-credit',
+                            'model': 'claude-sonnet-4-6',
+                            'max_tokens': 100,
+                            'system': [{'type': 'text', 'text': '투자 브리핑'}],
+                            'messages': [{'role': 'user', 'content': '브리핑'}],
+                        }),
+                        content_type='application/json')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['provider'] == 'openai'
+        assert data['fallbackFrom'] == 'anthropic'
+        assert data['content'][0]['text'] == 'OpenAI fallback briefing'
+        assert any('anthropic.com' in call[0] for call in calls)
+        assert any('openai.com' in call[0] for call in calls)
+
     def test_decode_stored_data_accepts_legacy_json_dict(self):
         import server
 

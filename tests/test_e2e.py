@@ -1657,7 +1657,8 @@ class TestInvestmentPartner:
                         error: 'AI provider error',
                         requestId: 'ai-test-400',
                         status: 400,
-                        errorDetail: 'invalid model',
+                        providerReason: 'anthropic_credit',
+                        errorDetail: '{"type":"error","error":{"message":"Your credit balance is too low"}}',
                     }), { status: 400, headers: { 'Content-Type': 'application/json' } }));
                 }
                 return originalFetch(url, opts);
@@ -1680,6 +1681,10 @@ class TestInvestmentPartner:
         assert '오늘의 투자 데스크 임시 브리핑' in answer
         assert 'IREN' in answer
         assert 'QLD' in answer
+        assert 'Claude 크레딧 부족' in answer
+        assert 'credit balance' not in answer
+        assert 'AI HTTP' not in answer
+        assert 'provider error' not in answer
         assert '오류가 발생했어요' not in answer
 
     def test_investment_krw_auxiliary_display_keeps_usd_inputs(self, logged_in_page):
