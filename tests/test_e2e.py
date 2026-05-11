@@ -2100,6 +2100,53 @@ class TestInvestmentPartner:
         assert '약 2,500만원' in logged_in_page.locator('.investment-timeline-item.decision .chat-markdown table').inner_text()
         assert logged_in_page.locator('.investment-timeline-item.decision .chat-markdown li').first.inner_text() == '60달러대에서 보유 주식 70% 익절'
 
+    def test_investment_chat_refreshes_open_portfolio_and_desk_modals(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.investment.positions = [{
+                id: 'ip-live-iren',
+                symbol: 'IREN',
+                name: 'Iris Energy',
+                shares: 1700,
+                avgPrice: 46.06,
+                currentPrice: 60,
+            }];
+            state.investment.decisions = [];
+            state.investment.events = [];
+            render();
+        }""")
+
+        logged_in_page.locator('#investment-menu-portfolio').click()
+        logged_in_page.wait_for_selector('#investment-portfolio-modal', timeout=8_000)
+        assert '1,700' in logged_in_page.locator('#modal-box').inner_text()
+
+        logged_in_page.evaluate("""async () => {
+            await saveInvestmentChatArtifacts(
+                'portfolio update save',
+                'IREN remaining 510 shares avg 66.38 current 64\\ncash 125000 USD'
+            );
+        }""")
+        logged_in_page.wait_for_function(
+            "() => state.investment.positions.some(p => p.symbol === 'IREN' && p.shares === 510) && document.querySelector('#modal-box')?.innerText.includes('510')",
+            timeout=8_000,
+        )
+
+        logged_in_page.locator('.modal-close').click()
+        logged_in_page.locator('#investment-menu-desk').click()
+        logged_in_page.wait_for_selector('#investment-desk-modal', timeout=8_000)
+        assert logged_in_page.evaluate("() => state.investment.positions.some(p => p.assetType === 'cash' && p.cashAmount === 125000)")
+
+        logged_in_page.evaluate("""async () => {
+            await saveInvestmentChatArtifacts(
+                'portfolio update save',
+                'IREN remaining 510 shares avg 66.38 current 65\\ncash 126000 USD'
+            );
+        }""")
+        logged_in_page.wait_for_function(
+            "() => state.investment.positions.some(p => p.assetType === 'cash' && p.cashAmount === 126000) && document.querySelector('#investment-desk-modal')?.innerText.includes('126,000')",
+            timeout=8_000,
+        )
+
     def test_investment_chat_portfolio_update_uses_ai_residual_position(self, logged_in_page):
         self._open_investment(logged_in_page)
         logged_in_page.evaluate("""() => {

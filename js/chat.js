@@ -132,7 +132,7 @@ async function continueContextChat(text) {
     if (reply) {
       appendMessage('ai', reply);
       saveSummaryReplyAsRecord(reply);
-      saveInvestmentChatArtifacts(text, reply);
+      await saveInvestmentChatArtifacts(text, reply);
     } else {
       hideTypingIndicator();
     }
@@ -167,7 +167,7 @@ function saveSummaryReplyAsRecord(text) {
   renderSidebar();
 }
 
-function saveInvestmentChatArtifacts(userText, aiText) {
+async function saveInvestmentChatArtifacts(userText, aiText) {
   if (state.view !== 'investment') return;
   const ask = (userText || '').trim();
   const content = (aiText || '').trim();
@@ -191,9 +191,9 @@ function saveInvestmentChatArtifacts(userText, aiText) {
       severity: 'watch',
       source: 'chat',
     });
-    saveData();
+    await saveData();
     showToast('Market signal saved.');
-    renderRightPanel();
+    refreshInvestmentSurfaces();
     return;
   }
   if (/뉴스|동향|공시|기사|news|headline|filing/.test(ask)) {
@@ -208,20 +208,18 @@ function saveInvestmentChatArtifacts(userText, aiText) {
       linkedDecisionId: null,
       linkedRecordId: null,
     });
-    if (state.activeModal === 'investment-portfolio') openModal('investment-portfolio');
-    render();
-    saveData();
+    await saveData();
     showToast('뉴스 동향에 기록했어요.');
-    renderRightPanel();
+    refreshInvestmentSurfaces();
     return;
   }
 
   if (/투자\s*원칙|원칙|매매\s*원칙|방향성|체크리스트|리스크/.test(ask)) {
     const prev = state.investment.rules.coreRules || '';
     state.investment.rules.coreRules = [prev, content].filter(Boolean).join('\n\n');
-    saveData();
+    await saveData();
     showToast('투자 원칙에 반영했어요.');
-    renderRightPanel();
+    refreshInvestmentSurfaces();
     return;
   }
 
@@ -238,11 +236,9 @@ function saveInvestmentChatArtifacts(userText, aiText) {
       linkedDecisionId: null,
       linkedRecordId: null,
     });
-    saveData();
+    await saveData();
     showToast('포트폴리오에 반영했어요.');
-    if (state.activeModal === 'investment-portfolio') openModal('investment-portfolio');
-    render();
-    renderRightPanel();
+    refreshInvestmentSurfaces();
     return;
   }
 
@@ -252,8 +248,7 @@ function saveInvestmentChatArtifacts(userText, aiText) {
     const trade = inferInvestmentTradeFill(ask, combined, action, position);
     if (isDuplicateInvestmentTradeArtifact(position?.symbol || symbol || '', action, trade.shares, trade.price, combined)) {
       showToast('이미 반영된 매매 기록이라 중복 적용하지 않았어요.');
-      render();
-      renderRightPanel();
+      refreshInvestmentSurfaces();
       return;
     }
     const decision = {
@@ -297,12 +292,29 @@ function saveInvestmentChatArtifacts(userText, aiText) {
         decision.summary = `${decision.summary}\n예수금 ${formatMoneySigned(decision.cashDelta || 0)}`;
       }
     }
-    saveData();
+    await saveData();
     showToast('매매 기록에 남겼어요.');
-    if (state.activeModal === 'investment-portfolio') openModal('investment-portfolio');
-    render();
-    renderRightPanel();
+    refreshInvestmentSurfaces();
   }
+}
+
+function refreshInvestmentSurfaces() {
+  const active = state.activeModal;
+  const investmentModals = new Set([
+    'investment-desk',
+    'investment-portfolio',
+    'investment-timeline',
+    'investment-news',
+    'investment-decisions',
+    'investment-research',
+    'investment-signals',
+  ]);
+  state.investment = normalizeInvestmentState(state.investment);
+  state.investment.alerts = buildInvestmentRiskAlerts(state.investment.positions, state.investment.rules);
+  render();
+  if (typeof renderSidebar === 'function') renderSidebar();
+  if (typeof renderRightPanel === 'function') renderRightPanel();
+  if (active && investmentModals.has(active)) openModal(active);
 }
 
 function buildInvestmentTradeArtifactKey(symbol, action, shares, price) {
@@ -404,7 +416,9 @@ function inferInvestmentPositionSnapshot(text) {
   const shares = extractSnapshotNumber(raw, [
     /(?:\uBCF4\uC720\s*)?\uC218\uB7C9[^0-9]{0,24}([0-9][0-9,.]*)\s*(?:\uC8FC|\uAC1C|shares?)/i,
     /(?:\uC794\uC5EC|\uB0A8\uC740)[^0-9]{0,24}([0-9][0-9,.]*)\s*(?:\uC8FC|\uAC1C|shares?)/i,
+    /(?:remaining|left|holding|position|shares?|quantity|qty)[^0-9]{0,24}([0-9][0-9,.]*)\s*(?:shares?|ea|units?)?/i,
     /([0-9][0-9,.]*)\s*(?:\uC8FC|shares?)\s*(?:\uBCF4\uC720|\uB0A8)/i,
+    /([0-9][0-9,.]*)\s*(?:shares?|units?)\s*(?:remaining|left|holding)/i,
   ]);
   const avgPrice = extractSnapshotNumber(raw, [
     /(?:\uD3C9\uB2E8|\uD3C9\uADE0\s*\uB2E8\uAC00|avg|average)[^0-9]{0,24}\$?\s*([0-9][0-9,.]*)/i,
