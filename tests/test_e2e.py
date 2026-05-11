@@ -1607,6 +1607,79 @@ class TestInvestmentPartner:
         logged_in_page.wait_for_selector('#investment-portfolio-modal', timeout=8_000)
         assert '62,022,720' in logged_in_page.locator('#investment-portfolio-modal').inner_text()
 
+    def test_chat_portfolio_snapshot_updates_block_rows_and_fx_rate(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        result = logged_in_page.evaluate("""() => {
+            state.investment = normalizeInvestmentState({
+                positions: [{
+                    id: 'ip-iren-snapshot-block',
+                    symbol: 'IREN',
+                    name: '아이렌',
+                    shares: 510,
+                    avgPrice: 33,
+                    currentPrice: 61.2,
+                }],
+                decisions: [],
+                events: [],
+                rules: {},
+                usdKrwRate: 1350,
+            });
+            const text = `
+CASH
+현금 · 현금
+33.3%
+$42,135
+보유 현금 $42,135 · 약 ₩56,882,250
+즉시 투입 가능한 대기 자금
+IREN
+아이렌
+24.7%
+$31,212
+수량 510 · 평단 $66.38 · 현재 $61.2 · 매입금 $33,853.8
+QLD
+QLD
+22.6%
+$28,616.64
+수량 312 · 평단 $88.88 · 현재 $91.72 · 매입금 $27,730.56
+CRCL
+써클
+10.2%
+$12,844.71
+수량 113 · 평단 $128.91 · 현재 $113.67 · 매입금 $14,566.83
+ETH-USD
+이더리움 · 코인
+9.3%
+$11,717.55
+수량 5 · 평단 $4,531.54 · 현재 $2,343.51 · 매입금 $22,657.7
+이거 대로 포트폴리오를 수정하되, 1470원 환율 적용해`;
+            const update = applyInvestmentPortfolioSnapshotFromChat(text);
+            const bySymbol = Object.fromEntries(state.investment.positions.map(p => [p.symbol, p]));
+            const prompt = _buildChatSysPrompt(false, null, null, '');
+            return {
+                changed: update.changed,
+                rate: state.investment.usdKrwRate,
+                cash: bySymbol.CASH.cashAmount,
+                irenAvg: bySymbol.IREN.avgPrice,
+                qldShares: bySymbol.QLD.shares,
+                crclCurrent: bySymbol.CRCL.currentPrice,
+                ethType: bySymbol['ETH-USD'].assetType,
+                promptHasAuthoritative: prompt.includes('AUTHORITATIVE CURRENT LEDGER'),
+                promptIrenAvg: prompt.includes('IREN') && prompt.includes('66.38'),
+            };
+        }""")
+
+        assert result == {
+            'changed': True,
+            'rate': 1470,
+            'cash': 42135,
+            'irenAvg': 66.38,
+            'qldShares': 312,
+            'crclCurrent': 113.67,
+            'ethType': 'crypto',
+            'promptHasAuthoritative': True,
+            'promptIrenAvg': True,
+        }
+
     def test_investment_timeline_modal_lists_events_and_decisions(self, logged_in_page):
         self._open_investment(logged_in_page)
         logged_in_page.evaluate("""() => {
