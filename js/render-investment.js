@@ -7,6 +7,9 @@ function renderInvestmentView() {
   const inv = normalizeInvestmentState(state.investment);
   state.investment = inv;
   const totals = investmentTotals(inv.positions);
+  const cashValue = (inv.positions || [])
+    .filter(p => isCashInvestmentPosition(p))
+    .reduce((sum, p) => sum + investmentPositionValue(p, 'currentPrice'), 0);
   const last = inv.decisions.at(-1);
   const messages = state.currentChatMessages || [];
   const alerts = inv.alerts || buildInvestmentRiskAlerts(inv.positions, inv.rules);
@@ -36,7 +39,11 @@ function renderInvestmentView() {
     <section class="investment-summary-grid">
       <div class="investment-summary-card">
         <span>보유 종목</span>
-        <strong>${inv.positions.length}</strong>
+        <strong>${inv.positions.filter(p => !isCashInvestmentPosition(p)).length}</strong>
+      </div>
+      <div class="investment-summary-card">
+        <span>현금</span>
+        <strong>${formatMoney(cashValue)}</strong>
       </div>
       <div class="investment-summary-card">
         <span>투자 원칙</span>
@@ -135,7 +142,7 @@ function renderInvestmentDeskStrip(desk) {
       <p>${esc((briefing.briefingQuestions || [])[0] || topRisk?.body || '오늘 시장 변수와 내 보유 노출을 함께 점검하세요.')}</p>
     </div>
     <div class="investment-desk-strip-metrics">
-      <div><span>현금</span><strong>${formatMoney(snapshot.cashValue || 0)}</strong></div>
+      <div><span>현금</span><strong>${formatMoney(snapshot.cashValue || 0)}</strong><small>${Number(snapshot.cashWeight || 0).toFixed(1)}%</small></div>
       <div><span>최대 비중</span><strong>${esc(snapshot.topSymbol || '-')} ${Number(snapshot.topWeight || 0).toFixed(1)}%</strong></div>
       <div><span>금지 행동</span><strong>${(desk.forbiddenActions || []).length}</strong></div>
     </div>
@@ -276,6 +283,13 @@ function renderModalInvestmentPortfolio() {
   const unpriced = getInvestmentUnpricedPositions(inv.positions);
   const totals = investmentTotals(inv.positions);
   const total = totals.totalValue;
+  const cashValue = (inv.positions || [])
+    .filter(p => isCashInvestmentPosition(p))
+    .reduce((sum, p) => sum + investmentPositionValue(p, 'currentPrice'), 0);
+  const investedValue = tradableSlices.reduce((sum, p) => sum + p.value, 0);
+  const investedCost = tradableSlices.reduce((sum, p) => sum + p.cost, 0);
+  const investedGain = investedValue - investedCost;
+  const investedGainPercent = investedCost ? (investedGain / investedCost) * 100 : 0;
   if (!slices.length) {
     return `
       <button class="modal-close" onclick="closeModal()">x</button>
@@ -321,9 +335,11 @@ function renderModalInvestmentPortfolio() {
     <div class="investment-portfolio-modal" id="investment-portfolio-modal">
       <div class="investment-portfolio-overview">
         <div><span>총 평가액</span><strong>${formatMoney(totals.totalValue)}</strong>${formatKrwApprox(totals.totalValue)}</div>
-        <div><span>총 매입금</span><strong>${formatMoney(totals.totalCost)}</strong>${formatKrwApprox(totals.totalCost)}</div>
-        <div><span>평가손익</span><strong class="${totals.totalGain >= 0 ? 'up' : 'down'}">${formatMoneySigned(totals.totalGain)}</strong>${formatKrwApprox(totals.totalGain, true)}</div>
-        <div><span>수익률</span><strong class="${totals.totalGain >= 0 ? 'up' : 'down'}">${formatPercent(totals.totalGainPercent)}</strong></div>
+        <div><span>현금</span><strong>${formatMoney(cashValue)}</strong><small class="investment-krw-approx">비중 ${total ? (cashValue / total * 100).toFixed(1) : '0.0'}%</small></div>
+        <div><span>주식/코인 평가액</span><strong>${formatMoney(investedValue)}</strong>${formatKrwApprox(investedValue)}</div>
+        <div><span>주식/코인 매입금</span><strong>${formatMoney(investedCost)}</strong>${formatKrwApprox(investedCost)}</div>
+        <div><span>평가손익</span><strong class="${investedGain >= 0 ? 'up' : 'down'}">${formatMoneySigned(investedGain)}</strong>${formatKrwApprox(investedGain, true)}</div>
+        <div><span>투자 수익률</span><strong class="${investedGain >= 0 ? 'up' : 'down'}">${formatPercent(investedGainPercent)}</strong></div>
         <div><span>최대 보유</span><strong>${esc(top.symbol || '-')} ${top.weight.toFixed(1)}%</strong></div>
         <div><span>집중도</span><strong class="${concentrationTone}">${concentrationLabel}</strong></div>
         <div><span>가격 상태</span><strong>${staleCount ? `${staleCount}개 갱신 필요` : '최신'}</strong></div>

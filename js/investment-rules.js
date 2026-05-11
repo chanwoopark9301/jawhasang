@@ -8,7 +8,10 @@ function parseInvestmentNumber(value) {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
   const cleaned = String(value).trim().replace(/,/g, '');
   const parsed = Number(cleaned);
-  return Number.isFinite(parsed) ? parsed : 0;
+  if (Number.isFinite(parsed)) return parsed;
+  const firstNumber = cleaned.match(/-?\d+(?:\.\d+)?/);
+  const fallback = firstNumber ? Number(firstNumber[0]) : 0;
+  return Number.isFinite(fallback) ? fallback : 0;
 }
 
 function isCashInvestmentPosition(position) {

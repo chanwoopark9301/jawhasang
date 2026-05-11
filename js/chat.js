@@ -352,8 +352,11 @@ function normalizeInvestmentTradeText(text) {
 
 function applyInvestmentPortfolioSnapshotFromChat(text) {
   const raw = String(text || '');
-  const intent = /(?:\uD3EC\uD2B8\uD3F4\uB9AC\uC624|\uBCF4\uC720\s*\uC218\uB7C9|\uC218\uB7C9|\uD3C9\uB2E8|\uD3C9\uADE0\s*\uB2E8\uAC00|\uD604\uC7AC\uAC00|\uD604\uAE08|\uC608\uC218\uAE08|portfolio|position|cash|avg|average)/i.test(raw);
-  if (!intent || /(?:\uB9E4\uB9E4|\uAC70\uB798|\uB9E4\uC218|\uB9E4\uB3C4|\uC775\uC808|\uC190\uC808|trade|buy|sell)/i.test(raw)) {
+  const intent = isInvestmentPortfolioSnapshotIntent(raw);
+  const negatesTradeRecord = /(?:\uC544\uB2C8\uB77C|\uB9D0\uACE0|not\s+(?:a\s+)?trade|not\s+record)/i.test(raw);
+  const explicitTradeIntent = !negatesTradeRecord && /(?:\uB9E4\uB9E4\s*\uAE30\uB85D|\uAC70\uB798\s*\uAE30\uB85D|\uB9E4\uC218\s*\uAE30\uB85D|\uB9E4\uB3C4\s*\uAE30\uB85D|trade\s*log|record\s*trade)/i.test(raw);
+  if (!intent || explicitTradeIntent) {
+    logger.debug('투자 포트폴리오 스냅샷 갱신 생략', { intent, explicitTradeIntent, raw: raw.slice(0, 240) });
     return { changed: false, symbols: [], summary: '' };
   }
 
@@ -368,7 +371,7 @@ function applyInvestmentPortfolioSnapshotFromChat(text) {
   (state.investment.positions || []).forEach(position => {
     if (isCashInvestmentPosition(position)) return;
     if (!investmentTextMentionsPosition(raw, position)) return;
-    const patch = inferInvestmentPositionSnapshot(raw);
+    const patch = inferInvestmentPositionSnapshot(raw, position);
     if (!Object.keys(patch).length) return;
     Object.assign(position, patch, {
       manualPrice: patch.currentPrice != null ? true : position.manualPrice,
@@ -377,18 +380,30 @@ function applyInvestmentPortfolioSnapshotFromChat(text) {
     changed.push(`${position.symbol || position.name} ${Object.entries(patch).map(([key, value]) => `${key}=${value}`).join(', ')}`);
   });
 
-  if (!changed.length) return { changed: false, symbols: [], summary: '' };
+  if (!changed.length) {
+    logger.warn('투자 포트폴리오 스냅샷 갱신 의도는 감지됐지만 추출된 값이 없음', { raw: raw.slice(0, 500) });
+    return { changed: false, symbols: [], summary: '' };
+  }
   state.investment.alerts = buildInvestmentRiskAlerts(state.investment.positions, state.investment.rules);
   const symbols = (state.investment.positions || [])
     .filter(p => !isCashInvestmentPosition(p) && investmentTextMentionsPosition(raw, p))
     .map(p => p.symbol || p.name)
     .filter(Boolean);
   if (cashUsd > 0) symbols.push('CASH');
+  logger.info('투자 포트폴리오 스냅샷 자동 갱신', { changed, symbols });
   return {
     changed: true,
     symbols: [...new Set(symbols)],
     summary: `대화에서 포트폴리오 값을 추출해 자동 반영했습니다.\n\n${changed.map(item => `- ${item}`).join('\n')}`,
   };
+}
+
+function isInvestmentPortfolioSnapshotIntent(text) {
+  const raw = String(text || '');
+  const snapshotWords = /(?:\uD3EC\uD2B8\uD3F4\uB9AC\uC624|\uACC4\uC88C|\uBCF4\uC720\s*\uC218\uB7C9|\uC794\uC5EC\s*\uC218\uB7C9|\uD604\uC7AC\s*\uC0C1\uD0DC|\uC2A4\uB0C5\uC0F7|\uAC31\uC2E0|\uC218\uC815|\uBC18\uC601|portfolio|account|snapshot|position|update|sync)/i.test(raw);
+  const valueWords = /(?:\uC218\uB7C9|\uC8FC|\uAC1C|\uD3C9\uB2E8|\uD3C9\uADE0\s*\uB2E8\uAC00|\uD604\uC7AC\uAC00|\uD604\uC7AC\s*\uAC00\uACA9|\uD604\uAE08|\uC608\uC218\uAE08|\uCD1D\s*\uD3C9\uAC00\uC561|shares?|qty|average|avg|current|cash|total value)/i.test(raw);
+  const directCash = /(?:\uD604\uAE08|\uC608\uC218\uAE08|cash)[^\n]{0,80}(?:[0-9]|\uC5B5|\uB9CC|USD|\$)/i.test(raw);
+  return (snapshotWords && valueWords) || directCash;
 }
 
 function investmentTextMentionsPosition(text, position) {
@@ -410,8 +425,8 @@ function investmentTextMentionsPosition(text, position) {
   return (aliases[symbol] || []).some(term => lower.includes(term));
 }
 
-function inferInvestmentPositionSnapshot(text) {
-  const raw = String(text || '');
+function inferInvestmentPositionSnapshot(text, position = null) {
+  const raw = extractInvestmentPositionSnapshotContext(text, position);
   const patch = {};
   const shares = extractSnapshotNumber(raw, [
     /(?:\uBCF4\uC720\s*)?\uC218\uB7C9[^0-9]{0,24}([0-9][0-9,.]*)\s*(?:\uC8FC|\uAC1C|shares?)/i,
@@ -419,6 +434,7 @@ function inferInvestmentPositionSnapshot(text) {
     /(?:remaining|left|holding|position|shares?|quantity|qty)[^0-9]{0,24}([0-9][0-9,.]*)\s*(?:shares?|ea|units?)?/i,
     /([0-9][0-9,.]*)\s*(?:\uC8FC|shares?)\s*(?:\uBCF4\uC720|\uB0A8)/i,
     /([0-9][0-9,.]*)\s*(?:shares?|units?)\s*(?:remaining|left|holding)/i,
+    /(?:^|[\s:·-])([0-9][0-9,.]*)\s*(?:\uC8FC|\uAC1C|shares?|units?)(?:\s|$|[·,])/i,
   ]);
   const avgPrice = extractSnapshotNumber(raw, [
     /(?:\uD3C9\uB2E8|\uD3C9\uADE0\s*\uB2E8\uAC00|avg|average)[^0-9]{0,24}\$?\s*([0-9][0-9,.]*)/i,
@@ -430,6 +446,20 @@ function inferInvestmentPositionSnapshot(text) {
   if (avgPrice > 0) patch.avgPrice = avgPrice;
   if (currentPrice > 0) patch.currentPrice = currentPrice;
   return patch;
+}
+
+function extractInvestmentPositionSnapshotContext(text, position) {
+  const raw = String(text || '');
+  if (!position) return raw;
+  const lines = raw.split(/\r?\n/);
+  const matched = [];
+  lines.forEach((line, index) => {
+    if (investmentTextMentionsPosition(line, position)) {
+      matched.push(line);
+    }
+  });
+  const context = matched.filter(Boolean).join('\n').trim();
+  return context || raw;
 }
 
 function extractSnapshotNumber(text, patterns) {
@@ -445,11 +475,11 @@ function inferInvestmentCashUsdFromText(text) {
   const cashMatch = raw.match(/(?:\uD604\uAE08|\uC608\uC218\uAE08|cash)[^\n]{0,80}/i);
   if (!cashMatch) return 0;
   const fragment = cashMatch[0];
-  const usd = fragment.match(/(?:\$|USD\s*)([0-9][0-9,.]*)|([0-9][0-9,.]*)\s*(?:USD|\uB2EC\uB7EC|\uBD88)/i);
+  const usd = fragment.match(/(?:\$|USD\s*)([0-9][0-9,]*(?:\.[0-9]{1,4})?)|([0-9][0-9,]*(?:\.[0-9]{1,4})?)\s*(?:USD|\uB2EC\uB7EC|\uBD88)/i);
   if (usd) return parseInvestmentNumber(usd[1] || usd[2]);
   const krw = parseKoreanKrwAmount(fragment);
   if (krw > 0) return Math.round((krw / investmentUsdKrwRate()) * 100) / 100;
-  const n = parseInvestmentNumber((fragment.match(/([0-9][0-9,.]*)/) || [])[1]);
+  const n = parseInvestmentNumber((fragment.match(/([0-9][0-9,]*(?:\.[0-9]{1,4})?)/) || [])[1]);
   return n > 0 ? n : 0;
 }
 

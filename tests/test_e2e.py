@@ -2211,9 +2211,13 @@ class TestInvestmentPartner:
             );
         }""")
         logged_in_page.wait_for_function(
-            "() => state.investment.positions.some(p => p.assetType === 'cash' && p.cashAmount === 126000) && document.querySelector('#investment-desk-modal')?.innerText.includes('126,000')",
+            "() => state.investment.positions.some(p => p.assetType === 'cash' && p.cashAmount === 126000)",
             timeout=8_000,
         )
+        logged_in_page.locator('.modal-close').click()
+        logged_in_page.locator('#investment-menu-portfolio').click()
+        logged_in_page.wait_for_selector('#investment-portfolio-modal', timeout=8_000)
+        assert '126,000' in logged_in_page.locator('#investment-portfolio-modal').inner_text()
 
     def test_investment_chat_portfolio_update_uses_ai_residual_position(self, logged_in_page):
         self._open_investment(logged_in_page)
@@ -2338,6 +2342,76 @@ class TestInvestmentPartner:
         modal_text = logged_in_page.locator('#modal-box').inner_text()
         assert '510' in modal_text
         assert '$66.38' in modal_text
+
+    def test_portfolio_snapshot_update_wins_over_trade_words_and_logs_cash(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.currentChatMessages = [];
+            state.investment.chat = [];
+            state.investment.decisions = [];
+            state.investment.events = [];
+            state.investment.usdKrwRate = 1350;
+            state.investment.positions = [{
+                id: 'ip-iren-snapshot-priority',
+                symbol: 'IREN',
+                name: 'Iris Energy',
+                shares: 1700,
+                avgPrice: 46.06,
+                currentPrice: 60,
+            }, {
+                id: 'ip-crcl-snapshot-priority',
+                symbol: 'CRCL',
+                name: 'Circle',
+                shares: 1,
+                avgPrice: 1,
+                currentPrice: 1,
+            }];
+            render();
+        }""")
+
+        logged_in_page.evaluate("""async () => {
+            await saveInvestmentChatArtifacts(
+                '매도 이야기가 있지만 이건 매매 기록이 아니라 포트폴리오 갱신이야',
+                'IREN 510주 평단 66.38 현재가 64\\nCRCL 113주 평단 128.91 현재가 121.8\\n현금 $167,594.542.3%'
+            );
+        }""")
+
+        result = logged_in_page.evaluate("""() => {
+            const iren = state.investment.positions.find(p => p.symbol === 'IREN');
+            const crcl = state.investment.positions.find(p => p.symbol === 'CRCL');
+            const cash = state.investment.positions.find(p => p.assetType === 'cash');
+            return {
+                irenShares: iren.shares,
+                irenAvg: iren.avgPrice,
+                irenCurrent: iren.currentPrice,
+                crclShares: crcl.shares,
+                crclAvg: crcl.avgPrice,
+                crclCurrent: crcl.currentPrice,
+                cash: Math.round(cash.cashAmount * 100) / 100,
+                decisions: state.investment.decisions.length,
+                lastEvent: state.investment.events.at(-1)?.type,
+                logged: logger.getHistory().some(item => item.args?.[0] === '투자 포트폴리오 스냅샷 자동 갱신'),
+            };
+        }""")
+        assert result == {
+            'irenShares': 510,
+            'irenAvg': 66.38,
+            'irenCurrent': 64,
+            'crclShares': 113,
+            'crclAvg': 128.91,
+            'crclCurrent': 121.8,
+            'cash': 167594.54,
+            'decisions': 0,
+            'lastEvent': 'portfolio',
+            'logged': True,
+        }
+
+        logged_in_page.locator('#investment-menu-portfolio').click()
+        logged_in_page.wait_for_selector('#investment-portfolio-modal', timeout=8_000)
+        modal_text = logged_in_page.locator('#investment-portfolio-modal').inner_text()
+        assert '현금' in modal_text
+        assert '$167,594.54' in modal_text
+        assert '주식/코인 평가액' in modal_text
 
     def test_portfolio_open_does_not_reconstruct_cash_from_historical_sells(self, logged_in_page):
         self._open_investment(logged_in_page)

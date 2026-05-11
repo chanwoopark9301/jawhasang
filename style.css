@@ -3622,6 +3622,13 @@ body { height: var(--app-height, 100dvh); }
   font-size: 12px;
 }
 
+.investment-desk-strip-metrics small {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--color-text-secondary);
+}
+
 .investment-desk-modal {
   display: grid;
   gap: 14px;

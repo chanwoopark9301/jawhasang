@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v104'; // Rework today's desk as market briefing
+const CACHE_NAME = 'jip-v105'; // Harden portfolio snapshot updates
 
 const STATIC_ASSETS = [
   '/style.css',
