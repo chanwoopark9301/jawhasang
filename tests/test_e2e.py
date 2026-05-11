@@ -1626,6 +1626,62 @@ class TestInvestmentPartner:
         assert 'QLD' in system_prompt
         assert logged_in_page.locator('.chat-bubble-ai').last.inner_text().startswith('오늘 브리핑')
 
+    def test_investment_briefing_chat_falls_back_when_ai_errors(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.investment.positions = [
+                { id: 'ip-fallback-cash', symbol: 'CASH', name: 'Cash', assetType: 'cash', shares: 42135, cashAmount: 42135, avgPrice: 1, currentPrice: 1 },
+                { id: 'ip-fallback-iren', symbol: 'IREN', name: 'Iris Energy', shares: 510, avgPrice: 66.38, currentPrice: 61.2 },
+                { id: 'ip-fallback-qld', symbol: 'QLD', name: 'QLD', shares: 312, avgPrice: 88.88, currentPrice: 91.72 },
+            ];
+            state.investment.usdKrwRate = 1470;
+            window.__capturedAnalyzePayload = null;
+            window.__capturedAnalyzeHeaders = null;
+            const originalFetch = window.fetch.bind(window);
+            window.saveData = async () => true;
+            window.fetch = (url, opts = {}) => {
+                const target = String(url);
+                if (target.includes('/api/investment/ledger')) {
+                    return Promise.resolve(new Response(JSON.stringify({ ok: true, investment: state.investment, positions: state.investment.positions }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                if (target.includes('/api/investment/news')) {
+                    return Promise.resolve(new Response(JSON.stringify({ news: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                if (target.includes('/api/market/quote')) {
+                    return Promise.resolve(new Response(JSON.stringify({ quotes: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                if (target.includes('/api/analyze')) {
+                    window.__capturedAnalyzePayload = JSON.parse(opts.body);
+                    window.__capturedAnalyzeHeaders = opts.headers;
+                    return Promise.resolve(new Response(JSON.stringify({
+                        error: 'AI provider error',
+                        requestId: 'ai-test-400',
+                        status: 400,
+                        errorDetail: 'invalid model',
+                    }), { status: 400, headers: { 'Content-Type': 'application/json' } }));
+                }
+                return originalFetch(url, opts);
+            };
+            render();
+        }""")
+
+        logged_in_page.locator('#chat-input-bottom').fill('다시 브리핑해봐')
+        logged_in_page.locator('#chat-input-bottom').press('Enter')
+        logged_in_page.wait_for_function("() => window.__capturedAnalyzePayload", timeout=8_000)
+        logged_in_page.wait_for_selector('.chat-bubble-ai', timeout=8_000)
+        answer = logged_in_page.locator('.chat-bubble-ai').last.inner_text()
+        payload = logged_in_page.evaluate("() => window.__capturedAnalyzePayload")
+        header_value = logged_in_page.evaluate("""() => {
+            const h = window.__capturedAnalyzeHeaders || {};
+            return h['X-Client-Request-Id'] || h['x-client-request-id'] || '';
+        }""")
+        assert payload['clientRequestId'].startswith('chat-')
+        assert header_value.startswith('chat-')
+        assert '오늘의 투자 데스크 임시 브리핑' in answer
+        assert 'IREN' in answer
+        assert 'QLD' in answer
+        assert '오류가 발생했어요' not in answer
+
     def test_investment_krw_auxiliary_display_keeps_usd_inputs(self, logged_in_page):
         self._open_investment(logged_in_page)
         logged_in_page.evaluate("""() => {

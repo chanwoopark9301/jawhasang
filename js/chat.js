@@ -157,12 +157,23 @@ async function continueContextChat(text) {
     .filter(m => m.role !== 'system')
     .slice(-WINDOW)
     .map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.text }));
+  const clientRequestId = `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  logger.info('Context chat AI request start', {
+    requestId: clientRequestId,
+    view: state.view,
+    replyMode: state.replyMode,
+    systemChars: sysPrompt.length,
+    messageCount: messages.length,
+    messageChars: messages.reduce((sum, msg) => sum + String(msg.content || '').length, 0),
+    extraContextChars: [investmentNewsContext, investmentMarketContext, investmentFxContext].join('').length,
+  });
 
   try {
     const res = await fetch('/api/analyze', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Client-Request-Id': clientRequestId },
       body: JSON.stringify({
+        clientRequestId,
         model: 'claude-sonnet-4-6', max_tokens: isInvestment ? 1600 : 800,
         system: [{ type: 'text', text: sysPrompt, cache_control: { type: 'ephemeral' } }],
         messages,
@@ -180,6 +191,11 @@ async function continueContextChat(text) {
     const data = await res.json();
     const reply = data.content?.map(c => c.text || '').join('').trim();
     if (reply) {
+      logger.info('Context chat AI request success', {
+        requestId: clientRequestId,
+        view: state.view,
+        replyChars: reply.length,
+      });
       appendMessage('ai', reply);
       saveSummaryReplyAsRecord(reply);
       await saveInvestmentChatArtifacts(text, reply);
@@ -187,14 +203,68 @@ async function continueContextChat(text) {
       appendMessage('ai', '응답이 비어 있었어요. 방금 질문을 한 번만 다시 보내주세요.');
     }
   } catch (e) {
+    const fallback = isInvestment && isInvestmentBriefingIntent(text)
+      ? buildInvestmentBriefingFallbackReply(text, e)
+      : '';
     logger.error('Context chat AI request failed', {
+      requestId: clientRequestId,
       view: state.view,
       replyMode: state.replyMode,
+      systemChars: sysPrompt.length,
+      messageCount: messages.length,
+      messageChars: messages.reduce((sum, msg) => sum + String(msg.content || '').length, 0),
       message: e?.message || String(e),
     });
-    appendMessage('ai', '죄송해요, 오류가 발생했어요. 다시 시도해주세요.');
+    if (fallback) {
+      appendMessage('ai', fallback);
+    } else {
+      appendMessage('ai', `죄송해요, 오류가 발생했어요. 다시 시도해주세요.\n\n오류 추적 ID: ${clientRequestId}`);
+    }
   } finally {
     state._ctxChatLoading = false;
+  }
+}
+
+function isInvestmentBriefingIntent(text) {
+  return /브리핑|시황|오늘\s*중요|데스크|시장\s*정리|morning|briefing|market\s*brief/i.test(String(text || ''));
+}
+
+function buildInvestmentBriefingFallbackReply(userText, error) {
+  try {
+    const inv = state.investment = normalizeInvestmentState(state.investment);
+    const totals = investmentTotals(inv.positions || []);
+    const nonCash = (inv.positions || []).filter(p => !isCashInvestmentPosition(p));
+    const cash = (inv.positions || [])
+      .filter(p => isCashInvestmentPosition(p))
+      .reduce((sum, p) => sum + investmentPositionValue(p, 'currentPrice'), 0);
+    const rate = parseInvestmentNumber(inv.usdKrwRate) || investmentUsdKrwRate();
+    const top = nonCash
+      .map(p => {
+        const value = investmentPositionValue(p, 'currentPrice');
+        const cost = investmentPositionValue(p, 'avgPrice');
+        const weight = totals.totalValue ? (value / totals.totalValue) * 100 : 0;
+        const gain = value - cost;
+        return { p, value, weight, gain, gainPct: cost ? (gain / cost) * 100 : 0 };
+      })
+      .sort((a, b) => b.value - a.value);
+    const desk = typeof buildDailyInvestmentDesk === 'function' ? buildDailyInvestmentDesk(inv) : null;
+    const macro = (desk?.macro || []).slice(0, 3).map(item => `- **${item.title}**: ${item.body || item.description || ''}`).join('\n') || '- CPI/Fed/나스닥 위험선호, 금리, 주요 정책 일정을 우선 확인해야 합니다.';
+    const micro = top.slice(0, 5).map(item => {
+      const symbol = item.p.symbol || item.p.name || '?';
+      const thesis = item.p.thesis ? ` 투자 논리: ${item.p.thesis}` : '';
+      return `- **${symbol}**: 비중 ${item.weight.toFixed(1)}%, 현재 ${formatMoney(item.p.currentPrice || 0)}, 평단 ${formatMoney(item.p.avgPrice || 0)}, 손익 ${formatMoneySigned(item.gain)} (${item.gainPct >= 0 ? '+' : ''}${item.gainPct.toFixed(2)}%).${thesis}`;
+    }).join('\n') || '- 보유 종목 원장이 비어 있어 종목별 미시 변수는 계산하지 못했습니다.';
+    const riskLines = [];
+    if (top[0] && top[0].weight > parseInvestmentNumber(inv.rules.maxPositionWeight || 25)) {
+      riskLines.push(`- ${top[0].p.symbol || top[0].p.name} 비중 ${top[0].weight.toFixed(1)}%가 최대 비중 원칙 ${inv.rules.maxPositionWeight}%를 넘습니다.`);
+    }
+    if (cash > 0) riskLines.push(`- 현금 ${formatMoney(cash)}(약 ₩${Math.round(cash * rate).toLocaleString('ko-KR')})는 추격매수 대기 자금으로 쓰지 말고, 진입 조건이 맞을 때만 분할 집행합니다.`);
+    riskLines.push('- 뉴스나 X 흐름만 보고 즉시 매수하지 않습니다. 공식 공시·회사 IR·신뢰 가능한 금융매체·가격/거래량 확인 전까지는 약한 신호입니다.');
+    const trace = error?.message ? `\n\n> AI 호출은 실패했지만 원장 기준 로컬 브리핑으로 대체했습니다. 콘솔/서버 로그에서 오류 추적 ID를 확인하세요. (${String(error.message).slice(0, 160)})` : '';
+    return `## 오늘의 투자 데스크 임시 브리핑\n\n### 계좌 기준\n- 총 평가액: ${formatMoney(totals.totalValue)} (약 ₩${Math.round(totals.totalValue * rate).toLocaleString('ko-KR')})\n- 현금: ${formatMoney(cash)}\n- 투자 수익률: ${totals.totalGainPercent >= 0 ? '+' : ''}${totals.totalGainPercent.toFixed(2)}%\n\n### 거시 변수\n${macro}\n\n### 보유 종목별 확인 지점\n${micro}\n\n### 오늘 하지 말아야 할 행동\n${riskLines.join('\n')}${trace}`;
+  } catch (fallbackError) {
+    logger.error('Investment briefing fallback failed', fallbackError);
+    return '';
   }
 }
 

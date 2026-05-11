@@ -32,6 +32,7 @@ from cryptography.fernet import Fernet, InvalidToken
 
 load_dotenv('ecrk.env')
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
+ANTHROPIC_FALLBACK_MODEL = os.getenv('ANTHROPIC_FALLBACK_MODEL', 'claude-sonnet-4-5-20250929')
 OPENAI_API_KEY    = os.getenv('OPENAI_API_KEY', '')
 OPENAI_MODEL      = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
 APP_PASSWORD      = os.getenv('APP_PASSWORD', '')
@@ -2170,6 +2171,57 @@ def _scrub_payload(payload: dict) -> dict:
 
     return result
 
+def _anthropic_payload_stats(payload: dict) -> dict:
+    """Return compact diagnostics for AI proxy logging without leaking content."""
+    if not isinstance(payload, dict):
+        return {}
+    system = payload.get('system')
+    if isinstance(system, str):
+        system_chars = len(system)
+        system_blocks = 1
+    elif isinstance(system, list):
+        system_chars = sum(len(str(item.get('text') or '')) for item in system if isinstance(item, dict))
+        system_blocks = len(system)
+    else:
+        system_chars = 0
+        system_blocks = 0
+    messages = payload.get('messages') if isinstance(payload.get('messages'), list) else []
+    message_chars = 0
+    roles = []
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+        roles.append(str(msg.get('role') or '?'))
+        content = msg.get('content')
+        if isinstance(content, str):
+            message_chars += len(content)
+        elif isinstance(content, list):
+            message_chars += sum(len(str(block.get('text') or '')) for block in content if isinstance(block, dict))
+    return {
+        'systemBlocks': system_blocks,
+        'systemChars': system_chars,
+        'messageCount': len(messages),
+        'messageChars': message_chars,
+        'rolesTail': roles[-6:],
+    }
+
+def _anthropic_api_payload(payload: dict) -> dict:
+    """Drop local-only diagnostics before forwarding to Anthropic."""
+    allowed = {'model', 'max_tokens', 'messages', 'system', 'metadata', 'stop_sequences', 'temperature', 'top_k', 'top_p', 'tools', 'tool_choice', 'stream'}
+    return {key: value for key, value in dict(payload or {}).items() if key in allowed}
+
+def _anthropic_error_text(resp) -> str:
+    try:
+        return (resp.text or '')[:1200]
+    except Exception:
+        return ''
+
+def _should_retry_anthropic_model(resp, body: str) -> bool:
+    if resp.status_code != 400 or not ANTHROPIC_FALLBACK_MODEL:
+        return False
+    lowered = (body or '').lower()
+    return 'model' in lowered and ('not found' in lowered or 'invalid' in lowered or 'does not exist' in lowered)
+
 # ---------------------------------------------------------------------------
 # 축어록 요약 엔드포인트 (긴 축어록 2단계 처리용)
 # ---------------------------------------------------------------------------
@@ -2382,22 +2434,26 @@ def investment_ai_compare():
 @app.route('/api/analyze', methods=['POST'])
 @require_auth
 def analyze():
+    request_id = f"ai-{int(time.time() * 1000)}"
     if not ANTHROPIC_API_KEY:
-        log.error('ANTHROPIC_API_KEY 없음 — AI 기능 불가')
-        return jsonify({'error': 'ANTHROPIC_API_KEY가 ecrk.env에 없습니다'}), 500
+        log.error('POST /api/analyze [%s] ANTHROPIC_API_KEY 없음 — AI 기능 불가', request_id)
+        return jsonify({'error': 'ANTHROPIC_API_KEY가 ecrk.env에 없습니다', 'requestId': request_id}), 500
 
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
-        log.warning('POST /api/analyze: 유효하지 않은 페이로드')
-        return jsonify({'error': '유효하지 않은 요청 형식'}), 400
+        log.warning('POST /api/analyze [%s]: 유효하지 않은 페이로드', request_id)
+        return jsonify({'error': '유효하지 않은 요청 형식', 'requestId': request_id}), 400
 
     use_stream = payload.get('stream', False)
+    client_request_id = str(payload.get('clientRequestId') or request.headers.get('X-Client-Request-Id') or '')
     model      = payload.get('model', '?')
     max_tok    = payload.get('max_tokens', '?')
-    log.info('AI 분석 요청: model=%s, max_tokens=%s, stream=%s', model, max_tok, use_stream)
+    stats      = _anthropic_payload_stats(payload)
+    log.info('POST /api/analyze [%s] request client=%s model=%s max_tokens=%s stream=%s stats=%s',
+             request_id, client_request_id or '-', model, max_tok, use_stream, stats)
 
     # AI 호출 전 PII 스크러빙
-    payload = _scrub_payload(payload)
+    payload = _anthropic_api_payload(_scrub_payload(payload))
 
     try:
         resp = requests.post(
@@ -2413,17 +2469,45 @@ def analyze():
             stream=use_stream,
         )
     except requests.Timeout:
-        log.error('AI 호출 타임아웃 (120초)')
-        return jsonify({'error': 'AI 요청 타임아웃 (120초)'}), 504
+        log.error('POST /api/analyze [%s] AI 호출 타임아웃 (120초)', request_id)
+        return jsonify({'error': 'AI 요청 타임아웃 (120초)', 'requestId': request_id}), 504
     except requests.RequestException as e:
-        log.error('AI 네트워크 오류: %s', e, exc_info=True)
-        return jsonify({'error': f'네트워크 오류: {e}'}), 502
+        log.error('POST /api/analyze [%s] AI 네트워크 오류: %s', request_id, e, exc_info=True)
+        return jsonify({'error': f'네트워크 오류: {e}', 'requestId': request_id, 'errorDetail': _safe_error_detail(e)}), 502
 
     if not resp.ok:
-        log.warning('AI 오류 응답: HTTP %d', resp.status_code)
+        error_body = _anthropic_error_text(resp)
+        log.warning('POST /api/analyze [%s] AI 오류 응답: HTTP %d model=%s body=%s',
+                    request_id, resp.status_code, payload.get('model'), error_body)
+        if _should_retry_anthropic_model(resp, error_body) and payload.get('model') != ANTHROPIC_FALLBACK_MODEL:
+            retry_payload = {**payload, 'model': ANTHROPIC_FALLBACK_MODEL}
+            log.warning('POST /api/analyze [%s] retrying with fallback model=%s', request_id, ANTHROPIC_FALLBACK_MODEL)
+            try:
+                resp = requests.post(
+                    'https://api.anthropic.com/v1/messages',
+                    headers={
+                        'x-api-key': ANTHROPIC_API_KEY,
+                        'anthropic-version': '2023-06-01',
+                        'anthropic-beta': 'prompt-caching-2024-07-31',
+                        'Content-Type': 'application/json',
+                    },
+                    json=retry_payload,
+                    timeout=120,
+                    stream=use_stream,
+                )
+                if not resp.ok:
+                    error_body = _anthropic_error_text(resp)
+                    log.warning('POST /api/analyze [%s] fallback AI 오류 응답: HTTP %d model=%s body=%s',
+                                request_id, resp.status_code, retry_payload.get('model'), error_body)
+            except requests.Timeout:
+                log.error('POST /api/analyze [%s] fallback AI 호출 타임아웃 (120초)', request_id)
+                return jsonify({'error': 'AI 요청 타임아웃 (120초)', 'requestId': request_id}), 504
+            except requests.RequestException as e:
+                log.error('POST /api/analyze [%s] fallback AI 네트워크 오류: %s', request_id, e, exc_info=True)
+                return jsonify({'error': f'네트워크 오류: {e}', 'requestId': request_id, 'errorDetail': _safe_error_detail(e)}), 502
 
     if use_stream:
-        log.debug('AI 스트리밍 응답 시작')
+        log.debug('POST /api/analyze [%s] AI 스트리밍 응답 시작 status=%d', request_id, resp.status_code)
         def generate():
             for chunk in resp.iter_content(chunk_size=None):
                 yield chunk
@@ -2434,7 +2518,15 @@ def analyze():
         )
 
     log.info('AI 분석 완료: HTTP %d', resp.status_code)
-    return (resp.content, resp.status_code, {'Content-Type': 'application/json'})
+    if not resp.ok:
+        return jsonify({
+            'error': 'AI provider error',
+            'requestId': request_id,
+            'status': resp.status_code,
+            'model': payload.get('model'),
+            'errorDetail': _anthropic_error_text(resp),
+        }), resp.status_code
+    return (resp.content, resp.status_code, {'Content-Type': 'application/json', 'X-Request-Id': request_id})
 
 # ---------------------------------------------------------------------------
 # AI 텍스트 변환 (축어록 정리 / 일기 변환)
