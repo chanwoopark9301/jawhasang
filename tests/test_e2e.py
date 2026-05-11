@@ -749,6 +749,9 @@ class TestInvestmentPartner:
 
         result = logged_in_page.evaluate("""() => {
             saveData = () => Promise.resolve(true);
+            window.__marketCloseToast = null;
+            const originalToast = window.showToast;
+            window.showToast = (message) => { window.__marketCloseToast = message; };
             state.investment = normalizeInvestmentState({
                 events: [],
                 chatSessions: [{
@@ -767,6 +770,7 @@ class TestInvestmentPartner:
             const changed = maybeFinalizeInvestmentMarketChatSession(new Date('2026-05-08T21:01:00Z'));
             const session = state.investment.chatSessions[0];
             const event = state.investment.events[0];
+            window.showToast = originalToast;
             return {
                 changed,
                 eventId: event?.id,
@@ -775,6 +779,7 @@ class TestInvestmentPartner:
                 body: event?.body,
                 summarizedAt: session.summarizedAt,
                 summaryEventId: session.summaryEventId,
+                toast: window.__marketCloseToast,
             };
         }""")
 
@@ -785,6 +790,7 @@ class TestInvestmentPartner:
         assert 'IREN' in result['body']
         assert result['summarizedAt']
         assert result['summaryEventId'] == result['eventId']
+        assert result['toast'] is None
 
     def test_investment_nav_renders_chat_first_layout(self, logged_in_page):
         self._open_investment(logged_in_page)

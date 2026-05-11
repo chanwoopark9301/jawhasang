@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v110'; // Normalize investment ledger and timeline graph
+const CACHE_NAME = 'jip-v111'; // Silent market-close chat summaries
 
 const STATIC_ASSETS = [
   '/style.css',

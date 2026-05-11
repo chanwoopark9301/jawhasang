@@ -1289,7 +1289,9 @@ function maybeFinalizeInvestmentMarketChatSession(date = new Date()) {
     if (typeof _saveToLocalCache === 'function') _saveToLocalCache();
     saveData();
     if (typeof renderRightPanel === 'function') renderRightPanel();
-    if (typeof showToast === 'function') showToast('장 마감 대화를 투자 타임라인에 정리했어요.');
+    logger.info('장 마감 대화 세션을 투자 타임라인 이벤트로 자동 정리', {
+      count: state.investment.events.filter(e => e.source === 'market-chat-session').length,
+    });
   }
   return changed;
 }
