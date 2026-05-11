@@ -7,7 +7,7 @@ pure and testable: no Flask, no network, no storage writes.
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-from typing import Any, Dict, Iterable, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 
 def _num(value: Any, default: float = 0.0) -> float:
@@ -229,7 +229,135 @@ def _evidence_level(event: Dict[str, Any]) -> str:
     return "E"
 
 
-def build_behavior_controls(investment: Dict[str, Any], theses: List[Dict[str, Any]], today_value: Any = None) -> List[Dict[str, Any]]:
+def _event_text(event: Dict[str, Any]) -> str:
+    return " ".join([
+        str(event.get("symbol") or ""),
+        str(event.get("type") or ""),
+        str(event.get("title") or ""),
+        str(event.get("body") or ""),
+        str(event.get("source") or ""),
+    ]).lower()
+
+
+def _driver_keywords(driver: str, profile: str) -> List[str]:
+    text = f"{driver} {profile}".lower()
+    base = {
+        "usdc": ["usdc", "stablecoin", "reserve", "circle", "issuance", "supply"],
+        "regulation": ["clarity", "genius", "stablecoin", "bill", "markup", "senate", "house", "regulation", "policy"],
+        "rates": ["fed", "rate", "powell", "cpi", "inflation", "yield", "dollar"],
+        "ai": ["ai", "cloud", "gpu", "microsoft", "anthropic", "contract", "rpo", "arr", "data center", "datacenter"],
+        "dilution": ["dilution", "offering", "atm", "convertible", "shares", "equity", "424b5"],
+        "btc": ["bitcoin", "btc", "hash", "mining", "hashprice"],
+        "earnings": ["earnings", "eps", "revenue", "guidance", "10-q", "8-k", "call"],
+        "semis": ["nasdaq", "semiconductor", "nvda", "chip", "ai capex", "breadth", "valuation", "momentum"],
+        "crypto": ["crypto", "ethereum", "eth", "bitcoin", "btc", "etf", "flows", "liquidity"],
+    }
+    keywords: List[str] = []
+    for key, values in base.items():
+        if key in text or any(value in text for value in values):
+            keywords.extend(values)
+    keywords.extend([part for part in driver.lower().replace("/", " ").split() if len(part) >= 4])
+    return sorted(set(keywords))
+
+
+def _classify_evidence_impact(text: str, level: str) -> Tuple[str, str]:
+    negative_terms = [
+        "dilution", "offering", "atm", "downgrade", "miss", "delay", "delayed",
+        "weaker", "decline", "outflow", "lawsuit", "investigation", "risk",
+        "hot cpi", "rate hike", "inflation", "termination", "guidance cut",
+    ]
+    positive_terms = [
+        "beat", "raise", "raised", "upgrade", "approval", "approved", "accepted",
+        "contract", "prepayment", "growth", "increase", "inflow", "record",
+        "on schedule", "guidance raised", "partnership",
+    ]
+    unconfirmed_terms = ["rumor", "reportedly", "x.com", "twitter", "unconfirmed", "may", "could", "signal"]
+    if any(term in text for term in negative_terms):
+        return "bearish", "possible thesis damage or risk expansion"
+    if any(term in text for term in positive_terms):
+        if level in {"D", "E"} or any(term in text for term in unconfirmed_terms):
+            return "unconfirmed", "positive signal needs official/trusted confirmation"
+        return "bullish", "supports one or more thesis drivers"
+    if level in {"D", "E"} or any(term in text for term in unconfirmed_terms):
+        return "unconfirmed", "weak-source or incomplete signal"
+    return "neutral", "relevant but direction is not yet clear"
+
+
+def build_thesis_evidence(investment: Dict[str, Any], theses: List[Dict[str, Any]], today_value: Any = None) -> Dict[str, Dict[str, Any]]:
+    today = _today(today_value)
+    events = [e for e in investment.get("events") or [] if isinstance(e, dict)]
+    results: Dict[str, Dict[str, Any]] = {
+        thesis["symbol"]: {
+            "bullishEvidence": [],
+            "bearishEvidence": [],
+            "unconfirmedEvidence": [],
+            "neutralEvidence": [],
+            "pressureScore": 0,
+            "status": "unproven",
+        }
+        for thesis in theses
+    }
+
+    for thesis in theses:
+        symbol = thesis["symbol"]
+        profile = thesis.get("profile") or ""
+        drivers = thesis.get("drivers") or []
+        driver_terms = {driver: _driver_keywords(driver, profile) for driver in drivers}
+        for event in events:
+            event_date = _parse_event_date(event)
+            if event_date and abs((event_date - today).days) > 14:
+                continue
+            if not _event_relevance(event, symbol):
+                continue
+            text = _event_text(event)
+            matched = [
+                driver for driver, terms in driver_terms.items()
+                if any(term and term in text for term in terms)
+            ]
+            if not matched and str(event.get("symbol") or "").upper() not in {symbol, "MACRO", "MARKET", ""}:
+                continue
+            level = _evidence_level(event)
+            impact, reason = _classify_evidence_impact(text, level)
+            item = {
+                "eventId": event.get("id"),
+                "date": str(event.get("date") or "")[:10],
+                "symbol": symbol,
+                "title": str(event.get("title") or event.get("type") or "evidence"),
+                "drivers": matched or drivers[:1],
+                "impact": impact,
+                "evidenceLevel": level,
+                "reason": reason,
+                "needsVerification": level in {"D", "E"} or impact == "unconfirmed",
+            }
+            bucket = {
+                "bullish": "bullishEvidence",
+                "bearish": "bearishEvidence",
+                "unconfirmed": "unconfirmedEvidence",
+                "neutral": "neutralEvidence",
+            }[impact]
+            results[symbol][bucket].append(item)
+
+    for symbol, data in results.items():
+        score = (
+            len(data["bullishEvidence"]) * 2
+            - len(data["bearishEvidence"]) * 3
+            - len(data["unconfirmedEvidence"])
+        )
+        data["pressureScore"] = score
+        if data["bearishEvidence"]:
+            data["status"] = "under_pressure"
+        elif data["bullishEvidence"] and not data["unconfirmedEvidence"]:
+            data["status"] = "supported"
+        elif data["unconfirmedEvidence"]:
+            data["status"] = "needs_confirmation"
+        else:
+            data["status"] = "unproven"
+        for key in ("bullishEvidence", "bearishEvidence", "unconfirmedEvidence", "neutralEvidence"):
+            data[key] = data[key][:5]
+    return results
+
+
+def build_behavior_controls(investment: Dict[str, Any], theses: List[Dict[str, Any]], today_value: Any = None, evidence_map: Dict[str, Dict[str, Any]] | None = None) -> List[Dict[str, Any]]:
     today = _today(today_value)
     rows, totals = _portfolio_rows(investment)
     rules = investment.get("rules") or {}
@@ -288,6 +416,23 @@ def build_behavior_controls(investment: Dict[str, Any], theses: List[Dict[str, A
             required.append("scenario table before order")
             titles = ", ".join(str(e.get("title") or e.get("type"))[:60] for e in near_events[:2])
             reasons.append(f"Near catalyst: {titles}.")
+
+        thesis_evidence = (evidence_map or {}).get(symbol) or {}
+        if thesis_evidence.get("status") == "under_pressure":
+            if severity != "block":
+                state = "review"
+                severity = "watch"
+            blocked.append("add before thesis review")
+            required.append("review bearish evidence")
+            title = (thesis_evidence.get("bearishEvidence") or [{}])[0].get("title") or "bearish evidence"
+            reasons.append(f"Thesis pressure detected: {title}.")
+        elif thesis_evidence.get("status") == "needs_confirmation":
+            if severity != "block":
+                state = "confirmation_wait"
+                severity = "watch"
+            blocked.append("act on rumor")
+            required.append("confirm with A/B evidence")
+            reasons.append("Relevant evidence exists but source quality or direction is not strong enough.")
 
         for decision in recent_decisions:
             if str(decision.get("symbol") or "").upper() != symbol:
@@ -354,7 +499,7 @@ def build_research_queue(investment: Dict[str, Any], theses: List[Dict[str, Any]
     return queue[:24]
 
 
-def build_market_view(investment: Dict[str, Any], theses: List[Dict[str, Any]], controls: List[Dict[str, Any]], today_value: Any = None) -> Dict[str, Any]:
+def build_market_view(investment: Dict[str, Any], theses: List[Dict[str, Any]], controls: List[Dict[str, Any]], today_value: Any = None, evidence_map: Dict[str, Dict[str, Any]] | None = None) -> Dict[str, Any]:
     today = _today(today_value)
     rows, totals = _portfolio_rows(investment)
     tradable_rows = [r for r in rows if r["assetType"] != "cash" and r["symbol"] != "CASH"]
@@ -386,6 +531,8 @@ def build_market_view(investment: Dict[str, Any], theses: List[Dict[str, Any]], 
             "view": thesis.get("thesis") if thesis else "No thesis recorded.",
             "controlState": control.get("state") if control else "observe",
             "whyItMatters": _why_it_matters(row, thesis),
+            "thesisStatus": ((evidence_map or {}).get(row["symbol"]) or {}).get("status", "unproven"),
+            "pressureScore": ((evidence_map or {}).get(row["symbol"]) or {}).get("pressureScore", 0),
         })
 
     blocked = [c for c in controls if c.get("blockedActions")]
@@ -398,6 +545,7 @@ def build_market_view(investment: Dict[str, Any], theses: List[Dict[str, Any]], 
         "evidence": evidence,
         "doNotDo": _build_do_not_do(blocked),
         "falsificationFocus": _build_falsification_focus(theses, key_issues),
+        "thesisEvidence": evidence_map or {},
     }
 
 
@@ -446,16 +594,20 @@ def build_investment_desk_engine(investment: Dict[str, Any], today_value: Any = 
     today = _today(today_value)
     inv = investment if isinstance(investment, dict) else {}
     theses = build_theses(inv)
-    controls = build_behavior_controls(inv, theses, today)
-    market_view = build_market_view(inv, theses, controls, today)
+    evidence_map = build_thesis_evidence(inv, theses, today)
+    for thesis in theses:
+        thesis.update(evidence_map.get(thesis["symbol"], {}))
+    controls = build_behavior_controls(inv, theses, today, evidence_map)
+    market_view = build_market_view(inv, theses, controls, today, evidence_map)
     research_queue = build_research_queue(inv, theses)
     return {
-        "version": "2026-05-11.py-engine-1",
+        "version": "2026-05-11.py-engine-2",
         "generatedAt": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "date": today.isoformat(),
         "marketView": market_view,
         "theses": theses,
         "behaviorControls": controls,
+        "thesisEvidence": evidence_map,
         "researchQueue": research_queue,
         "summary": render_engine_brief({
             "marketView": market_view,
@@ -475,7 +627,10 @@ def render_engine_brief(engine: Dict[str, Any]) -> str:
         "Key issues:",
     ]
     for issue in (view.get("keyIssues") or [])[:3]:
-        lines.append(f"- {issue.get('symbol')}: {issue.get('view')} ({issue.get('controlState')})")
+        lines.append(
+            f"- {issue.get('symbol')}: {issue.get('view')} "
+            f"({issue.get('controlState')}, thesis={issue.get('thesisStatus')}, pressure={issue.get('pressureScore')})"
+        )
     lines.append("Do not do:")
     for item in (view.get("doNotDo") or [])[:5]:
         lines.append(f"- {item}")

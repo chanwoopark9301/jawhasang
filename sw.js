@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v135'; // Move investment desk judgement to Python engine
+const CACHE_NAME = 'jip-v136'; // Add thesis evidence pressure engine
 
 const STATIC_ASSETS = [
   '/style.css',

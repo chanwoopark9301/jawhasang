@@ -267,15 +267,15 @@ function applyInvestmentServerDeskEngine(baseDesk, investment) {
     })) : baseDesk.marketBriefing?.macroItems,
     microItems: keyIssues.length ? keyIssues.map(item => ({
       id: `server-issue-${item.symbol}`,
-      title: `${item.symbol} · ${item.profile || 'thesis'}`,
-      body: item.whyItMatters || item.view || '',
+      title: `${item.symbol} · ${item.profile || 'thesis'} · ${item.thesisStatus || 'unproven'}`,
+      body: `${item.whyItMatters || item.view || ''} Pressure score: ${item.pressureScore ?? 0}.`,
       source: 'python-desk-engine',
     })) : baseDesk.marketBriefing?.microItems,
     portfolioImplications: keyIssues.length ? keyIssues.map(item => ({
       symbol: item.symbol,
-      title: item.controlState || 'observe',
+      title: `${item.controlState || 'observe'} · ${item.thesisStatus || 'unproven'}`,
       body: item.view || '',
-      tone: item.controlState === 'blocked' ? 'block' : 'watch',
+      tone: ['blocked', 'review', 'confirmation_wait'].includes(item.controlState) ? 'block' : 'watch',
     })) : baseDesk.marketBriefing?.portfolioImplications,
     dataRequests: (engine.researchQueue || []).slice(0, 6).map(item => `${item.symbol}: ${item.driver} - ${item.evidenceNeeded}`),
   };

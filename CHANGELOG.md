@@ -8,6 +8,14 @@
 
 ## 2026-05-08
 
+### 투자 thesis 증거 압력 엔진
+
+- Python 투자 판단 엔진에 저장된 이벤트/뉴스/공시를 종목별 thesis driver에 연결하는 증거 분류 단계를 추가했다.
+- 각 증거는 `bullishEvidence`, `bearishEvidence`, `unconfirmedEvidence`, `neutralEvidence`로 나뉘고, source 품질에 따라 A/B/C/D/E 등급과 확인 필요 여부를 갖는다.
+- CRCL 같은 정책/X 흐름은 공식 확인 전 `needs_confirmation`, IREN의 ATM/희석 같은 공시성 리스크는 `under_pressure`로 thesis 상태에 반영된다.
+- 행동 통제 엔진이 thesis 증거 상태를 읽어 `act on rumor`, `add before thesis review` 같은 금지 행동을 추가로 만든다.
+- 오늘의 데스크 UI 카드에도 thesis 상태와 pressure score가 드러나도록 서버 엔진 결과 매핑을 보강했다.
+- 서버 테스트는 루머성 CRCL 신호와 IREN 희석 리스크가 각각 확인 대기/논리 압박으로 분류되고, 행동 금지 조건까지 이어지는지 검증한다.
 ### Python 투자 판단 엔진 분리
 
 - 투자 데스크의 핵심 판단을 브라우저 JS가 아니라 `investment_desk_engine.py` 순수 Python 모듈로 분리했다.

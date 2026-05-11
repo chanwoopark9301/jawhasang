@@ -249,6 +249,8 @@ class TestDataAPI:
                         'rules': {'maxPositionWeight': 25, 'chaseLimit': 3},
                         'events': [
                             {'id': 'earnings-crcl', 'date': '2026-05-11', 'type': 'earnings', 'symbol': 'CRCL', 'title': 'CRCL earnings'},
+                            {'id': 'crcl-rumor', 'date': '2026-05-11', 'type': 'signal', 'symbol': 'CRCL', 'title': 'X rumor says stablecoin bill may pass', 'source': 'x.com'},
+                            {'id': 'iren-dilution', 'date': '2026-05-11', 'type': 'news', 'symbol': 'IREN', 'title': 'IREN ATM offering dilution risk', 'source': 'sec-edgar'},
                             {'id': 'macro-cpi', 'date': '2026-05-12', 'type': 'macro', 'symbol': 'MACRO', 'title': 'CPI'},
                         ],
                         'decisions': [
@@ -265,21 +267,29 @@ class TestDataAPI:
         data = r.get_json()
         assert data['ok'] is True
         engine = data['engine']
-        assert engine['version'].startswith('2026-05-11.py-engine')
+        assert engine['version'].startswith('2026-05-11.py-engine-2')
         thesis = {item['symbol']: item for item in engine['theses']}
         assert thesis['CRCL']['profile'] == 'stablecoin_issuer'
         assert 'stablecoin legislation' in thesis['CRCL']['drivers']
+        assert thesis['CRCL']['status'] == 'needs_confirmation'
+        assert thesis['CRCL']['unconfirmedEvidence'][0]['needsVerification'] is True
         assert thesis['IREN']['profile'] == 'ai_miner_infrastructure'
+        assert thesis['IREN']['status'] == 'under_pressure'
+        assert thesis['IREN']['bearishEvidence'][0]['evidenceLevel'] == 'A'
         controls = {item['symbol']: item for item in engine['behaviorControls']}
         assert 'market buy' in controls['CRCL']['blockedActions']
         assert 'impulse trade' in controls['CRCL']['blockedActions']
+        assert 'act on rumor' in controls['CRCL']['blockedActions']
         assert 'immediate re-entry' in controls['IREN']['blockedActions']
+        assert 'add before thesis review' in controls['IREN']['blockedActions']
         assert engine['marketView']['topLine']
+        assert engine['marketView']['thesisEvidence']['IREN']['status'] == 'under_pressure'
         assert any(item['symbol'] == 'CRCL' and item['driver'] == 'stablecoin legislation'
                    for item in engine['researchQueue'])
 
         loaded = client.get('/api/data').get_json()['investment']
         assert loaded['desk']['engine']['date'] == '2026-05-11'
+        assert loaded['theses']['IREN']['status'] == 'under_pressure'
         assert loaded['deskSnapshots'][0]['topLine'] == engine['marketView']['topLine']
 
     def test_investment_desk_engine_is_dynamic_for_unknown_symbol(self):
