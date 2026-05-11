@@ -188,11 +188,16 @@ async function continueContextChat(text) {
       } catch (_) {
         detail = '';
       }
-      throw new Error(friendly || `AI HTTP ${res.status}${detail ? ` ${detail.slice(0, 240)}` : ''}`);
+      const error = new Error(friendly || `AI HTTP ${res.status}${detail ? ` ${detail.slice(0, 240)}` : ''}`);
+      error.aiCreditIssue = isAiCreditIssue([detail, friendly].join(' '));
+      throw error;
     }
     const data = await res.json();
     const reply = data.content?.map(c => c.text || '').join('').trim();
     if (reply) {
+      if (data.fallbackFrom === 'anthropic' && data.provider === 'openai') {
+        showAiCreditWarningModal({ fallback: 'openai' });
+      }
       logger.info('Context chat AI request success', {
         requestId: clientRequestId,
         view: state.view,
@@ -218,6 +223,9 @@ async function continueContextChat(text) {
       message: e?.message || String(e),
     });
     if (fallback) {
+      if (e?.aiCreditIssue || isAiCreditIssue(e?.message)) {
+        showAiCreditWarningModal({ fallback: 'local' });
+      }
       appendMessage('ai', fallback);
     } else {
       appendMessage('ai', `죄송해요, 오류가 발생했어요. 다시 시도해주세요.\n\n오류 추적 ID: ${clientRequestId}`);
@@ -241,7 +249,7 @@ function friendlyAiHttpError(status, detail = '') {
     parsed?.errorDetail,
     parsed?.providerReason,
   ].filter(Boolean).join(' ').toLowerCase();
-  if (joined.includes('credit balance') || joined.includes('insufficient credit') || joined.includes('anthropic_credit')) {
+  if (isAiCreditIssue(joined)) {
     return `Claude 크레딧 부족으로 AI 호출이 실패했습니다. HTTP ${status}`;
   }
   if (status === 429) return 'AI 호출 한도가 잠시 걸렸습니다. 잠시 후 다시 시도하면 됩니다.';
@@ -249,6 +257,22 @@ function friendlyAiHttpError(status, detail = '') {
   if (status >= 500) return `AI 서버 오류가 발생했습니다. HTTP ${status}`;
   if (status >= 400) return `AI 요청이 거부됐습니다. HTTP ${status}`;
   return '';
+}
+
+function isAiCreditIssue(value) {
+  return /credit balance|insufficient credit|anthropic_credit|billing|크레딧|잔액/i.test(String(value || ''));
+}
+
+function showAiCreditWarningModal({ fallback = 'local' } = {}) {
+  if (typeof openModal === 'function') {
+    openModal('ai-credit-warning', { provider: 'Claude', fallback });
+    return;
+  }
+  if (typeof showToast === 'function') {
+    showToast(fallback === 'openai'
+      ? 'Claude 크레딧 부족: OpenAI로 대체했어요.'
+      : 'Claude 크레딧 부족: 로컬 임시 브리핑으로 대체했어요.');
+  }
 }
 
 function buildInvestmentBriefingFallbackReply(userText, error) {

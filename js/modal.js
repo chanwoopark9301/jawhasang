@@ -71,6 +71,7 @@ function buildModalHTML(id, data) {
     case 'investment-signals':   return renderModalInvestmentSignals();
     case 'investment-timeline':  return renderModalInvestmentTimeline();
     case 'investment-ai-compare':return renderModalInvestmentAICompare();
+    case 'ai-credit-warning':    return renderModalAiCreditWarning(data);
     default:              return `<p>알 수 없는 팝업: ${esc(id)}</p>`;
   }
 }
@@ -123,6 +124,32 @@ function renderModalReminderSettings() {
       <button class="investment-refresh-btn investment-modal-refresh-btn" id="record-reminder-test" onclick="sendRecordReminderTestNotification()">테스트 알림</button>
     </div>
   `;
+}
+
+function renderModalAiCreditWarning(data = {}) {
+  const provider = data.provider || 'Claude';
+  const fallback = data.fallback || 'local';
+  const fallbackText = fallback === 'openai'
+    ? 'OpenAI로 자동 대체해서 답변을 이어갔습니다.'
+    : '원장 기준 로컬 임시 브리핑으로 대체했습니다.';
+  const nextStep = fallback === 'openai'
+    ? 'Claude 크레딧을 충전하면 다시 Claude 응답을 우선 사용합니다.'
+    : 'Claude 크레딧을 충전하거나 OpenAI API 키/잔액을 확인하면 AI 브리핑을 다시 사용할 수 있습니다.';
+  return `
+    <button class="modal-close" onclick="closeModal()">×</button>
+    <div class="modal-title">AI 크레딧 확인 필요</div>
+    <div class="modal-subtitle">${esc(provider)} 크레딧 부족으로 기본 AI 호출이 실패했습니다.</div>
+    <div class="ctx-block" style="margin-top:14px;">
+      <div class="ctx-lbl">현재 처리</div>
+      <div class="ctx-txt">${esc(fallbackText)}</div>
+    </div>
+    <div class="ctx-block" style="margin-top:12px;">
+      <div class="ctx-lbl">다음 조치</div>
+      <div class="ctx-txt">${esc(nextStep)}</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-primary" onclick="closeModal()">확인</button>
+    </div>`;
 }
 
 function renderModalNewTopic() {

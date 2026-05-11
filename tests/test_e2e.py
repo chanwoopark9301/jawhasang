@@ -1686,6 +1686,51 @@ class TestInvestmentPartner:
         assert 'AI HTTP' not in answer
         assert 'provider error' not in answer
         assert '오류가 발생했어요' not in answer
+        logged_in_page.wait_for_selector('#modal-overlay.open #modal-box', timeout=8_000)
+        modal_text = logged_in_page.locator('#modal-box').inner_text()
+        assert 'AI 크레딧 확인 필요' in modal_text
+        assert 'Claude 크레딧 부족' in modal_text
+        assert '로컬 임시 브리핑' in modal_text
+
+    def test_investment_chat_shows_credit_popup_when_openai_fallback_answers(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.investment.positions = [
+                { id: 'ip-openai-fallback-iren', symbol: 'IREN', name: 'Iris Energy', shares: 510, avgPrice: 66.38, currentPrice: 61.2 },
+            ];
+            const originalFetch = window.fetch.bind(window);
+            window.saveData = async () => true;
+            window.fetch = (url, opts = {}) => {
+                const target = String(url);
+                if (target.includes('/api/investment/ledger')) {
+                    return Promise.resolve(new Response(JSON.stringify({ ok: true, investment: state.investment, positions: state.investment.positions }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                if (target.includes('/api/investment/news')) {
+                    return Promise.resolve(new Response(JSON.stringify({ news: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                if (target.includes('/api/market/quote')) {
+                    return Promise.resolve(new Response(JSON.stringify({ quotes: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                if (target.includes('/api/analyze')) {
+                    return Promise.resolve(new Response(JSON.stringify({
+                        provider: 'openai',
+                        fallbackFrom: 'anthropic',
+                        content: [{ text: '## OpenAI 대체 브리핑\\n- Claude 크레딧 부족으로 OpenAI가 답했습니다.' }],
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                return originalFetch(url, opts);
+            };
+            render();
+        }""")
+
+        logged_in_page.locator('#chat-input-bottom').fill('오늘 브리핑해줘')
+        logged_in_page.locator('#chat-input-bottom').press('Enter')
+        logged_in_page.wait_for_selector('.chat-bubble-ai', timeout=8_000)
+        assert 'OpenAI 대체 브리핑' in logged_in_page.locator('.chat-bubble-ai').last.inner_text()
+        logged_in_page.wait_for_selector('#modal-overlay.open #modal-box', timeout=8_000)
+        modal_text = logged_in_page.locator('#modal-box').inner_text()
+        assert 'AI 크레딧 확인 필요' in modal_text
+        assert 'OpenAI로 자동 대체' in modal_text
 
     def test_investment_krw_auxiliary_display_keeps_usd_inputs(self, logged_in_page):
         self._open_investment(logged_in_page)

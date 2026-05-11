@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v132'; // Fall back to OpenAI when Claude credit is empty
+const CACHE_NAME = 'jip-v133'; // Show popup when AI credit is empty
 
 const STATIC_ASSETS = [
   '/style.css',
