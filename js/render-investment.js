@@ -366,7 +366,10 @@ function renderModalInvestmentPortfolio() {
   const concentrationLabel = top.weight >= 50 ? '고집중' : top.weight >= 30 ? '집중' : '분산';
   const concentrationTone = top.weight >= 50 ? 'block' : top.weight >= 30 ? 'watch' : 'allow';
   const alerts = buildInvestmentRiskAlerts(inv.positions, inv.rules).slice(0, 4);
-  const ruleSummary = inv.rules?.coreRules ? inv.rules.coreRules : `종목별 최대 비중 ${inv.rules?.maxPositionWeight || 30}% · 쿨다운 ${inv.rules?.cooldownMinutes || 30}분`;
+  const cleanCoreRules = typeof stripInvestmentPortfolioSnapshotFromRules === 'function'
+    ? stripInvestmentPortfolioSnapshotFromRules(inv.rules?.coreRules || '')
+    : (inv.rules?.coreRules || '');
+  const ruleSummary = cleanCoreRules ? cleanCoreRules : `종목별 최대 비중 ${inv.rules?.maxPositionWeight || 30}% · 쿨다운 ${inv.rules?.cooldownMinutes || 30}분`;
   const updatedAt = inv.market?.fetchedAt || slices.map(p => p.marketUpdatedAt || p.lastMarketUpdatedAt).filter(Boolean).sort().at(-1) || '';
 
   return `

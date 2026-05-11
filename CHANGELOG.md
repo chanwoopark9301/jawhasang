@@ -515,3 +515,14 @@
 - 투자 원칙, 뉴스 동향, 매매 판단, 시장 데이터, 위험 신호를 `investment` 데이터 구조에 저장하도록 확장했다.
 - `/api/market/quote` 서버 프록시를 추가해 보유 종목, NASDAQ, S&P 500 현재가를 조회할 수 있게 했다.
 - 현재가 갱신 후 목표가 근접, 손절가 근접, 급등/급락, 비중 초과 위험 신호를 계산해 표시하도록 했다.
+
+## 2026-05-11
+
+### Portfolio snapshot table recovery
+
+- Investment chat artifacts now try portfolio snapshot updates before saving content as investment rules.
+- If the ledger only has `CASH`, the app can rebuild positions from a markdown table with `symbol | shares | avg price | current price`.
+- Cash parsing now prefers explicit USD-converted cash and `USD/KRW` lines, so stale CASH values do not win over the user's latest account snapshot.
+- Portfolio markdown accidentally pasted into core rules is stripped during portfolio updates and hidden from the portfolio report.
+- Verified the markdown-table rebuild path, the existing snapshot update path, and the snapshot-over-trade-word priority path with E2E tests.
+- Updated static asset cache to `20260511-11` and service worker cache to `jip-v113`.

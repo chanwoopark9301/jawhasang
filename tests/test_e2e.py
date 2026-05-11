@@ -2621,6 +2621,91 @@ class TestInvestmentPartner:
         assert '$167,594.54' in modal_text
         assert '주식/코인 평가액' in modal_text
 
+    def test_portfolio_snapshot_markdown_table_rebuilds_missing_positions(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.currentChatMessages = [];
+            state.investment.chat = [];
+            state.investment.decisions = [];
+            state.investment.events = [];
+            state.investment.rules.coreRules = '1. 계획 없이 매수하지 않는다.\\n\\n## 포트폴리오 갱신 반영\\n이 표는 원칙이 아니다.';
+            state.investment.positions = [{
+                id: 'ip-cash-auto',
+                assetType: 'cash',
+                symbol: 'CASH',
+                name: '현금',
+                shares: 45925.93,
+                avgPrice: 1,
+                currentPrice: 1,
+                cashAmount: 45925.93,
+                currency: 'USD',
+            }];
+            render();
+        }""")
+
+        logged_in_page.evaluate("""async () => {
+            await saveInvestmentChatArtifacts(
+                '포트폴리오 갱신 반영해줘. 원칙 화면에 있는 표 기준으로 계좌를 복구해줘.',
+                `## 포트폴리오 갱신 반영
+
+### 📊 종목별 현황
+| 종목 | 수량 | 평단 | 현재가 | 평가손익 | 손익률 |
+|------|------|------|--------|----------|--------|
+| IREN | 510주 | $66.38 | $61.20 | -$2,641.80 | -7.80% |
+| CRCL | 113주 | $128.91 | $113.67 | -$1,722.12 | -11.82% |
+| ETH-USD | 5개 | $4,531.54 | $2,356.45 | -$10,875.45 | -47.99% |
+
+### 💵 현금 환산
+- 보유 현금: ₩125,000,000
+- USD/KRW: 1,471.98
+- 달러 환산 예수금: 약 $84,920
+
+### 🗂 포트폴리오 합산
+| 항목 | 금액 |
+|------|------|
+| 총 평가액 | $140,758.96 |`
+            );
+        }""")
+
+        result = logged_in_page.evaluate("""() => {
+            const bySymbol = Object.fromEntries(state.investment.positions.map(p => [p.symbol, p]));
+            const totals = investmentTotals(state.investment.positions);
+            return {
+                count: state.investment.positions.length,
+                irenShares: bySymbol.IREN?.shares,
+                irenAvg: bySymbol.IREN?.avgPrice,
+                irenCurrent: bySymbol.IREN?.currentPrice,
+                crclShares: bySymbol.CRCL?.shares,
+                ethType: bySymbol['ETH-USD']?.assetType,
+                ethCurrent: bySymbol['ETH-USD']?.currentPrice,
+                cash: Math.round((bySymbol.CASH?.cashAmount || 0) * 100) / 100,
+                total: Math.round(totals.totalValue * 100) / 100,
+                lastEvent: state.investment.events.at(-1)?.type,
+                rules: state.investment.rules.coreRules,
+            };
+        }""")
+        assert result == {
+            'count': 4,
+            'irenShares': 510,
+            'irenAvg': 66.38,
+            'irenCurrent': 61.2,
+            'crclShares': 113,
+            'ethType': 'crypto',
+            'ethCurrent': 2356.45,
+            'cash': 84920,
+            'total': 140758.96,
+            'lastEvent': 'portfolio',
+            'rules': '1. 계획 없이 매수하지 않는다.',
+        }
+
+        logged_in_page.locator('#investment-menu-portfolio').click()
+        logged_in_page.wait_for_selector('#investment-portfolio-modal', timeout=8_000)
+        modal_text = logged_in_page.locator('#investment-portfolio-modal').inner_text()
+        assert 'IREN' in modal_text
+        assert 'CRCL' in modal_text
+        assert 'ETH-USD' in modal_text
+        assert '포트폴리오 갱신 반영' not in modal_text
+
     def test_portfolio_open_does_not_reconstruct_cash_from_historical_sells(self, logged_in_page):
         self._open_investment(logged_in_page)
         logged_in_page.evaluate("""() => {
