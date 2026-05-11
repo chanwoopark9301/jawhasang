@@ -168,7 +168,15 @@ async function continueContextChat(text) {
         messages,
       }),
     });
-    if (!res.ok) throw new Error(`AI HTTP ${res.status}`);
+    if (!res.ok) {
+      let detail = '';
+      try {
+        detail = (await res.text()).slice(0, 400);
+      } catch (_) {
+        detail = '';
+      }
+      throw new Error(`AI HTTP ${res.status}${detail ? ` ${detail}` : ''}`);
+    }
     const data = await res.json();
     const reply = data.content?.map(c => c.text || '').join('').trim();
     if (reply) {
@@ -179,6 +187,11 @@ async function continueContextChat(text) {
       appendMessage('ai', '응답이 비어 있었어요. 방금 질문을 한 번만 다시 보내주세요.');
     }
   } catch (e) {
+    logger.error('Context chat AI request failed', {
+      view: state.view,
+      replyMode: state.replyMode,
+      message: e?.message || String(e),
+    });
     appendMessage('ai', '죄송해요, 오류가 발생했어요. 다시 시도해주세요.');
   } finally {
     state._ctxChatLoading = false;
@@ -999,13 +1012,13 @@ function inferInvestmentSymbol(text) {
 function shouldFetchInvestmentNews(text) {
   const ask = (text || '').toLowerCase();
   if (state.view === 'investment' && state.replyMode === 'invest-news') return true;
-  return /\uB274\uC2A4|\uCD5C\uC2E0|\uB3D9\uD5A5|\uACF5\uC2DC|\uBC95\uC548|\uADDC\uC81C|\uAC80\uC0C9|\uCC3E\uC544|\uCC3E\uC544\uC918|\uC54C\uC544\uBD10|news|headline|filing|bill|act|regulation|search|find|look up|x\.com|twitter|tweet|thetechinvest|elon|musk|cathie|wood|thiel/.test(ask);
+  return /\uBE0C\uB9AC\uD551|\uC2DC\uD669|\uC624\uB298\s*\uC911\uC694|\uC2DC\uC7A5\s*\uBE0C\uB9AC\uD551|\uB274\uC2A4|\uCD5C\uC2E0|\uB3D9\uD5A5|\uACF5\uC2DC|\uBC95\uC548|\uADDC\uC81C|\uAC80\uC0C9|\uCC3E\uC544|\uCC3E\uC544\uC918|\uC54C\uC544\uBD10|briefing|brief|market update|news|headline|filing|bill|act|regulation|search|find|look up|x\.com|twitter|tweet|thetechinvest|elon|musk|cathie|wood|thiel/.test(ask);
 }
 
 function shouldFetchInvestmentMarketContext(text) {
   const ask = String(text || '').toLowerCase();
   if (state.view === 'investment' && state.replyMode === 'invest-status') return true;
-  return /\uC0C1\uD0DC|\uC2DC\uC138|\uD604\uC7AC\uAC00|\uAC00\uACA9|\uC5B4\uB54C|\uD3C9\uAC00|\uC190\uC775|\uD3EC\uD2B8\uD3F4\uB9AC\uC624|\uD604\uAE08|\uC608\uC218\uAE08|\uC6D0\uD654|\uD658\uC728|\uB2EC\uB7EC|status|price|quote|position|portfolio|cash|krw|usd.?krw|exchange|fx/.test(ask);
+  return /\uBE0C\uB9AC\uD551|\uC2DC\uD669|\uC624\uB298\s*\uC911\uC694|\uC2DC\uC7A5\s*\uBE0C\uB9AC\uD551|\uC0C1\uD0DC|\uC2DC\uC138|\uD604\uC7AC\uAC00|\uAC00\uACA9|\uC5B4\uB54C|\uD3C9\uAC00|\uC190\uC775|\uD3EC\uD2B8\uD3F4\uB9AC\uC624|\uD604\uAE08|\uC608\uC218\uAE08|\uC6D0\uD654|\uD658\uC728|\uB2EC\uB7EC|briefing|brief|market update|status|price|quote|position|portfolio|cash|krw|usd.?krw|exchange|fx/.test(ask);
 }
 
 function inferInvestmentMarketSymbols(text) {
@@ -1206,6 +1219,18 @@ async function fetchInvestmentNewsContext(text) {
     return `\n\n[투자 뉴스 조회 결과]\n- 조회 기준일: ${today}\n- 뉴스 조회가 실패했습니다. 실패 사실을 짧게 알리고 기존 기록과 투자 원칙으로만 답하세요.`;
   }
 }
+function clampInvestmentPromptText(value, max = 700) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!text || text.length <= max) return text;
+  return `${text.slice(0, max).trim()} ...[truncated ${text.length - max} chars]`;
+}
+
+function clampInvestmentPromptBlock(value, max = 6000) {
+  const text = String(value || '').trim();
+  if (!text || text.length <= max) return text;
+  return `${text.slice(0, max).trim()}\n...[truncated ${text.length - max} chars]`;
+}
+
 // AI 대화용 시스템 프롬프트 생성 (현재 역할 기준으로 매 메시지마다 최신 반영)
 function _buildChatSysPrompt(isMyRecords, topic, student, extraContext = '') {
   const modePrompt = _replyModePrompt(state.replyMode || 'dictation');
@@ -1215,7 +1240,7 @@ function _buildChatSysPrompt(isMyRecords, topic, student, extraContext = '') {
       ? investmentTotals(inv.positions || [])
       : { totalValue: 0, totalCost: 0, totalGain: 0, totalGainPercent: 0 };
     const positions = inv.positions.map(p =>
-      `- ${p.symbol || '?'}: 수량 ${p.shares || 0}, 평균 ${p.avgPrice || 0}, 현재 ${p.currentPrice || 0}, 목표 ${p.targetPrice || '-'}, 손절 ${p.stopPrice || '-'}, 논리 ${p.thesis || '없음'}`
+      `- ${p.symbol || '?'}: 수량 ${p.shares || 0}, 평균 ${p.avgPrice || 0}, 현재 ${p.currentPrice || 0}, 목표 ${p.targetPrice || '-'}, 손절 ${p.stopPrice || '-'}, 논리 ${clampInvestmentPromptText(p.thesis || '없음', 240)}`
     ).join('\n') || '- 등록된 보유 종목 없음';
     const portfolioSnapshot = [
       'AUTHORITATIVE CURRENT LEDGER - use these numbers over any earlier chat history.',
@@ -1226,28 +1251,29 @@ function _buildChatSysPrompt(isMyRecords, topic, student, extraContext = '') {
     ].join('\n');
     const dailyDesk = typeof buildDailyInvestmentDesk === 'function' ? buildDailyInvestmentDesk(inv) : null;
     const dailyDeskBrief = dailyDesk && typeof renderDailyDeskBrief === 'function'
-      ? renderDailyDeskBrief(dailyDesk)
+      ? clampInvestmentPromptBlock(renderDailyDeskBrief(dailyDesk), 5500)
       : 'Daily Investment Desk: unavailable';
     const recentNews = inv.events
       .filter(e => e.type === 'news')
       .slice(-5)
-      .map(e => `- ${e.date} ${e.symbol || ''} ${e.title}: ${e.body}`)
+      .map(e => `- ${e.date} ${e.symbol || ''} ${clampInvestmentPromptText(e.title, 160)}: ${clampInvestmentPromptText(e.body, 650)}`)
       .join('\n') || '- 기록된 뉴스 없음';
     const recentSignals = (inv.events || [])
       .filter(e => e.type === 'signal')
       .slice(-8)
-      .map(e => `- ${e.date || ''} ${e.symbol || ''} ${e.title || 'Signal'}${e.handle ? ` (@${e.handle})` : ''}: ${e.body || ''}`)
+      .map(e => `- ${e.date || ''} ${e.symbol || ''} ${clampInvestmentPromptText(e.title || 'Signal', 160)}${e.handle ? ` (@${e.handle})` : ''}: ${clampInvestmentPromptText(e.body, 520)}`)
       .join('\n') || '- No saved market signals';
     const todayIso = new Date().toISOString().slice(0, 10);
     const upcomingEvents = (inv.events || [])
       .filter(e => e.date && e.date >= todayIso && ['earnings', 'macro', 'analyst'].includes(e.type))
       .sort((a, b) => String(a.date).localeCompare(String(b.date)))
       .slice(0, 10)
-      .map(e => `- ${e.date} [${e.type}] ${e.symbol || ''} ${e.title}: ${e.body || ''}`)
+      .map(e => `- ${e.date} [${e.type}] ${e.symbol || ''} ${clampInvestmentPromptText(e.title, 160)}: ${clampInvestmentPromptText(e.body, 360)}`)
       .join('\n') || '- 예정된 투자 일정 없음';
     const recentDecisions = inv.decisions.slice(-5).map(d =>
-      `- ${d.createdAt?.slice(0, 10) || ''} ${d.symbol} ${d.action}: ${d.label} — ${d.summary}`
+      `- ${d.createdAt?.slice(0, 10) || ''} ${d.symbol} ${d.action}: ${clampInvestmentPromptText(d.label, 120)} — ${clampInvestmentPromptText(d.summary, 520)}`
     ).join('\n') || '- 기록된 매매 판단 없음';
+    const compactExtraContext = clampInvestmentPromptBlock(extraContext, 8000);
     return `당신은 개인 투자자의 이성적 매매 통제 파트너입니다.
 목표는 수익률 예측이나 종목 추천이 아니라, 사용자가 사전에 정한 원칙을 기억하고 감정적 매매를 줄이는 것입니다.
 감정 상태를 묻지 말고, 원칙·숫자·기록·뉴스 해석을 기준으로 짧고 분명하게 돕습니다.
@@ -1314,7 +1340,7 @@ ${upcomingEvents}
 최근 매매 판단:
 ${recentDecisions}
 
-${extraContext}
+${compactExtraContext}
 
 ${modePrompt}`;
   }

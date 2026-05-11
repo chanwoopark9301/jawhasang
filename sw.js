@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v126'; // Expand investment timeline graphs
+const CACHE_NAME = 'jip-v127'; // Stabilize briefing chat context
 
 const STATIC_ASSETS = [
   '/style.css',

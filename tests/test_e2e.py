@@ -1504,6 +1504,70 @@ class TestInvestmentPartner:
         assert '125000' in prompt
         assert '1700' not in prompt
 
+    def test_investment_briefing_chat_clamps_saved_context(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            const longBody = 'Long saved news body '.repeat(900);
+            state.investment.positions = [
+                { id: 'ip-brief-iren', symbol: 'IREN', name: 'Iris Energy', shares: 510, avgPrice: 66.38, currentPrice: 61.2 },
+                { id: 'ip-brief-qld', symbol: 'QLD', name: 'QLD', shares: 312, avgPrice: 88.88, currentPrice: 91.72 },
+            ];
+            state.investment.events = Array.from({ length: 12 }, (_, idx) => ({
+                id: `ie-brief-${idx}`,
+                date: '2026-05-11',
+                type: idx % 2 ? 'signal' : 'news',
+                symbol: idx % 2 ? 'QLD' : 'IREN',
+                title: `Saved briefing context ${idx}`,
+                body: longBody,
+                severity: 'info',
+            }));
+            state.investment.decisions = [{
+                id: 'dec-brief',
+                createdAt: '2026-05-11T09:00:00',
+                symbol: 'IREN',
+                action: 'sell',
+                label: 'Very long decision',
+                summary: longBody,
+            }];
+            window.__capturedAnalyzePayload = null;
+            const originalFetch = window.fetch.bind(window);
+            window.saveData = async () => true;
+            window.fetch = (url, opts) => {
+                const target = String(url);
+                if (target.includes('/api/investment/news')) {
+                    return Promise.resolve(new Response(JSON.stringify({ news: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                if (target.includes('/api/market/quote')) {
+                    return Promise.resolve(new Response(JSON.stringify({
+                        source: 'test',
+                        quotes: [
+                            { symbol: 'IREN', price: 61.2 },
+                            { symbol: 'QLD', price: 91.72 },
+                            { symbol: 'USDKRW=X', price: 1470 },
+                        ],
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                if (target.includes('/api/analyze')) {
+                    window.__capturedAnalyzePayload = JSON.parse(opts.body);
+                    return Promise.resolve(new Response(JSON.stringify({
+                        content: [{ text: '## 오늘 브리핑\\n- 원장 기준으로 핵심 변수만 압축했습니다.' }],
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                return originalFetch(url, opts);
+            };
+            render();
+        }""")
+
+        logged_in_page.locator('#chat-input-bottom').fill('좋아. 브리핑 해봐')
+        logged_in_page.locator('#chat-input-bottom').press('Enter')
+        logged_in_page.wait_for_function("() => window.__capturedAnalyzePayload", timeout=8_000)
+        system_prompt = logged_in_page.evaluate("() => window.__capturedAnalyzePayload.system[0].text")
+        assert len(system_prompt) < 35000
+        assert 'truncated' in system_prompt
+        assert 'IREN' in system_prompt
+        assert 'QLD' in system_prompt
+        assert logged_in_page.locator('.chat-bubble-ai').last.inner_text().startswith('오늘 브리핑')
+
     def test_investment_krw_auxiliary_display_keeps_usd_inputs(self, logged_in_page):
         self._open_investment(logged_in_page)
         logged_in_page.evaluate("""() => {
