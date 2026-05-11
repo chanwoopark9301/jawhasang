@@ -88,11 +88,39 @@ async function continueContextChat(text) {
   const isInvestment = state.view === 'investment';
   const topic   = isMyRecords ? state.myTopics.find(t => t.id === state.selTopic) : null;
   const student = (!isMyRecords && !isInvestment) ? state.students.find(s => s.id === state.selStudent) : null;
+  const portfolioSnapshotRequest = isInvestment
+    && typeof isInvestmentPortfolioSnapshotIntent === 'function'
+    && isInvestmentPortfolioSnapshotIntent(text);
+
+  if (portfolioSnapshotRequest && typeof applyInvestmentPortfolioSnapshotFromChat === 'function') {
+    const directPortfolioUpdate = applyInvestmentPortfolioSnapshotFromChat(text);
+    if (directPortfolioUpdate.changed) {
+      const today = new Date().toISOString().split('T')[0];
+      state.investment.events.push({
+        id: 'ie' + Date.now(),
+        date: today,
+        type: 'portfolio',
+        symbol: directPortfolioUpdate.symbols.join(', '),
+        title: '포트폴리오 자동 갱신',
+        body: directPortfolioUpdate.summary,
+        severity: 'info',
+        linkedDecisionId: null,
+        linkedRecordId: null,
+      });
+      hideTypingIndicator();
+      appendMessage('ai', `포트폴리오를 바로 갱신했어요.\n\n${directPortfolioUpdate.summary}`);
+      refreshInvestmentSurfaces();
+      showToast('포트폴리오에 바로 반영했어요. 서버 저장은 뒤에서 진행합니다.');
+      persistInvestmentChangesInBackground('direct portfolio snapshot');
+      state._ctxChatLoading = false;
+      return;
+    }
+  }
 
   let investmentNewsContext = '';
   let investmentMarketContext = '';
   let investmentFxContext = '';
-  if (isInvestment) {
+  if (isInvestment && !portfolioSnapshotRequest) {
     try {
       investmentNewsContext = await fetchInvestmentNewsContext(text);
     } catch (e) {
@@ -232,9 +260,9 @@ async function saveInvestmentChatArtifacts(userText, aiText) {
       linkedDecisionId: null,
       linkedRecordId: null,
     });
-    await saveData();
-    showToast('포트폴리오에 반영했어요.');
     refreshInvestmentSurfaces();
+    showToast('포트폴리오에 바로 반영했어요. 서버 저장은 뒤에서 진행합니다.');
+    persistInvestmentChangesInBackground('portfolio snapshot');
     return;
   }
 
@@ -346,6 +374,22 @@ function refreshInvestmentSurfaces() {
   if (typeof renderSidebar === 'function') renderSidebar();
   if (typeof renderRightPanel === 'function') renderRightPanel();
   if (active && investmentModals.has(active)) openModal(active);
+}
+
+function persistInvestmentChangesInBackground(label = 'investment change') {
+  const startedAt = performance.now();
+  saveData({ retries: 1 })
+    .then(ok => {
+      logger.info('투자 변경 백그라운드 저장 완료', {
+        label,
+        ok,
+        durationMs: Math.round(performance.now() - startedAt),
+      });
+    })
+    .catch(error => {
+      logger.warn('투자 변경 백그라운드 저장 실패', { label, error });
+      if (typeof showToast === 'function') showToast('화면에는 반영했지만 서버 저장이 지연됐어요. 잠시 후 다시 동기화합니다.');
+    });
 }
 
 function buildInvestmentTradeArtifactKey(symbol, action, shares, price) {

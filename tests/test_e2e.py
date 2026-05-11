@@ -2582,6 +2582,101 @@ class TestInvestmentPartner:
         logged_in_page.wait_for_selector('#investment-portfolio-modal', timeout=8_000)
         assert '126,000' in logged_in_page.locator('#investment-portfolio-modal').inner_text()
 
+    def test_portfolio_snapshot_update_does_not_wait_for_server_save(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.investment.positions = [{
+                id: 'ip-fast-iren',
+                symbol: 'IREN',
+                name: 'Iris Energy',
+                shares: 1700,
+                avgPrice: 46.06,
+                currentPrice: 60,
+            }];
+            state.investment.events = [];
+            window.__saveResolved = false;
+            window.saveData = () => new Promise(resolve => {
+                setTimeout(() => {
+                    window.__saveResolved = true;
+                    resolve(true);
+                }, 1200);
+            });
+            render();
+        }""")
+
+        result = logged_in_page.evaluate("""async () => {
+            const started = performance.now();
+            await saveInvestmentChatArtifacts(
+                'portfolio update save',
+                'IREN remaining 510 shares avg 66.38 current 64\\ncash 125000 USD'
+            );
+            const iren = state.investment.positions.find(p => p.symbol === 'IREN');
+            const cash = state.investment.positions.find(p => p.assetType === 'cash');
+            return {
+                elapsed: performance.now() - started,
+                shares: iren.shares,
+                cash: cash.cashAmount,
+                saveResolved: window.__saveResolved,
+            };
+        }""")
+
+        assert result['elapsed'] < 600
+        assert result['shares'] == 510
+        assert result['cash'] == 125000
+        assert result['saveResolved'] is False
+        logged_in_page.wait_for_function("() => window.__saveResolved === true", timeout=3_000)
+
+    def test_portfolio_snapshot_chat_applies_without_ai_roundtrip(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.currentChatMessages = [];
+            state.investment.positions = [{
+                id: 'ip-fast-chat-iren',
+                symbol: 'IREN',
+                name: 'Iris Energy',
+                shares: 1700,
+                avgPrice: 46.06,
+                currentPrice: 60,
+            }];
+            state.investment.events = [];
+            window.__saveResolved = false;
+            window.__unexpectedFetch = false;
+            window.saveData = () => new Promise(resolve => {
+                setTimeout(() => {
+                    window.__saveResolved = true;
+                    resolve(true);
+                }, 1200);
+            });
+            window.fetch = () => {
+                window.__unexpectedFetch = true;
+                return Promise.reject(new Error('unexpected fetch'));
+            };
+            render();
+        }""")
+
+        result = logged_in_page.evaluate("""async () => {
+            const started = performance.now();
+            await continueContextChat('portfolio update IREN remaining 510 shares avg 66.38 current 64 cash 125000 USD');
+            const iren = state.investment.positions.find(p => p.symbol === 'IREN');
+            const cash = state.investment.positions.find(p => p.assetType === 'cash');
+            return {
+                elapsed: performance.now() - started,
+                shares: iren.shares,
+                cash: cash.cashAmount,
+                saveResolved: window.__saveResolved,
+                unexpectedFetch: window.__unexpectedFetch,
+                aiMessages: state.currentChatMessages.filter(m => m.role === 'ai').length,
+            };
+        }""")
+
+        assert result['elapsed'] < 600
+        assert result['shares'] == 510
+        assert result['cash'] == 125000
+        assert result['saveResolved'] is False
+        assert result['unexpectedFetch'] is False
+        assert result['aiMessages'] == 1
+        logged_in_page.wait_for_function("() => window.__saveResolved === true", timeout=3_000)
+
     def test_investment_chat_portfolio_update_uses_ai_residual_position(self, logged_in_page):
         self._open_investment(logged_in_page)
         logged_in_page.evaluate("""() => {
@@ -2684,12 +2779,13 @@ class TestInvestmentPartner:
         snapshot = logged_in_page.evaluate("""() => {
             const iren = state.investment.positions.find(p => p.symbol === 'IREN');
             const cash = state.investment.positions.find(p => p.assetType === 'cash');
+            const portfolioEvent = [...state.investment.events].reverse().find(e => e.type === 'portfolio');
             return {
                 shares: iren.shares,
                 avgPrice: iren.avgPrice,
                 cash: Math.round(cash.cashAmount * 100) / 100,
-                eventType: state.investment.events.at(-1).type,
-                eventTitle: state.investment.events.at(-1).title,
+                eventType: portfolioEvent?.type,
+                eventTitle: portfolioEvent?.title,
             };
         }""")
         assert snapshot == {
