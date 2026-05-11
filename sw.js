@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v115'; // Sanitize investment desk news queries
+const CACHE_NAME = 'jip-v116'; // Defer startup investment desk batch
 
 const STATIC_ASSETS = [
   '/style.css',

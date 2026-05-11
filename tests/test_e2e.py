@@ -1277,6 +1277,65 @@ class TestInvestmentPartner:
         assert result['hasIrenImplication'] is True
         assert result['hasQldQuestion'] is True
 
+    def test_startup_daily_desk_background_skips_redundant_sync_and_presave(self, logged_in_page):
+        logged_in_page.evaluate("""() => {
+            state.investment = normalizeInvestmentState({
+                positions: [{
+                    id: 'ip-startup-crcl',
+                    symbol: 'CRCL',
+                    name: 'Circle',
+                    shares: 113,
+                    avgPrice: 128.91,
+                    currentPrice: 100,
+                }],
+                events: [],
+                decisions: [],
+                desk: { autoPrepare: true, prepareTime: '09:00' },
+            });
+            window.__refreshCount = 0;
+            window.__saveCount = 0;
+            window.lastServerSyncAgeMs = () => 5000;
+            window.refreshDataFromServer = async () => {
+                window.__refreshCount += 1;
+                return false;
+            };
+            window.saveData = async () => {
+                window.__saveCount += 1;
+                return true;
+            };
+            window.fetchMarketQuoteData = async () => ({
+                quotes: [
+                    { symbol: 'CRCL', price: 113.67, changePercent: 1.2 },
+                    { symbol: 'USDKRW=X', price: 1350 },
+                ],
+            });
+            window.apiSyncInvestmentCalendar = async () => ({ ok: true, eventsSynced: 0 });
+            window.apiFetchInvestmentNews = async () => ({ news: [] });
+        }""")
+
+        result = logged_in_page.evaluate("""async () => {
+            await prepareDailyInvestmentDesk({
+                force: true,
+                silent: true,
+                reason: 'startup-after-prepare-time',
+                background: true,
+            });
+            return {
+                refreshCount: window.__refreshCount,
+                saveCount: window.__saveCount,
+                steps: state.investment.desk.steps.map(step => ({
+                    name: step.name,
+                    detail: step.detail,
+                })),
+            };
+        }""")
+
+        assert result['refreshCount'] == 0
+        assert result['saveCount'] == 1
+        details = {step['name']: step['detail'] for step in result['steps']}
+        assert details['server-ledger-sync'].startswith('skipped:')
+        assert details['ledger-save-before-batch'].startswith('skipped:')
+
     def test_daily_desk_news_queries_follow_current_holdings(self, logged_in_page):
         self._open_investment(logged_in_page)
         result = logged_in_page.evaluate("""() => {

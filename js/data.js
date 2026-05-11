@@ -44,6 +44,7 @@ async function loadData() {
 
       const isNew = !data.students || !data.students.length;
       _applyServerData(data);
+      _lastSyncAt = Date.now();
       logger.info('서버 데이터 수신 완료 (학생 %d명, 회기 %d건)', state.students.length, state.sessions.length);
       _saveToLocalCache();
 
@@ -82,6 +83,10 @@ const _CACHE_KEY = 'jip_data_cache';
 let _lastSyncAt = 0;
 let _syncInFlight = false;
 let _saveQueue = Promise.resolve();
+
+function lastServerSyncAgeMs() {
+  return _lastSyncAt ? Date.now() - _lastSyncAt : Infinity;
+}
 
 async function refreshDataFromServer(options = {}) {
   const minInterval = Number.isFinite(options.minInterval) ? options.minInterval : 5000;

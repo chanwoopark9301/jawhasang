@@ -284,7 +284,7 @@ function scheduleDailyInvestmentDeskPreparation() {
   threshold.setHours(Math.min(23, Math.max(0, parseInt(hRaw, 10) || 9)), Math.min(59, Math.max(0, parseInt(mRaw, 10) || 0)), 0, 0);
 
   if (now >= threshold && prefs.lastPreparedDate !== today) {
-    setTimeout(() => prepareDailyInvestmentDesk({ force: false, silent: true, reason: 'startup-after-prepare-time' }), 1200);
+    scheduleStartupDailyInvestmentDeskPreparation();
   }
   _investmentDeskPrepareTimer = setTimeout(() => {
     prepareDailyInvestmentDesk({ force: true, silent: true, reason: 'scheduled' })
@@ -293,8 +293,27 @@ function scheduleDailyInvestmentDeskPreparation() {
   return true;
 }
 
+function scheduleStartupDailyInvestmentDeskPreparation() {
+  const run = () => prepareDailyInvestmentDesk({
+    force: false,
+    silent: true,
+    reason: 'startup-after-prepare-time',
+    background: true,
+  });
+  if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(run, { timeout: 9000 });
+  } else {
+    setTimeout(run, 9000);
+  }
+}
+
 async function prepareDailyInvestmentDesk(options = {}) {
   if (_investmentDeskPreparing) return false;
+  const startedAt = performance.now();
+  const isStartupBackground = options.background === true || options.reason === 'startup-after-prepare-time';
+  const recentInitialSync = isStartupBackground
+    && typeof lastServerSyncAgeMs === 'function'
+    && lastServerSyncAgeMs() < 60000;
   state.investment = normalizeInvestmentState(state.investment);
   const today = new Date().toISOString().slice(0, 10);
   if (!options.force && state.investment.desk?.lastPreparedDate === today) return false;
@@ -322,16 +341,24 @@ async function prepareDailyInvestmentDesk(options = {}) {
 
   try {
     try {
-      const changed = await refreshDataFromServer({ force: true, minInterval: 0, render: false });
-      state.investment = normalizeInvestmentState(state.investment);
-      markStep('server-ledger-sync', true, changed ? 'server state merged' : 'already fresh');
+      if (recentInitialSync) {
+        markStep('server-ledger-sync', true, 'skipped: startup data was synced moments ago');
+      } else {
+        const changed = await refreshDataFromServer({ force: true, minInterval: 0, render: false });
+        state.investment = normalizeInvestmentState(state.investment);
+        markStep('server-ledger-sync', true, changed ? 'server state merged' : 'already fresh');
+      }
     } catch (e) {
       markStep('server-ledger-sync', false, e.message || 'server sync failed');
     }
 
     try {
-      await saveData({ retries: 1 });
-      markStep('ledger-save-before-batch', true, 'latest local ledger pushed');
+      if (isStartupBackground) {
+        markStep('ledger-save-before-batch', true, 'skipped: background run saves once after batch');
+      } else {
+        await saveData({ retries: 1 });
+        markStep('ledger-save-before-batch', true, 'latest local ledger pushed');
+      }
     } catch (e) {
       markStep('ledger-save-before-batch', false, e.message || 'save failed');
     }
@@ -399,7 +426,13 @@ async function prepareDailyInvestmentDesk(options = {}) {
     if (!options.silent) {
       showToast(errors.length ? '오늘의 데스크를 일부만 준비했어요. 로그를 확인해주세요.' : '오늘의 데스크를 준비했어요.');
     }
-    logger.info('오늘의 투자 데스크 준비 완료', { status: state.investment.desk.status, steps, errors });
+    logger.info('오늘의 투자 데스크 준비 완료', {
+      status: state.investment.desk.status,
+      steps,
+      errors,
+      background: isStartupBackground,
+      durationMs: Math.round(performance.now() - startedAt),
+    });
     render();
     if (originalActiveModal === 'investment-desk' || state.activeModal === 'investment-desk') openModal('investment-desk');
     return true;
