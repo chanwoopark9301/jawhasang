@@ -118,13 +118,20 @@ async function syncInvestmentCalendarData() {
     btn.textContent = '일정 동기화 중';
   });
   try {
+    await saveData({ retries: 1 });
     const data = await apiSyncInvestmentCalendar(45);
-    if (data.investment) state.investment = normalizeInvestmentState(data.investment);
+    if (data.investment) {
+      state.investment = typeof _mergeIncomingInvestmentState === 'function'
+        ? _mergeIncomingInvestmentState(data.investment)
+        : normalizeInvestmentState(data.investment);
+    }
     const missing = Array.isArray(data.missingProviders) && data.missingProviders.length
       ? ` 필요한 키: ${data.missingProviders.join(', ')}`
       : '';
     showToast(`투자 일정 ${data.eventsSynced || 0}개를 캘린더에 반영했어요.${missing}`);
+    await saveData({ retries: 1 });
     render();
+    if (state.activeModal === 'investment-desk') openModal('investment-desk');
   } catch (e) {
     logger.warn('투자 일정 동기화 실패', e);
     showToast(e.message || '투자 일정 동기화에 실패했어요.');
@@ -257,6 +264,227 @@ function notifyInvestmentSignal(title, body) {
 }
 
 let _investmentNotificationTimer = null;
+let _investmentDeskPrepareTimer = null;
+let _investmentDeskPreparing = false;
+
+function scheduleDailyInvestmentDeskPreparation() {
+  if (_investmentDeskPrepareTimer) {
+    clearTimeout(_investmentDeskPrepareTimer);
+    _investmentDeskPrepareTimer = null;
+  }
+  state.investment = normalizeInvestmentState(state.investment);
+  const prefs = state.investment.desk || {};
+  if (prefs.autoPrepare === false) return false;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const delay = nextInvestmentNotificationDelay(prefs.prepareTime || '09:00');
+  const now = new Date();
+  const [hRaw, mRaw] = String(prefs.prepareTime || '09:00').split(':');
+  const threshold = new Date(now);
+  threshold.setHours(Math.min(23, Math.max(0, parseInt(hRaw, 10) || 9)), Math.min(59, Math.max(0, parseInt(mRaw, 10) || 0)), 0, 0);
+
+  if (now >= threshold && prefs.lastPreparedDate !== today) {
+    setTimeout(() => prepareDailyInvestmentDesk({ force: false, silent: true, reason: 'startup-after-prepare-time' }), 1200);
+  }
+  _investmentDeskPrepareTimer = setTimeout(() => {
+    prepareDailyInvestmentDesk({ force: true, silent: true, reason: 'scheduled' })
+      .finally(() => scheduleDailyInvestmentDeskPreparation());
+  }, delay);
+  return true;
+}
+
+async function prepareDailyInvestmentDesk(options = {}) {
+  if (_investmentDeskPreparing) return false;
+  state.investment = normalizeInvestmentState(state.investment);
+  const today = new Date().toISOString().slice(0, 10);
+  if (!options.force && state.investment.desk?.lastPreparedDate === today) return false;
+
+  _investmentDeskPreparing = true;
+  const steps = [];
+  const errors = [];
+  const markStep = (name, ok, detail = '') => {
+    steps.push({ name, ok: !!ok, detail, at: new Date().toISOString() });
+    if (!ok && detail) errors.push(`${name}: ${detail}`);
+  };
+  const originalActiveModal = state.activeModal;
+  state.investment.desk = {
+    ...(state.investment.desk || {}),
+    status: 'running',
+    lastRunReason: options.reason || 'manual',
+    steps,
+    errors,
+  };
+  if (!options.silent) {
+    showToast('오늘의 투자 데스크를 준비하고 있어요.');
+    render();
+    if (originalActiveModal === 'investment-desk') openModal('investment-desk');
+  }
+
+  try {
+    try {
+      const changed = await refreshDataFromServer({ force: true, minInterval: 0, render: false });
+      state.investment = normalizeInvestmentState(state.investment);
+      markStep('server-ledger-sync', true, changed ? 'server state merged' : 'already fresh');
+    } catch (e) {
+      markStep('server-ledger-sync', false, e.message || 'server sync failed');
+    }
+
+    try {
+      await saveData({ retries: 1 });
+      markStep('ledger-save-before-batch', true, 'latest local ledger pushed');
+    } catch (e) {
+      markStep('ledger-save-before-batch', false, e.message || 'save failed');
+    }
+
+    try {
+      const broker = state.investment.broker || {};
+      if (String(broker.provider || '').toLowerCase() === 'kis' || broker.status === 'connected') {
+        const data = await apiSyncKisBroker(30);
+        if (data.investment) state.investment = normalizeInvestmentState(data.investment);
+        markStep('broker-sync', true, `${data.positionsSynced || 0} positions, ${data.tradesSynced || 0} trades`);
+      } else {
+        markStep('broker-sync', true, 'skipped: broker not connected');
+      }
+    } catch (e) {
+      markStep('broker-sync', false, e.message || 'broker sync failed');
+    }
+
+    try {
+      const symbols = investmentDeskMarketSymbols();
+      if (symbols.length) {
+        const data = await fetchMarketQuoteData(symbols);
+        applyInvestmentQuotes(data.quotes || [], { forceCurrentPrice: true });
+        const fx = (data.quotes || []).find(q => String(q.symbol || '').toUpperCase() === 'USDKRW=X');
+        if (fx?.price) state.investment.usdKrwRate = Number(fx.price);
+        markStep('market-quote-sync', true, `${(data.quotes || []).length}/${symbols.length} quotes`);
+      } else {
+        markStep('market-quote-sync', true, 'no symbols');
+      }
+    } catch (e) {
+      markStep('market-quote-sync', false, e.message || 'market quote failed');
+    }
+
+    try {
+      const data = await apiSyncInvestmentCalendar(45);
+      if (data.investment) {
+        state.investment = typeof _mergeIncomingInvestmentState === 'function'
+          ? _mergeIncomingInvestmentState(data.investment)
+          : normalizeInvestmentState(data.investment);
+      }
+      markStep('calendar-sync', true, `${data.eventsSynced || 0} events`);
+    } catch (e) {
+      markStep('calendar-sync', false, e.message || 'calendar sync failed');
+    }
+
+    try {
+      const result = await syncDailyInvestmentDeskNews();
+      markStep('news-signal-sync', true, `${result.added || 0} saved / ${result.fetched || 0} fetched`);
+    } catch (e) {
+      markStep('news-signal-sync', false, e.message || 'news sync failed');
+    }
+
+    state.investment = normalizeInvestmentState(state.investment);
+    state.investment.alerts = buildInvestmentRiskAlerts(state.investment.positions, state.investment.rules);
+    state.investment.desk = {
+      ...(state.investment.desk || {}),
+      autoPrepare: state.investment.desk?.autoPrepare !== false,
+      prepareTime: state.investment.desk?.prepareTime || '09:00',
+      lastPreparedDate: today,
+      lastPreparedAt: new Date().toISOString(),
+      status: errors.length ? 'partial' : 'ready',
+      steps,
+      errors,
+    };
+    await saveData({ retries: 1 });
+    if (!options.silent) {
+      showToast(errors.length ? '오늘의 데스크를 일부만 준비했어요. 로그를 확인해주세요.' : '오늘의 데스크를 준비했어요.');
+    }
+    logger.info('오늘의 투자 데스크 준비 완료', { status: state.investment.desk.status, steps, errors });
+    render();
+    if (originalActiveModal === 'investment-desk' || state.activeModal === 'investment-desk') openModal('investment-desk');
+    return true;
+  } finally {
+    _investmentDeskPreparing = false;
+  }
+}
+
+function investmentDeskMarketSymbols() {
+  const inv = state.investment = normalizeInvestmentState(state.investment);
+  const positionSymbols = (inv.positions || [])
+    .filter(p => !isCashInvestmentPosition(p))
+    .map(p => p.symbol)
+    .filter(Boolean);
+  return [...new Set([...positionSymbols, ...INVESTMENT_INDEX_SYMBOLS, 'USDKRW=X'].map(normalizeInvestmentMarketSymbol).filter(Boolean))];
+}
+
+async function syncDailyInvestmentDeskNews() {
+  const inv = state.investment = normalizeInvestmentState(state.investment);
+  const symbols = [...new Set((inv.positions || [])
+    .filter(p => !isCashInvestmentPosition(p))
+    .map(p => String(p.symbol || '').toUpperCase())
+    .filter(Boolean))];
+  const queries = buildDailyInvestmentDeskNewsQueries(symbols);
+  if (!symbols.length && !queries.length) return { fetched: 0, added: 0 };
+  const data = await apiFetchInvestmentNews(symbols, 3, queries);
+  const news = Array.isArray(data.news) ? data.news.slice(0, 18) : [];
+  const before = inv.events.length;
+  news.forEach(item => saveDailyInvestmentDeskNewsEvent(item));
+  return { fetched: news.length, added: inv.events.length - before };
+}
+
+function buildDailyInvestmentDeskNewsQueries(symbols) {
+  const set = new Set();
+  const has = symbol => symbols.includes(symbol);
+  if (has('CRCL') || has('ETH-USD') || has('ETH') || has('IREN')) {
+    set.add('Digital Asset Market Structure Clarity Act markup');
+    set.add('GENIUS Act stablecoin bill Circle USDC');
+    set.add('crypto market structure bill Senate House markup');
+  }
+  if (has('CRCL')) set.add('Circle Internet Group earnings USDC reserves interest income');
+  if (has('IREN')) set.add('IREN AI cloud Microsoft contract earnings funding dilution');
+  if (has('ETH-USD') || has('ETH')) set.add('Ethereum ETF crypto market flows regulation');
+  if (symbols.some(s => ['NVDA', 'AMD', 'AVGO', 'TSM', 'SMH', 'SOXX', 'QQQ', 'QQQM', 'QLD', 'TQQQ'].includes(s))) {
+    set.add('semiconductor AI capex Nasdaq momentum valuation');
+  }
+  set.add('CPI Powell Fed rates market expectations this week');
+  set.add('Iran Hormuz oil ceasefire market inflation risk');
+  set.add('US China summit semiconductor trade market');
+  return [...set].slice(0, 8);
+}
+
+function saveDailyInvestmentDeskNewsEvent(item) {
+  state.investment = normalizeInvestmentState(state.investment);
+  const title = String(item?.title || '').trim();
+  const link = String(item?.link || item?.url || '').trim();
+  if (!title && !link) return false;
+  const key = normalizeDailyDeskEventKey(link || title);
+  const exists = (state.investment.events || []).some(e => normalizeDailyDeskEventKey(e.sourceUrl || e.url || e.title) === key);
+  if (exists) return false;
+  const symbol = normalizeInvestmentMarketSymbol(item.symbol || item.topic || '');
+  const published = String(item.published || item.publishedAt || '').slice(0, 10);
+  const body = [
+    item.summary || item.description || '',
+    link ? `[source](${link})` : '',
+    'Desk rule: official filings, company IR, trusted financial media, and price/volume must confirm before acting.',
+  ].filter(Boolean).join('\n\n');
+  state.investment.events.push({
+    id: `desk-news-${new Date().toISOString().slice(0, 10)}-${key.slice(0, 48)}`,
+    date: /^\d{4}-\d{2}-\d{2}$/.test(published) ? published : new Date().toISOString().slice(0, 10),
+    type: item.kind === 'general-news' ? 'signal' : 'news',
+    severity: 'watch',
+    symbol: symbol || '',
+    title: title || 'Market signal',
+    body,
+    source: item.source || 'daily-desk-news',
+    sourceUrl: link,
+    deskPrepared: true,
+  });
+  return true;
+}
+
+function normalizeDailyDeskEventKey(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ').replace(/[^a-z0-9가-힣:/?&.= -]/g, '').slice(0, 160);
+}
 
 function scheduleInvestmentDeskNotifications() {
   if (_investmentNotificationTimer) {

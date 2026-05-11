@@ -154,12 +154,14 @@ function renderModalInvestmentDesk() {
   const inv = state.investment = normalizeInvestmentState(state.investment);
   const desk = buildDailyInvestmentDesk(inv);
   const briefing = desk.marketBriefing || {};
+  const prep = inv.desk || {};
   const riskTone = (briefing.dataRequests || []).length ? 'watch' : (desk.riskSignals || [])[0]?.severity || 'allow';
   return `
     <button class="modal-close" onclick="closeModal()">x</button>
     <div class="investment-modal-titlebar">
       <div class="modal-title">오늘의 투자 데스크</div>
       <div class="investment-action-row">
+        <button class="investment-refresh-btn investment-modal-refresh-btn" id="investment-desk-prepare" onclick="prepareDailyInvestmentDesk({ force: true, silent: false, reason: 'manual' })">오늘 데스크 갱신</button>
         <button class="investment-refresh-btn investment-modal-refresh-btn" onclick="fillInvestmentDeskBriefingPrompt()">브리핑 질문 채우기</button>
         <button class="investment-refresh-btn investment-modal-refresh-btn" onclick="syncInvestmentCalendarData()">일정 동기화</button>
         <button class="investment-refresh-btn investment-modal-refresh-btn" id="investment-desk-notification-permission" onclick="requestInvestmentNotifications()">알림 켜기</button>
@@ -171,7 +173,13 @@ function renderModalInvestmentDesk() {
         <span class="investment-badge ${esc(riskTone)}">Market Briefing Desk</span>
         <h4>${esc(briefing.headline || '오늘의 시장 브리핑')}</h4>
         <p>계좌 수치판은 포트폴리오에서 보고, 여기서는 이번 주 거시 변수와 보유 종목의 미시 변수가 만나는 지점을 먼저 봅니다.</p>
+        <div class="investment-desk-prep-status">
+          <strong>${esc(investmentDeskPrepStatusLabel(prep.status))}</strong>
+          <span>${prep.lastPreparedAt ? `마지막 준비 ${formatDateTimeShort(prep.lastPreparedAt)}` : `매일 ${esc(prep.prepareTime || '09:00')} 이후 자동 준비`}</span>
+        </div>
       </section>
+
+      ${renderInvestmentDeskPreparationSteps(prep)}
 
       <section class="investment-portfolio-alerts">
         <div class="investment-portfolio-list-head">
@@ -211,6 +219,44 @@ function renderModalInvestmentDesk() {
         <ul class="investment-desk-list">${briefing.dataRequests.map(item => `<li>${esc(item)}</li>`).join('')}</ul>
       </section>` : ''}
     </div>`;
+}
+
+function investmentDeskPrepStatusLabel(status) {
+  return ({
+    ready: '오늘 데스크 준비 완료',
+    partial: '일부 자료만 준비됨',
+    running: '데스크 준비 중',
+    failed: '데스크 준비 실패',
+  })[status] || '자동 준비 대기';
+}
+
+function renderInvestmentDeskPreparationSteps(prep) {
+  const steps = Array.isArray(prep?.steps) ? prep.steps : [];
+  if (!steps.length) return '';
+  return `<section class="investment-portfolio-alerts investment-desk-prep">
+    <div class="investment-portfolio-list-head">
+      <strong>아침 배치 상태</strong>
+      <span>원장·시세·일정·뉴스를 한 번에 준비</span>
+    </div>
+    <div class="investment-briefing-grid">
+      ${steps.map(step => `<article class="investment-briefing-card ${step.ok ? 'allow' : 'block'}">
+        <span>${step.ok ? 'done' : 'check'}</span>
+        <strong>${esc(investmentDeskStepLabel(step.name))}</strong>
+        <p>${esc(step.detail || '')}</p>
+      </article>`).join('')}
+    </div>
+  </section>`;
+}
+
+function investmentDeskStepLabel(name) {
+  return ({
+    'server-ledger-sync': '서버 원장 동기화',
+    'ledger-save-before-batch': '최신 원장 저장',
+    'broker-sync': '증권사 잔고 동기화',
+    'market-quote-sync': '현재가·지수·환율 갱신',
+    'calendar-sync': '실적·거시 일정 동기화',
+    'news-signal-sync': '뉴스·시장 신호 수집',
+  })[name] || name || '단계';
 }
 
 function renderInvestmentBriefingCards(items, cls) {

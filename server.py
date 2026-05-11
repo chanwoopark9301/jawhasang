@@ -212,6 +212,23 @@ def _empty_investment():
             'lastSyncedAt': None,
             'keywords': ['IREN', 'CRCL', 'AI', 'data center', 'Microsoft', 'Anthropic', 'Bitcoin', 'GPU', 'power', 'earnings'],
         },
+        'notifications': {
+            'enabled': False,
+            'dailyTime': '08:30',
+            'notifyDesk': True,
+            'notifyEvents': True,
+            'notifyRisks': True,
+            'lastDeskNotifiedDate': None,
+        },
+        'desk': {
+            'autoPrepare': True,
+            'prepareTime': '09:00',
+            'lastPreparedDate': None,
+            'lastPreparedAt': None,
+            'status': 'idle',
+            'steps': [],
+            'errors': [],
+        },
     }
 
 EMPTY = lambda: {
@@ -276,6 +293,7 @@ def _normalize_data(data: dict) -> dict:
             'calendar': {**base['calendar'], **(inv.get('calendar') if isinstance(inv.get('calendar'), dict) else {})},
             'signals': {**base['signals'], **(inv.get('signals') if isinstance(inv.get('signals'), dict) else {})},
             'notifications': {**base.get('notifications', {}), **(inv.get('notifications') if isinstance(inv.get('notifications'), dict) else {})},
+            'desk': {**base.get('desk', {}), **(inv.get('desk') if isinstance(inv.get('desk'), dict) else {})},
         }
     data['investment'] = inv
     return data

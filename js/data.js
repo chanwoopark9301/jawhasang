@@ -63,6 +63,9 @@ async function loadData() {
     if (typeof scheduleInvestmentDeskNotifications === 'function') {
       scheduleInvestmentDeskNotifications();
     }
+    if (typeof scheduleDailyInvestmentDeskPreparation === 'function') {
+      scheduleDailyInvestmentDeskPreparation();
+    }
     if (typeof scheduleRecordReminderNotifications === 'function') {
       scheduleRecordReminderNotifications();
     }

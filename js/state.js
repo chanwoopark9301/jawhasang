@@ -157,6 +157,15 @@ function defaultInvestmentState() {
       notifyRisks: true,
       lastDeskNotifiedDate: null,
     },
+    desk: {
+      autoPrepare: true,
+      prepareTime: '09:00',
+      lastPreparedDate: null,
+      lastPreparedAt: null,
+      status: 'idle',
+      steps: [],
+      errors: [],
+    },
   };
 }
 
@@ -228,6 +237,7 @@ function normalizeInvestmentState(investment) {
     calendar: src.calendar && typeof src.calendar === 'object' ? { ...base.calendar, ...src.calendar } : base.calendar,
     signals: src.signals && typeof src.signals === 'object' ? { ...base.signals, ...src.signals } : base.signals,
     notifications: src.notifications && typeof src.notifications === 'object' ? { ...base.notifications, ...src.notifications } : base.notifications,
+    desk: src.desk && typeof src.desk === 'object' ? { ...base.desk, ...src.desk } : base.desk,
   };
 }
 

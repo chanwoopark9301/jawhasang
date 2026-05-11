@@ -1107,6 +1107,130 @@ class TestInvestmentPartner:
         assert 'IREN' in payload['title'] or 'IREN' in payload['body']
         assert logged_in_page.evaluate("() => scheduleInvestmentDeskNotifications()") is True
 
+    def test_prepare_daily_investment_desk_syncs_ledger_market_calendar_and_news(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.investment = normalizeInvestmentState({
+                positions: [{
+                    id: 'ip-desk-crcl',
+                    symbol: 'CRCL',
+                name: 'Circle',
+                shares: 113,
+                avgPrice: 128.91,
+                currentPrice: 100,
+                manualPrice: true,
+                }, {
+                    id: 'ip-desk-eth',
+                    symbol: 'ETH-USD',
+                    name: 'Ethereum',
+                    assetType: 'crypto',
+                    shares: 5,
+                    avgPrice: 4531.54,
+                    currentPrice: 2300,
+                }, {
+                    id: 'ip-desk-iren',
+                    symbol: 'IREN',
+                    name: 'Iris Energy',
+                    shares: 510,
+                    avgPrice: 66.38,
+                    currentPrice: 60,
+                }, {
+                    id: 'ip-desk-qld',
+                    symbol: 'QLD',
+                    name: 'ProShares Ultra QQQ',
+                    shares: 321,
+                    avgPrice: 88.88,
+                    currentPrice: 90,
+                }],
+                events: [],
+                decisions: [],
+                desk: { autoPrepare: true, prepareTime: '09:00' },
+            });
+            window.__deskNewsRequest = null;
+            window.__savedCount = 0;
+            window.refreshDataFromServer = async () => false;
+            window.saveData = async () => { window.__savedCount += 1; return true; };
+            window.fetchMarketQuoteData = async (symbols) => ({
+                requested: symbols,
+                quotes: [
+                    { symbol: 'CRCL', price: 113.67, changePercent: -2.1 },
+                    { symbol: 'ETH-USD', price: 2351.3, changePercent: 1.5 },
+                    { symbol: 'IREN', price: 61.2, changePercent: 0.8 },
+                    { symbol: 'QLD', price: 92.5, changePercent: 2.4 },
+                    { symbol: '^IXIC', price: 21000, changePercent: 0.9 },
+                    { symbol: '^GSPC', price: 6200, changePercent: 0.3 },
+                    { symbol: 'USDKRW=X', price: 1350 },
+                ],
+            });
+            window.apiSyncInvestmentCalendar = async () => ({
+                ok: true,
+                eventsSynced: 2,
+                investment: {
+                    ...state.investment,
+                    events: [{
+                        id: 'macro-cpi-test',
+                        date: new Date().toISOString().slice(0, 10),
+                        type: 'macro',
+                        symbol: 'MACRO',
+                        title: 'CPI',
+                        body: 'Fed rates and inflation consensus matter.',
+                        source: 'test-calendar',
+                    }],
+                },
+            });
+            window.apiFetchInvestmentNews = async (symbols, limit, queries) => {
+                window.__deskNewsRequest = { symbols, limit, queries };
+                return {
+                    news: [{
+                        symbol: 'CRCL',
+                        topic: 'Digital Asset Market Structure Clarity Act',
+                        title: 'Clarity Act markup talk lifts crypto policy focus',
+                        summary: 'Traders are watching possible markup dates, but official confirmation is still required.',
+                        link: 'https://example.com/clarity',
+                        source: 'google-news-rss',
+                        kind: 'general-news',
+                        published: new Date().toISOString(),
+                    }],
+                };
+            };
+            render();
+        }""")
+
+        result = logged_in_page.evaluate("""async () => {
+            await prepareDailyInvestmentDesk({ force: true, silent: true, reason: 'test' });
+            const desk = buildDailyInvestmentDesk(state.investment);
+            return {
+                crclPrice: state.investment.positions.find(p => p.symbol === 'CRCL').currentPrice,
+                qldPrice: state.investment.positions.find(p => p.symbol === 'QLD').currentPrice,
+                status: state.investment.desk.status,
+                preparedDate: state.investment.desk.lastPreparedDate,
+                stepNames: state.investment.desk.steps.map(s => s.name),
+                newsSaved: state.investment.events.some(e => e.title.includes('Clarity Act markup')),
+                newsQueries: window.__deskNewsRequest.queries,
+                savedCount: window.__savedCount,
+                hasCrclImplication: desk.marketBriefing.portfolioImplications.some(item => item.symbol === 'CRCL'),
+                hasEthImplication: desk.marketBriefing.portfolioImplications.some(item => item.symbol === 'ETH-USD'),
+                hasIrenImplication: desk.marketBriefing.portfolioImplications.some(item => item.symbol === 'IREN'),
+                hasQldQuestion: desk.marketBriefing.briefingQuestions.some(item => item.includes('QLD')),
+            };
+        }""")
+        today = logged_in_page.evaluate("() => new Date().toISOString().slice(0, 10)")
+        assert result['crclPrice'] == 113.67
+        assert result['qldPrice'] == 92.5
+        assert result['status'] == 'ready'
+        assert result['preparedDate'] == today
+        assert 'server-ledger-sync' in result['stepNames']
+        assert 'market-quote-sync' in result['stepNames']
+        assert 'calendar-sync' in result['stepNames']
+        assert 'news-signal-sync' in result['stepNames']
+        assert result['newsSaved'] is True
+        assert any('Clarity Act' in query for query in result['newsQueries'])
+        assert result['savedCount'] >= 2
+        assert result['hasCrclImplication'] is True
+        assert result['hasEthImplication'] is True
+        assert result['hasIrenImplication'] is True
+        assert result['hasQldQuestion'] is True
+
     def test_investment_prompt_includes_daily_desk_guardrails(self, logged_in_page):
         self._open_investment(logged_in_page)
 

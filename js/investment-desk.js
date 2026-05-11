@@ -345,7 +345,7 @@ function buildInvestmentMarketBriefing(inv, context = {}) {
       addMicro('iren-ai-miner', 'IREN 손절은 가격보다 스토리 훼손 기준', 'IREN은 채굴주이면서 AI 인프라 기대가 섞여 있어 BTC, AI 계약, 실적/가이던스, 자금조달을 나눠 봐야 합니다.', 'model');
       addImplication('IREN', '손절 조건 재정의 필요', `현재 비중 ${weight.toFixed(1)}%, 손익 ${gain.toFixed(1)}%. 가격 손절과 실적/계약/희석 훼손 조건을 분리해야 합니다.`);
       briefingQuestions.push('IREN: 가격 손절선이 아니라 실적, AI 계약, BTC, 희석 리스크 기준으로 손절 조건을 잡아줘.');
-    } else if (['NVDA', 'AMD', 'AVGO', 'TSM', 'SMH', 'SOXX', 'QQQM', 'QQQ'].includes(symbol)) {
+    } else if (['NVDA', 'AMD', 'AVGO', 'TSM', 'SMH', 'SOXX', 'QQQM', 'QQQ', 'QLD', 'TQQQ'].includes(symbol)) {
       addMicro('semiconductor-entry', '반도체·나스닥 추격 진입 점검', '강세 섹터라도 이미 오른 구간에서는 신규 추천보다 진입 가격, 분할, 무효화 조건이 먼저입니다.', 'model');
       addImplication(symbol, '추격 매수 검문', `현재 비중 ${weight.toFixed(1)}%. 추천 여부보다 지금 가격에서 손익비가 남아 있는지 확인해야 합니다.`);
       briefingQuestions.push(`${symbol}: 이미 오른 반도체/나스닥 구간에서 신규 진입이 유리한지, 대안 후보와 비교해줘.`);

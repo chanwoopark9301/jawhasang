@@ -3664,6 +3664,23 @@ body { height: var(--app-height, 100dvh); }
   color: var(--color-text-secondary);
 }
 
+.investment-desk-prep-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.investment-desk-prep-status strong {
+  color: var(--color-text-primary);
+}
+
+.investment-desk-prep .investment-briefing-card {
+  min-height: 104px;
+}
+
 .investment-desk-list {
   display: grid;
   gap: 7px;

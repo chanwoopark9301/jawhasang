@@ -36,6 +36,8 @@ class TestDataAPI:
         assert data['investment']['calendar']['lookaheadDays'] == 45
         assert 'signals' in data['investment']
         assert len(data['investment']['signals']['watchlist']) >= 1
+        assert data['investment']['desk']['autoPrepare'] is True
+        assert data['investment']['desk']['prepareTime'] == '09:00'
 
     def test_save_and_load_data(self, client, sample_student, sample_session_short):
         payload = {

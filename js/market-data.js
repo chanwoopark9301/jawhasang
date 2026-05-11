@@ -79,7 +79,7 @@ async function refreshInvestmentMarketData() {
 
   try {
     const data = await fetchMarketQuoteData(symbols);
-    applyInvestmentQuotes(data.quotes);
+    applyInvestmentQuotes(data.quotes, { forceCurrentPrice: true });
     saveData();
     const found = new Set((data.quotes || []).map(q => String(q.symbol || '').toUpperCase()));
     const missing = symbols.filter(sym => !found.has(String(sym).toUpperCase()));
@@ -101,7 +101,7 @@ async function refreshInvestmentMarketData() {
   }
 }
 
-function applyInvestmentQuotes(quotes) {
+function applyInvestmentQuotes(quotes, options = {}) {
   const inv = state.investment = normalizeInvestmentState(state.investment);
   const map = {};
   (quotes || []).forEach(q => { if (q.symbol) map[String(q.symbol).toUpperCase()] = q; });
@@ -110,7 +110,7 @@ function applyInvestmentQuotes(quotes) {
     if (isCashInvestmentPosition(p)) return;
     const q = map[String(p.symbol || '').toUpperCase()];
     if (!q) return;
-    if (p.manualPrice) {
+    if (p.manualPrice && !options.forceCurrentPrice) {
       p.lastMarketPrice = q.price != null ? Number(q.price) : p.lastMarketPrice;
       p.lastMarketUpdatedAt = new Date().toISOString();
       p.changePercent = q.changePercent != null ? Number(q.changePercent) : p.changePercent;
