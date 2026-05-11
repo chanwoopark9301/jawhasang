@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v108'; // Harden Supabase storage and investment state merge
+const CACHE_NAME = 'jip-v109'; // Dynamic daily desk research queries
 
 const STATIC_ASSETS = [
   '/style.css',

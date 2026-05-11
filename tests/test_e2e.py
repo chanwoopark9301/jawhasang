@@ -1231,6 +1231,42 @@ class TestInvestmentPartner:
         assert result['hasIrenImplication'] is True
         assert result['hasQldQuestion'] is True
 
+    def test_daily_desk_news_queries_follow_current_holdings(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        result = logged_in_page.evaluate("""() => {
+            const inv = normalizeInvestmentState({
+                positions: [{
+                    id: 'ip-desk-aapl',
+                    symbol: 'AAPL',
+                    name: 'Apple',
+                    shares: 10,
+                    avgPrice: 180,
+                    currentPrice: 190,
+                }, {
+                    id: 'ip-desk-xom',
+                    symbol: 'XOM',
+                    name: 'Exxon Mobil',
+                    shares: 8,
+                    avgPrice: 100,
+                    currentPrice: 110,
+                }],
+                events: [{
+                    id: 'macro-oil-test',
+                    type: 'macro',
+                    title: 'OPEC supply decision',
+                    body: 'Oil supply may affect energy stocks.',
+                    date: '2026-05-11',
+                }],
+            });
+            const symbols = inv.positions.map(p => p.symbol);
+            return buildDailyInvestmentDeskNewsQueries(symbols, inv);
+        }""")
+        joined = ' '.join(result)
+        assert 'AAPL Apple' in joined
+        assert 'XOM Exxon Mobil' in joined
+        assert 'OPEC supply decision' in joined
+        assert not any('Clarity Act' in query for query in result)
+
     def test_investment_prompt_includes_daily_desk_guardrails(self, logged_in_page):
         self._open_investment(logged_in_page)
 

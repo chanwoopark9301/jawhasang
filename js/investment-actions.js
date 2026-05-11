@@ -423,7 +423,7 @@ async function syncDailyInvestmentDeskNews() {
     .filter(p => !isCashInvestmentPosition(p))
     .map(p => String(p.symbol || '').toUpperCase())
     .filter(Boolean))];
-  const queries = buildDailyInvestmentDeskNewsQueries(symbols);
+  const queries = buildDailyInvestmentDeskNewsQueries(symbols, inv);
   if (!symbols.length && !queries.length) return { fetched: 0, added: 0 };
   const data = await apiFetchInvestmentNews(symbols, 3, queries);
   const news = Array.isArray(data.news) ? data.news.slice(0, 18) : [];
@@ -432,23 +432,58 @@ async function syncDailyInvestmentDeskNews() {
   return { fetched: news.length, added: inv.events.length - before };
 }
 
-function buildDailyInvestmentDeskNewsQueries(symbols) {
+function buildDailyInvestmentDeskNewsQueries(symbols, investment) {
+  const inv = investment ? normalizeInvestmentState(investment) : normalizeInvestmentState(state.investment);
   const set = new Set();
+  const positions = (inv.positions || []).filter(p => !isCashInvestmentPosition(p));
   const has = symbol => symbols.includes(symbol);
+  const add = query => {
+    const clean = String(query || '').replace(/\s+/g, ' ').trim();
+    if (clean) set.add(clean);
+  };
   if (has('CRCL') || has('ETH-USD') || has('ETH') || has('IREN')) {
-    set.add('Digital Asset Market Structure Clarity Act markup');
-    set.add('GENIUS Act stablecoin bill Circle USDC');
-    set.add('crypto market structure bill Senate House markup');
+    add('Digital Asset Market Structure Clarity Act markup');
+    add('GENIUS Act stablecoin bill stablecoin issuer USDC');
+    add('crypto market structure bill Senate House markup');
   }
-  if (has('CRCL')) set.add('Circle Internet Group earnings USDC reserves interest income');
-  if (has('IREN')) set.add('IREN AI cloud Microsoft contract earnings funding dilution');
-  if (has('ETH-USD') || has('ETH')) set.add('Ethereum ETF crypto market flows regulation');
+  positions.forEach(position => {
+    const symbol = String(position.symbol || '').toUpperCase();
+    if (!symbol) return;
+    const name = String(position.name || '').trim();
+    const label = name && name.toUpperCase() !== symbol ? `${symbol} ${name}` : symbol;
+    add(`${label} latest news earnings analyst price target`);
+    add(`${label} investor relations SEC filings guidance`);
+    const assetType = String(position.assetType || '').toLowerCase();
+    const descriptor = `${symbol} ${name} ${assetType}`.toLowerCase();
+    if (assetType === 'crypto' || /eth|btc|bitcoin|ethereum|solana|crypto|coin/.test(descriptor)) {
+      add(`${label} crypto policy ETF flows on-chain market risk`);
+    }
+    if (/qqq|qld|tqqq|nasdaq|semiconductor|nvda|amd|avgo|tsm|soxx|smh|ai|chip/.test(descriptor)) {
+      add(`${label} Nasdaq semiconductor AI capex valuation momentum`);
+    }
+    if (/energy|oil|lng|shipping|defense|uranium|commodity/.test(descriptor)) {
+      add(`${label} commodity geopolitics supply demand risk`);
+    }
+    if (/bank|financial|fintech|payment|circle|stablecoin|usdc/.test(descriptor)) {
+      add(`${label} regulation reserves interest income business model`);
+    }
+    if (/miner|mining|data center|datacenter|cloud|gpu|bitcoin|iren/.test(descriptor)) {
+      add(`${label} AI data center contract funding dilution bitcoin sensitivity`);
+    }
+  });
+  if (has('CRCL')) add('Circle Internet Group earnings USDC reserves interest income');
+  if (has('IREN')) add('IREN AI cloud Microsoft contract earnings funding dilution');
+  if (has('ETH-USD') || has('ETH')) add('Ethereum ETF crypto market flows regulation');
   if (symbols.some(s => ['NVDA', 'AMD', 'AVGO', 'TSM', 'SMH', 'SOXX', 'QQQ', 'QQQM', 'QLD', 'TQQQ'].includes(s))) {
-    set.add('semiconductor AI capex Nasdaq momentum valuation');
+    add('semiconductor AI capex Nasdaq momentum valuation');
   }
-  set.add('CPI Powell Fed rates market expectations this week');
-  set.add('Iran Hormuz oil ceasefire market inflation risk');
-  set.add('US China summit semiconductor trade market');
+  (inv.events || []).slice(-12).forEach(event => {
+    const text = [event.title, event.symbol, event.body].filter(Boolean).join(' ');
+    if (text) add(`${text} market impact`);
+  });
+  add('CPI Powell Fed rates market expectations this week');
+  add('geopolitical oil shipping risk inflation markets this week');
+  add('US China trade summit semiconductor AI supply chain market');
   return [...set].slice(0, 8);
 }
 

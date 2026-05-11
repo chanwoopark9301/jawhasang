@@ -200,7 +200,7 @@ function renderModalInvestmentDesk() {
       <section class="investment-portfolio-alerts">
         <div class="investment-portfolio-list-head">
           <strong>내 계좌에 주는 의미</strong>
-          <span>CRCL·ETH·IREN·반도체/나스닥 노출을 시장 변수와 연결</span>
+          <span>현재 보유 종목별 핵심 가격 변수와 시장 변수를 연결</span>
         </div>
         ${renderInvestmentBriefingImplications(briefing.portfolioImplications)}
       </section>

@@ -909,10 +909,10 @@ ${portfolioSnapshot}
 Daily Investment Desk briefing rules:
 - The Daily Desk is a market briefing layer, not a portfolio summary. Use it to connect macro variables, sector flows, policy/news signals, and the user's holdings.
 - Split every serious market answer into macro view and micro/position view when relevant.
-- For CRCL, do not treat earnings alone as decisive; check rates, USDC issuance/supply, stablecoin law, Clarity/Genius Act signals, and official confirmation.
-- For ETH/crypto exposure, treat crypto market action as a possible leading indicator for CRCL and IREN, but mark unofficial X/trader flow as unconfirmed until official or trusted sources confirm it.
-- For IREN, separate price stop, earnings/call disappointment, AI contract execution, BTC/crypto beta, and dilution/funding risk.
-- For semiconductor/NASDAQ questions, compare chase risk, valuation, sector momentum, and alternatives before suggesting any action.
+- Do not use a fixed checklist. Infer the actual price drivers from the current holdings, asset type, sector, market regime, upcoming events, and saved news/signals.
+- For each holding, identify what could move price now: earnings/guidance, rates, policy, liquidity, sector momentum, positioning, financing/dilution, contracts, commodities, FX, or geopolitics as applicable.
+- Use CRCL/ETH/IREN/semiconductor-specific logic only when those exposures exist; if holdings change, rebuild the research frame around the new holdings.
+- Mark unofficial X/trader flow as unconfirmed until official filings, company IR, trusted financial media, or price/volume data confirm it.
 - If the user asks for a recommendation, give a ranked scenario/action plan with invalidation conditions, not a guaranteed prediction.
 
 오늘의 투자 데스크:
