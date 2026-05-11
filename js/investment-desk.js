@@ -33,6 +33,16 @@ function buildDailyInvestmentDesk(investment = state.investment, date = new Date
   });
   const positionReviews = buildInvestmentDeskPositionReviews(tradable, inv.rules, todayEvents, maxWeight);
   const dataGaps = buildInvestmentDeskDataGaps(inv.positions, inv.rules);
+  const marketBriefing = buildInvestmentMarketBriefing(inv, {
+    today,
+    totals,
+    tradable,
+    cashValue,
+    events,
+    todayEvents,
+    upcomingEvents,
+    recentDecisions,
+  });
 
   const riskSignals = [];
   const forbiddenActions = [];
@@ -206,6 +216,7 @@ function buildDailyInvestmentDesk(investment = state.investment, date = new Date
     riskSignals: dedupeInvestmentDeskItems(riskSignals).sort(sortInvestmentDeskSignals),
     forbiddenActions: dedupeInvestmentDeskItems(forbiddenActions),
     allowedActions: dedupeInvestmentDeskItems(allowedActions),
+    marketBriefing,
     primaryAction,
     positionReviews,
     dataGaps,
@@ -219,6 +230,7 @@ function buildDailyInvestmentDesk(investment = state.investment, date = new Date
 function renderDailyDeskBrief(desk) {
   if (!desk) return 'Daily Investment Desk: unavailable';
   const snapshot = desk.accountSnapshot || {};
+  const briefing = desk.marketBriefing || {};
   const risks = (desk.riskSignals || []).slice(0, 5)
     .map(r => `- [${r.severity}] ${r.symbol ? `${r.symbol}: ` : ''}${r.title} | ${r.body}`)
     .join('\n') || '- no major risk';
@@ -238,6 +250,12 @@ function renderDailyDeskBrief(desk) {
     .map(e => `- ${e.date} [${e.type}] ${e.symbol || ''} ${e.title || ''}`)
     .join('\n') || '- none';
   return `Daily Investment Desk (${desk.date})
+Market briefing:
+- headline=${briefing.headline || ''}
+- macro=${(briefing.macroItems || []).map(item => `${item.title}: ${item.body}`).join(' | ') || 'none'}
+- micro=${(briefing.microItems || []).map(item => `${item.title}: ${item.body}`).join(' | ') || 'none'}
+- portfolio implications=${(briefing.portfolioImplications || []).map(item => `${item.symbol}: ${item.body}`).join(' | ') || 'none'}
+- briefing questions=${(briefing.briefingQuestions || []).join(' / ') || 'none'}
 Primary action:
 - [${desk.primaryAction?.tone || 'allow'}] ${desk.primaryAction?.title || ''}
 - ${desk.primaryAction?.body || ''}
@@ -257,6 +275,128 @@ Allowed actions:
 ${allowed}
 Today events:
 ${events}`;
+}
+
+function buildInvestmentMarketBriefing(inv, context = {}) {
+  const positions = Array.isArray(inv.positions) ? inv.positions : [];
+  const tradable = Array.isArray(context.tradable) ? context.tradable : getTradableInvestmentSlices(positions);
+  const events = Array.isArray(context.events) ? context.events : (inv.events || []);
+  const today = context.today || toInvestmentDeskDate(new Date());
+  const symbols = tradable.map(p => String(p.symbol || '').toUpperCase()).filter(Boolean);
+  const eventText = events.map(e => [e.symbol, e.title, e.body, e.source, e.handle].filter(Boolean).join(' ')).join('\n').toLowerCase();
+  const has = terms => terms.some(term => eventText.includes(String(term).toLowerCase()));
+  const hasSymbol = sym => symbols.includes(sym);
+
+  const macroItems = [];
+  const microItems = [];
+  const portfolioImplications = [];
+  const briefingQuestions = [];
+  const dataRequests = [];
+
+  const addMacro = (id, title, body, source = 'watch') => {
+    if (!macroItems.some(item => item.id === id)) macroItems.push({ id, title, body, source });
+  };
+  const addMicro = (id, title, body, source = 'watch') => {
+    if (!microItems.some(item => item.id === id)) microItems.push({ id, title, body, source });
+  };
+  const addImplication = (symbol, title, body, tone = 'watch') => {
+    if (!portfolioImplications.some(item => item.symbol === symbol && item.title === title)) {
+      portfolioImplications.push({ symbol, title, body, tone });
+    }
+  };
+
+  if (has(['cpi', 'inflation', '물가', '금리', 'rate', 'fed', 'powell', '파월'])) {
+    addMacro('rates', '금리·물가 경로', 'CPI, 파월 발언, 금리 기대가 성장주·코인·스테이블코인 관련주의 할인율과 유동성 프리미엄을 흔드는 축입니다.', 'event');
+  } else {
+    dataRequests.push('이번 주 CPI, 파월/Fed 발언, 금리 선물 변화');
+  }
+
+  if (has(['china', '미중', 'summit', '정상회담', 'tariff', 'trade war'])) {
+    addMacro('us-china', '미중 정상회담·공급망', '미중 협상 흐름은 반도체, AI 인프라, 나스닥 위험선호에 직접 연결됩니다.', 'event');
+  }
+
+  if (has(['iran', '이란', 'hormuz', '호르무즈', 'oil', '유가', 'ceasefire', '종전'])) {
+    addMacro('middle-east', '이란·호르무즈·유가', '지정학 리스크는 유가와 인플레이션 기대를 통해 금리·주식·코인 위험선호를 동시에 건드립니다.', 'event');
+  }
+
+  if (has(['clarity', 'market structure', 'genius', 'stablecoin', 'crypto bill', 'markup', '클래리티', '법안', '스테이블코인'])) {
+    addMacro('crypto-policy', '크립토 법안·스테이블코인 정책', '공식 일정 전이라도 마크업 가능성, 의원 발언, 업계 계정 흐름은 CRCL·ETH·채굴주에 선반영될 수 있습니다.', 'signal');
+  } else if (hasSymbol('CRCL') || symbols.includes('ETH-USD') || symbols.includes('ETH') || hasSymbol('IREN')) {
+    dataRequests.push('Clarity Act / GENIUS Act 공식 일정, X 주요 계정 흐름, 코인 시장 반응');
+  }
+
+  if (has(['semiconductor', '반도체', 'nvda', 'hbm', 'memory', 'ai chip'])) {
+    addMacro('semis', '반도체 강세 지속 여부', '이미 오른 반도체는 밸류에이션 부담과 AI CAPEX 기대를 같이 봐야 하며, 신규 진입은 추격 기준으로 걸러야 합니다.', 'signal');
+  }
+
+  tradable.forEach(slice => {
+    const symbol = String(slice.symbol || '').toUpperCase();
+    const weight = Number(slice.weight || 0);
+    const gain = Number(slice.gainPercent || 0);
+    if (symbol === 'CRCL') {
+      addMicro('crcl-earnings', 'CRCL 실적보다 중요한 변수', '서클은 단순 EPS보다 USDC 발행량, 준비자산 수익률, 금리 경로, 스테이블코인 법안 확률이 핵심입니다.', 'model');
+      addImplication('CRCL', '정책 이벤트 민감', `현재 비중 ${weight.toFixed(1)}%. 실적 당일 숫자보다 법안 마크업/금리/USDC 공급 변화가 방향을 정할 수 있습니다.`);
+      briefingQuestions.push('CRCL: 실적 숫자, USDC 발행량, 금리 민감도, Clarity/Genius Act 흐름을 분리해서 브리핑해줘.');
+    } else if (symbol === 'ETH' || symbol === 'ETH-USD') {
+      addMicro('eth-crypto-beta', 'ETH는 정책·유동성 선행지표', 'ETH 포지션은 코인판 위험선호와 법안 기대를 먼저 반영할 수 있어 CRCL/IREN 판단의 선행 신호로 봐야 합니다.', 'model');
+      addImplication(symbol, '코인 베타 노출', `현재 비중 ${weight.toFixed(1)}%. 이번 주 크립토 정책/금리 이벤트와 같이 관리해야 합니다.`);
+      briefingQuestions.push('ETH: 이번 주 코인판 흐름이 CRCL과 IREN에 주는 선행 신호를 정리해줘.');
+    } else if (symbol === 'IREN') {
+      addMicro('iren-ai-miner', 'IREN 손절은 가격보다 스토리 훼손 기준', 'IREN은 채굴주이면서 AI 인프라 기대가 섞여 있어 BTC, AI 계약, 실적/가이던스, 자금조달을 나눠 봐야 합니다.', 'model');
+      addImplication('IREN', '손절 조건 재정의 필요', `현재 비중 ${weight.toFixed(1)}%, 손익 ${gain.toFixed(1)}%. 가격 손절과 실적/계약/희석 훼손 조건을 분리해야 합니다.`);
+      briefingQuestions.push('IREN: 가격 손절선이 아니라 실적, AI 계약, BTC, 희석 리스크 기준으로 손절 조건을 잡아줘.');
+    } else if (['NVDA', 'AMD', 'AVGO', 'TSM', 'SMH', 'SOXX', 'QQQM', 'QQQ'].includes(symbol)) {
+      addMicro('semiconductor-entry', '반도체·나스닥 추격 진입 점검', '강세 섹터라도 이미 오른 구간에서는 신규 추천보다 진입 가격, 분할, 무효화 조건이 먼저입니다.', 'model');
+      addImplication(symbol, '추격 매수 검문', `현재 비중 ${weight.toFixed(1)}%. 추천 여부보다 지금 가격에서 손익비가 남아 있는지 확인해야 합니다.`);
+      briefingQuestions.push(`${symbol}: 이미 오른 반도체/나스닥 구간에서 신규 진입이 유리한지, 대안 후보와 비교해줘.`);
+    }
+  });
+
+  if (!macroItems.length) {
+    addMacro('macro-needed', '거시 일정 확인 필요', '오늘의 데스크가 제대로 작동하려면 CPI, FOMC/Fed 발언, 지정학, 미중 회담, 코인 정책 일정을 먼저 채워야 합니다.', 'gap');
+  }
+  if (!microItems.length) {
+    addMicro('position-needed', '보유 종목별 핵심 변수 확인 필요', '보유 종목의 실적일, 정책 민감도, 금리 민감도, 섹터 흐름을 연결해야 브리핑 품질이 올라갑니다.', 'gap');
+  }
+  if (!briefingQuestions.length) {
+    briefingQuestions.push('내 보유 종목 기준으로 오늘 가장 중요한 거시/미시 변수와 하지 말아야 할 행동을 브리핑해줘.');
+  }
+
+  const headline = buildInvestmentBriefingHeadline({ macroItems, microItems, portfolioImplications, dataRequests });
+  const aiBriefingPrompt = [
+    '오늘의 투자 데스크 브리핑을 작성해줘.',
+    '목표는 종목 추천을 단정하는 것이 아니라, 내 계좌 기준으로 이번 주 핵심 변수와 행동 기준을 정하는 것이다.',
+    '반드시 거시 변수와 미시 변수를 나누고, CRCL/ETH/IREN/반도체·나스닥 노출이 있으면 각각의 핵심 확인 지표와 손절/추격매수 금지 조건을 제시해줘.',
+    '공식 확인이 필요한 X/루머/비공식 흐름은 확정처럼 말하지 말고, 어떤 공식 자료로 확인해야 하는지 적어줘.',
+    `질문: ${briefingQuestions.join(' / ')}`,
+  ].join('\n');
+
+  return {
+    headline,
+    macroItems: macroItems.slice(0, 6),
+    microItems: microItems.slice(0, 6),
+    portfolioImplications: portfolioImplications.slice(0, 8),
+    briefingQuestions: briefingQuestions.slice(0, 6),
+    dataRequests: dataRequests.slice(0, 8),
+    aiBriefingPrompt,
+  };
+}
+
+function buildInvestmentBriefingHeadline({ macroItems, microItems, portfolioImplications, dataRequests }) {
+  if ((portfolioImplications || []).some(item => item.symbol === 'CRCL') &&
+      (portfolioImplications || []).some(item => item.symbol === 'ETH' || item.symbol === 'ETH-USD')) {
+    return '이번 주 핵심은 CRCL 실적보다 크립토 정책·금리·코인판 선행 신호입니다.';
+  }
+  if ((portfolioImplications || []).some(item => item.symbol === 'IREN')) {
+    return 'IREN은 가격보다 AI 계약·실적·희석 리스크 훼손 여부가 손절 기준입니다.';
+  }
+  if ((macroItems || []).some(item => item.id === 'rates')) {
+    return '오늘은 금리·물가 경로가 성장주와 코인 위험선호를 좌우합니다.';
+  }
+  if ((dataRequests || []).length) {
+    return '브리핑 전에 공식 일정과 시장 신호를 먼저 채워야 합니다.';
+  }
+  return '오늘의 데스크는 계좌보다 시장 변수와 보유 노출의 연결을 먼저 봅니다.';
 }
 
 function toInvestmentDeskDate(date) {

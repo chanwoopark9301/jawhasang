@@ -852,6 +852,8 @@ class TestInvestmentPartner:
         logged_in_page.wait_for_selector('#investment-portfolio-modal', timeout=8_000)
         assert logged_in_page.locator('.investment-pie-chart').is_visible()
         modal_text = logged_in_page.locator('#modal-box').inner_text()
+        assert '거시 브리핑' in modal_text
+        assert '미시 브리핑' in modal_text
         assert 'IREN' in modal_text
         assert '$98,600' in modal_text
         assert '$78,342' in modal_text
@@ -978,17 +980,83 @@ class TestInvestmentPartner:
         logged_in_page.locator('#investment-menu-desk').click()
         logged_in_page.wait_for_selector('#investment-desk-modal', timeout=8_000)
         modal_text = logged_in_page.locator('#modal-box').inner_text()
-        assert 'Account First Desk' in modal_text
-        assert '보유 종목별 통제 모드' in modal_text
+        assert 'Market Briefing Desk' in modal_text
+        assert '거시 브리핑' in modal_text
+        assert '미시 브리핑' in modal_text
         assert 'IREN' in modal_text
-        assert 'Cash' in modal_text or '$71,400' in modal_text
-        assert logged_in_page.locator('#investment-desk-modal .investment-alert.block').count() >= 1
+        assert 'AI 브리핑 질문' in modal_text
 
         desk = logged_in_page.evaluate("() => buildDailyInvestmentDesk(state.investment)")
-        labels = ' '.join(item['label'] for item in desk['forbiddenActions'])
-        assert 'IREN' in labels
         assert desk['accountSnapshot']['cashValue'] == 71400
         assert desk['todayEvents'][0]['symbol'] == 'IREN'
+        assert 'marketBriefing' in desk
+        assert any('IREN' in item for item in desk['marketBriefing']['briefingQuestions'])
+
+    def test_daily_investment_desk_briefs_crypto_policy_and_position_drivers(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            const today = new Date().toISOString().slice(0, 10);
+            state.investment.positions = [{
+                id: 'ip-crcl-brief',
+                symbol: 'CRCL',
+                name: 'Circle',
+                shares: 113,
+                avgPrice: 128.91,
+                currentPrice: 121.8,
+            }, {
+                id: 'ip-eth-brief',
+                symbol: 'ETH-USD',
+                name: 'Ethereum',
+                assetType: 'crypto',
+                shares: 5,
+                avgPrice: 4531.54,
+                currentPrice: 2337,
+            }, {
+                id: 'ip-iren-brief',
+                symbol: 'IREN',
+                name: 'Iris Energy',
+                shares: 510,
+                avgPrice: 66.38,
+                currentPrice: 64,
+            }];
+            state.investment.events = [{
+                id: 'evt-crcl-earnings',
+                type: 'earnings',
+                date: today,
+                symbol: 'CRCL',
+                title: 'Circle earnings',
+                body: 'USDC issuance and interest income are key',
+            }, {
+                id: 'evt-clarity-x',
+                type: 'signal',
+                date: today,
+                symbol: 'CRCL',
+                title: 'Clarity Act markup rumor',
+                body: 'X traders mention possible markup on 11 or 14; not official',
+            }, {
+                id: 'evt-cpi',
+                type: 'macro',
+                date: today,
+                title: 'CPI and Powell rate path',
+                body: 'Inflation expectation and Fed rates matter',
+            }];
+            render();
+        }""")
+
+        logged_in_page.locator('#investment-menu-desk').click()
+        logged_in_page.wait_for_selector('#investment-desk-modal', timeout=8_000)
+        modal_text = logged_in_page.locator('#modal-box').inner_text()
+        assert 'Market Briefing Desk' in modal_text
+        assert 'CRCL' in modal_text
+        assert 'ETH' in modal_text
+        assert 'IREN' in modal_text
+        assert 'USDC' in modal_text
+        assert 'Clarity' in modal_text
+
+        briefing = logged_in_page.evaluate("() => buildDailyInvestmentDesk(state.investment).marketBriefing")
+        assert any('CRCL' in item for item in briefing['briefingQuestions'])
+        assert any('ETH' in item for item in briefing['briefingQuestions'])
+        assert any('IREN' in item for item in briefing['briefingQuestions'])
 
     def test_daily_investment_desk_notification_payload_and_controls(self, logged_in_page):
         self._open_investment(logged_in_page)
@@ -1071,10 +1139,10 @@ class TestInvestmentPartner:
             return _buildChatSysPrompt(false, null, null);
         }""")
 
-        assert 'Daily Investment Desk guardrails' in prompt
-        assert 'Forbidden actions' in prompt
+        assert 'Daily Investment Desk briefing rules' in prompt
+        assert 'market briefing layer' in prompt
         assert 'IREN' in prompt
-        assert 're-entry' in prompt or 'buy/add' in prompt
+        assert 'scenario/action plan' in prompt
 
     def test_investment_krw_auxiliary_display_keeps_usd_inputs(self, logged_in_page):
         self._open_investment(logged_in_page)

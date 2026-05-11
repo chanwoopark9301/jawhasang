@@ -876,11 +876,14 @@ ${positions}
 포트폴리오 스냅샷:
 ${portfolioSnapshot}
 
-Daily Investment Desk guardrails:
-- Before answering any buy/add/re-entry question, inspect the Daily Investment Desk below.
-- If an action is listed under Forbidden actions, say it is blocked for now and explain the rule/event/trade-history reason first.
-- Treat cash after a sell as tax reserve or dry powder until a new written re-entry rule exists.
-- The desk is a behavioral control layer; it overrides vague encouragement and generic optimism.
+Daily Investment Desk briefing rules:
+- The Daily Desk is a market briefing layer, not a portfolio summary. Use it to connect macro variables, sector flows, policy/news signals, and the user's holdings.
+- Split every serious market answer into macro view and micro/position view when relevant.
+- For CRCL, do not treat earnings alone as decisive; check rates, USDC issuance/supply, stablecoin law, Clarity/Genius Act signals, and official confirmation.
+- For ETH/crypto exposure, treat crypto market action as a possible leading indicator for CRCL and IREN, but mark unofficial X/trader flow as unconfirmed until official or trusted sources confirm it.
+- For IREN, separate price stop, earnings/call disappointment, AI contract execution, BTC/crypto beta, and dilution/funding risk.
+- For semiconductor/NASDAQ questions, compare chase risk, valuation, sector momentum, and alternatives before suggesting any action.
+- If the user asks for a recommendation, give a ranked scenario/action plan with invalidation conditions, not a guaranteed prediction.
 
 오늘의 투자 데스크:
 ${dailyDeskBrief}

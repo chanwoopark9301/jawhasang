@@ -337,10 +337,10 @@ function buildInvestmentDeskNotificationPayload() {
     };
   }
   if (prefs.notifyDesk !== false) {
-    const snapshot = desk.accountSnapshot || {};
+    const briefing = desk.marketBriefing || {};
     return {
       title: '오늘의 투자 데스크',
-      body: `총 평가액 ${formatMoney(snapshot.totalValue || 0)} · 금지 행동 ${forbidden}개 · 오늘 일정 ${(desk.todayEvents || []).length}개`,
+      body: briefing.headline || `오늘 시장 변수와 보유 종목 노출을 먼저 확인하세요. 금지 행동 ${forbidden}개 · 오늘 일정 ${(desk.todayEvents || []).length}개`,
     };
   }
   return null;

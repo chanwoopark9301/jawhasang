@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v103'; // Refresh open investment modals after chat updates
+const CACHE_NAME = 'jip-v104'; // Rework today's desk as market briefing
 
 const STATIC_ASSETS = [
   '/style.css',

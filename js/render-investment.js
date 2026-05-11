@@ -125,13 +125,14 @@ function renderInvestmentPositions(positions, totals) {
 
 function renderInvestmentDeskStrip(desk) {
   const snapshot = desk.accountSnapshot || {};
+  const briefing = desk.marketBriefing || {};
   const topRisk = (desk.riskSignals || [])[0];
-  const tone = topRisk?.severity || 'allow';
+  const tone = (briefing.dataRequests || []).length ? 'watch' : topRisk?.severity || 'allow';
   return `<section class="investment-desk-strip ${esc(tone)}" id="investment-daily-desk-strip">
     <div>
-      <span class="investment-badge ${esc(tone)}">Daily Desk</span>
-      <h3>${esc(topRisk?.title || '오늘의 투자 데스크')}</h3>
-      <p>${esc(topRisk?.body || '오늘 계좌 기준으로 큰 위험 신호는 없습니다.')}</p>
+      <span class="investment-badge ${esc(tone)}">Market Desk</span>
+      <h3>${esc(briefing.headline || topRisk?.title || '오늘의 투자 데스크')}</h3>
+      <p>${esc((briefing.briefingQuestions || [])[0] || topRisk?.body || '오늘 시장 변수와 내 보유 노출을 함께 점검하세요.')}</p>
     </div>
     <div class="investment-desk-strip-metrics">
       <div><span>현금</span><strong>${formatMoney(snapshot.cashValue || 0)}</strong></div>
@@ -145,102 +146,99 @@ function renderInvestmentDeskStrip(desk) {
 function renderModalInvestmentDesk() {
   const inv = state.investment = normalizeInvestmentState(state.investment);
   const desk = buildDailyInvestmentDesk(inv);
-  const snapshot = desk.accountSnapshot || {};
-  const primary = desk.primaryAction || {};
-  const riskTone = primary.tone || (desk.riskSignals || [])[0]?.severity || 'allow';
-  const todayEvents = desk.todayEvents || [];
-  const upcomingEvents = desk.upcomingEvents || [];
+  const briefing = desk.marketBriefing || {};
+  const riskTone = (briefing.dataRequests || []).length ? 'watch' : (desk.riskSignals || [])[0]?.severity || 'allow';
   return `
     <button class="modal-close" onclick="closeModal()">x</button>
     <div class="investment-modal-titlebar">
       <div class="modal-title">오늘의 투자 데스크</div>
       <div class="investment-action-row">
-        <button class="investment-refresh-btn investment-modal-refresh-btn" onclick="refreshInvestmentMarketData()">현재가 갱신</button>
+        <button class="investment-refresh-btn investment-modal-refresh-btn" onclick="fillInvestmentDeskBriefingPrompt()">브리핑 질문 채우기</button>
         <button class="investment-refresh-btn investment-modal-refresh-btn" onclick="syncInvestmentCalendarData()">일정 동기화</button>
         <button class="investment-refresh-btn investment-modal-refresh-btn" id="investment-desk-notification-permission" onclick="requestInvestmentNotifications()">알림 켜기</button>
         <button class="investment-refresh-btn investment-modal-refresh-btn" id="investment-desk-notification-test" onclick="sendInvestmentDeskTestNotification()">테스트 알림</button>
       </div>
     </div>
     <div class="investment-desk-modal" id="investment-desk-modal">
-      <div class="investment-portfolio-overview">
-        <div><span>총 평가액</span><strong>${formatMoney(snapshot.totalValue || 0)}</strong>${formatKrwApprox(snapshot.totalValue || 0)}</div>
-        <div><span>현금</span><strong>${formatMoney(snapshot.cashValue || 0)}</strong><small>${Number(snapshot.cashWeight || 0).toFixed(1)}%</small></div>
-        <div><span>평가손익</span><strong class="${Number(snapshot.totalGain || 0) >= 0 ? 'up' : 'down'}">${formatMoneySigned(snapshot.totalGain || 0)}</strong><small>${formatPercent(snapshot.totalGainPercent || 0)}</small></div>
-        <div><span>최대 비중</span><strong>${esc(snapshot.topSymbol || '-')} ${Number(snapshot.topWeight || 0).toFixed(1)}%</strong></div>
-        <div><span>금지 행동</span><strong class="${(desk.forbiddenActions || []).length ? 'block' : 'allow'}">${(desk.forbiddenActions || []).length}개</strong></div>
-        <div><span>데이터 공백</span><strong>${(desk.dataGaps || []).length}개</strong></div>
-      </div>
-
       <section class="investment-desk-conclusion ${esc(riskTone)}">
-        <span class="investment-badge ${esc(riskTone)}">Account First Desk</span>
-        <h4>${esc(primary.title || '오늘의 계좌 결론')}</h4>
-        <p>${esc(primary.body || '기록된 계좌 기준으로 즉시 차단할 위험은 크지 않습니다.')}</p>
+        <span class="investment-badge ${esc(riskTone)}">Market Briefing Desk</span>
+        <h4>${esc(briefing.headline || '오늘의 시장 브리핑')}</h4>
+        <p>계좌 수치판은 포트폴리오에서 보고, 여기서는 이번 주 거시 변수와 보유 종목의 미시 변수가 만나는 지점을 먼저 봅니다.</p>
       </section>
 
       <section class="investment-portfolio-alerts">
         <div class="investment-portfolio-list-head">
-          <strong>보유 종목별 통제 모드</strong>
-          <span>계좌 비중, 손익, 일정, 방어 기준을 먼저 보고 오늘 할 행동을 제한합니다.</span>
+          <strong>거시 브리핑</strong>
+          <span>금리·물가·정책·지정학·섹터 흐름이 내 계좌에 주는 압력</span>
         </div>
-        ${renderInvestmentDeskPositionReviews(desk.positionReviews)}
+        ${renderInvestmentBriefingCards(briefing.macroItems, 'macro')}
       </section>
 
       <section class="investment-portfolio-alerts">
         <div class="investment-portfolio-list-head">
-          <strong>오늘 적용할 투자 원칙</strong>
-          <span>대화에서 정한 원칙을 오늘의 판단 기준으로 바로 확인합니다.</span>
+          <strong>미시 브리핑</strong>
+          <span>보유 종목별로 실적보다 더 중요한 변수와 확인 지표</span>
         </div>
-        ${renderInvestmentRulesSummary(inv.rules)}
-        <details class="investment-manage-tools investment-manual-tools" id="investment-rules-edit-tools">
-          <summary>
-            <span>원칙 수동 편집</span>
-            <small>숫자와 원칙을 직접 수정</small>
-          </summary>
-          ${renderInvestmentRulesForm(inv.rules)}
-        </details>
-      </section>
-
-      <section class="investment-portfolio-status">
-        <div>
-          <h4>금지 행동</h4>
-          ${renderInvestmentDeskActionList(desk.forbiddenActions, '오늘은 바로 하지 않을 행동이 없습니다.')}
-        </div>
-        <div>
-          <h4>허용 행동</h4>
-          ${renderInvestmentDeskActionList(desk.allowedActions, '시나리오 정리 후 판단하세요.')}
-        </div>
-        <div>
-          <h4>오늘 체크리스트</h4>
-          <ul class="investment-desk-list">${desk.checklist.map(item => `<li>${esc(item)}</li>`).join('')}</ul>
-        </div>
+        ${renderInvestmentBriefingCards(briefing.microItems, 'micro')}
       </section>
 
       <section class="investment-portfolio-alerts">
-        <h4>위험 신호</h4>
-        ${(desk.riskSignals || []).map(signal => `<div class="investment-alert ${esc(signal.severity)}">
-          <strong>${esc(signal.title)}</strong>
-          <p>${esc(signal.body)}</p>
-          ${signal.evidence ? `<small>${esc(signal.evidence)}</small>` : ''}
-        </div>`).join('')}
+        <div class="investment-portfolio-list-head">
+          <strong>내 계좌에 주는 의미</strong>
+          <span>CRCL·ETH·IREN·반도체/나스닥 노출을 시장 변수와 연결</span>
+        </div>
+        ${renderInvestmentBriefingImplications(briefing.portfolioImplications)}
       </section>
 
       <section class="investment-portfolio-alerts">
-        <h4>오늘/다가오는 촉발 이벤트</h4>
-        ${upcomingEvents.length ? upcomingEvents.map(event => `<div class="investment-desk-event">
-          <strong>${esc(event.date || '')} · ${esc(investmentDeskEventTypeLabel(event.type))}</strong>
-          <p>${esc(event.symbol ? `${event.symbol} ${event.title || ''}` : event.title || '')}</p>
-          ${event.body ? `<small>${esc(event.body)}</small>` : ''}
-        </div>`).join('') : '<p>다가오는 투자 일정이 없습니다.</p>'}
+        <div class="investment-portfolio-list-head">
+          <strong>AI 브리핑 질문</strong>
+          <span>대화창에 붙이면 최신 뉴스·공시·X 흐름까지 함께 물어볼 수 있는 질문</span>
+        </div>
+        <ul class="investment-desk-list">${(briefing.briefingQuestions || []).map(item => `<li>${esc(item)}</li>`).join('')}</ul>
+        <textarea class="form-input investment-textarea" id="investment-desk-briefing-prompt" readonly>${esc(briefing.aiBriefingPrompt || '')}</textarea>
       </section>
 
-      <section class="investment-portfolio-alerts">
-        <h4>판단 전에 메울 공백</h4>
-        ${(desk.dataGaps || []).length ? (desk.dataGaps || []).map(gap => `<div class="investment-alert ${esc(gap.severity || 'watch')}">
-          <strong>${esc(gap.title)}</strong>
-          <p>${esc(gap.body)}</p>
-        </div>`).join('') : '<p>현재 계좌 원장 기준으로 큰 데이터 공백은 없습니다.</p>'}
-      </section>
+      ${(briefing.dataRequests || []).length ? `<section class="investment-portfolio-alerts">
+        <h4>브리핑 전에 확인할 자료</h4>
+        <ul class="investment-desk-list">${briefing.dataRequests.map(item => `<li>${esc(item)}</li>`).join('')}</ul>
+      </section>` : ''}
     </div>`;
+}
+
+function renderInvestmentBriefingCards(items, cls) {
+  const list = Array.isArray(items) ? items : [];
+  if (!list.length) return '<p>저장된 시장 변수나 보유 종목 맥락이 아직 부족합니다.</p>';
+  return `<div class="investment-briefing-grid ${esc(cls || '')}">
+    ${list.map(item => `<article class="investment-briefing-card">
+      <span>${esc(item.source || 'watch')}</span>
+      <strong>${esc(item.title || '-')}</strong>
+      <p>${esc(item.body || '')}</p>
+    </article>`).join('')}
+  </div>`;
+}
+
+function renderInvestmentBriefingImplications(items) {
+  const list = Array.isArray(items) ? items : [];
+  if (!list.length) return '<p>보유 종목과 연결된 브리핑 포인트가 아직 없습니다. 포트폴리오와 뉴스/일정을 먼저 채워주세요.</p>';
+  return `<div class="investment-briefing-grid implications">
+    ${list.map(item => `<article class="investment-briefing-card ${esc(item.tone || 'watch')}">
+      <span>${esc(item.symbol || '계좌')}</span>
+      <strong>${esc(item.title || '-')}</strong>
+      <p>${esc(item.body || '')}</p>
+    </article>`).join('')}
+  </div>`;
+}
+
+function fillInvestmentDeskBriefingPrompt() {
+  const input = document.getElementById('chat-input-bottom');
+  const prompt = document.getElementById('investment-desk-briefing-prompt')?.value || '';
+  if (input && prompt) {
+    input.value = prompt;
+    input.dispatchEvent(new Event('input'));
+    closeModal();
+    input.focus();
+  }
 }
 
 function renderInvestmentDeskPositionReviews(reviews) {
