@@ -1280,7 +1280,7 @@ class TestInvestmentPartner:
                 status: state.investment.desk.status,
                 preparedDate: state.investment.desk.lastPreparedDate,
                 stepNames: state.investment.desk.steps.map(s => s.name),
-                newsSaved: state.investment.events.some(e => e.title.includes('Clarity Act markup')),
+                newsSaved: state.investment.events.some(e => e.sourceUrl === 'https://example.com/clarity' && e.body.includes('## 무슨 일이 있었나')),
                 newsQueries: window.__deskNewsRequest.queries,
                 savedCount: window.__savedCount,
                 hasCrclImplication: desk.marketBriefing.portfolioImplications.some(item => item.symbol === 'CRCL'),
@@ -1300,6 +1300,13 @@ class TestInvestmentPartner:
         assert 'news-signal-sync' in result['stepNames']
         assert result['newsSaved'] is True
         assert any('Clarity Act' in query for query in result['newsQueries'])
+
+        logged_in_page.locator('#investment-menu-desk').click()
+        logged_in_page.wait_for_selector('#investment-desk-modal', timeout=8_000)
+        modal_text = logged_in_page.locator('#investment-desk-modal').inner_text()
+        assert '아침 배치 상태' not in modal_text
+        assert 'server-ledger-sync' not in modal_text
+        assert 'done' not in modal_text
         assert result['savedCount'] >= 2
         assert result['hasCrclImplication'] is True
         assert result['hasEthImplication'] is True

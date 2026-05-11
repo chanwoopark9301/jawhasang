@@ -233,14 +233,18 @@ function investmentDeskPrepStatusLabel(status) {
 function renderInvestmentDeskPreparationSteps(prep) {
   const steps = Array.isArray(prep?.steps) ? prep.steps : [];
   if (!steps.length) return '';
+  const needsAttention = steps.filter(step => !step.ok);
+  const isRunning = prep?.status === 'running';
+  if (!needsAttention.length && !isRunning) return '';
+  const visibleSteps = needsAttention.length ? needsAttention : steps.slice(-1);
   return `<section class="investment-portfolio-alerts investment-desk-prep">
     <div class="investment-portfolio-list-head">
-      <strong>아침 배치 상태</strong>
-      <span>원장·시세·일정·뉴스를 한 번에 준비</span>
+      <strong>${isRunning ? '데스크 준비 중' : '확인 필요한 자료'}</strong>
+      <span>${isRunning ? '원장·시세·일정·뉴스를 최신 상태로 맞추는 중입니다.' : '브리핑 품질에 영향을 줄 수 있는 항목만 표시합니다.'}</span>
     </div>
     <div class="investment-briefing-grid">
-      ${steps.map(step => `<article class="investment-briefing-card ${step.ok ? 'allow' : 'block'}">
-        <span>${step.ok ? 'done' : 'check'}</span>
+      ${visibleSteps.map(step => `<article class="investment-briefing-card ${step.ok ? 'watch' : 'block'}">
+        <span>${step.ok ? '진행 중' : '확인 필요'}</span>
         <strong>${esc(investmentDeskStepLabel(step.name))}</strong>
         <p>${esc(step.detail || '')}</p>
       </article>`).join('')}

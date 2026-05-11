@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v121'; // Format fetched investment news for timeline
+const CACHE_NAME = 'jip-v122'; // Hide successful desk batch internals
 
 const STATIC_ASSETS = [
   '/style.css',
