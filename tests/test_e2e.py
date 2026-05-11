@@ -1452,9 +1452,13 @@ class TestInvestmentPartner:
         assert 'Circle news' in timeline_text
         assert 'IREN' in timeline_text
         assert 'Planned entry memo' in timeline_text
-        assert '매도 포인트 그래프' in timeline_text
-        assert logged_in_page.locator('.investment-trade-point').count() == 1
-        assert '71,400' in logged_in_page.locator('.investment-trade-tooltip').inner_text()
+        assert '투자 이벤트 그래프' in timeline_text
+        assert logged_in_page.locator('.investment-trade-point').count() == 2
+        assert logged_in_page.locator('.investment-event-point').count() == 2
+        tooltip_text = logged_in_page.evaluate("""() =>
+            [...document.querySelectorAll('.investment-trade-tooltip')].map(el => el.innerText).join('\\n')
+        """)
+        assert '71,400' in tooltip_text
         graph_bounds = logged_in_page.evaluate("""() => {
             const modal = document.querySelector('#modal-box').getBoundingClientRect();
             const graph = document.querySelector('#investment-trade-graph').getBoundingClientRect();

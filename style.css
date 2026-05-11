@@ -4309,7 +4309,8 @@ body { height: var(--app-height, 100dvh); }
   z-index: 2;
 }
 
-.investment-trade-point {
+.investment-trade-point,
+.investment-event-point {
   position: absolute;
   transform: translate(-50%, -50%);
   width: 22px;
@@ -4321,7 +4322,8 @@ body { height: var(--app-height, 100dvh); }
   z-index: 2;
 }
 
-.investment-trade-point > span {
+.investment-trade-point > span,
+.investment-event-point > span {
   display: block;
   width: 12px;
   height: 12px;
@@ -4334,6 +4336,31 @@ body { height: var(--app-height, 100dvh); }
 
 .investment-trade-point.down > span {
   background: #B91C1C;
+}
+
+.investment-event-point > span {
+  width: 10px;
+  height: 10px;
+  margin: 6px;
+  background: #64748B;
+  box-shadow: 0 2px 8px rgba(100, 116, 139, .28);
+}
+
+.investment-event-point.news > span {
+  background: #0F6E56;
+}
+
+.investment-event-point.signal > span {
+  background: #EF9F27;
+}
+
+.investment-event-point.earnings > span,
+.investment-event-point.event > span {
+  background: #7C3AED;
+}
+
+.investment-event-point.macro > span {
+  background: #2563EB;
 }
 
 .investment-trade-tooltip {
@@ -4355,7 +4382,9 @@ body { height: var(--app-height, 100dvh); }
 }
 
 .investment-trade-point:hover .investment-trade-tooltip,
-.investment-trade-point:focus .investment-trade-tooltip {
+.investment-trade-point:focus .investment-trade-tooltip,
+.investment-event-point:hover .investment-trade-tooltip,
+.investment-event-point:focus .investment-trade-tooltip {
   display: grid;
   gap: 3px;
 }

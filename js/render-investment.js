@@ -1069,6 +1069,123 @@ function renderInvestmentSellPointGraph(decisions) {
   </section>`;
 }
 
+function renderInvestmentTimelineEventGraph(rows) {
+  const chronological = (Array.isArray(rows) ? rows : [])
+    .slice()
+    .sort((a, b) => String(a.createdAt || a.date || '').localeCompare(String(b.createdAt || b.date || '')));
+  const points = chronological
+    .filter(item => item && (item.type !== 'decision' || parseInvestmentNumber(item.tradeShares) > 0 || item.body || item.title))
+    .map((item, index, arr) => {
+      const shares = parseInvestmentNumber(item.tradeShares);
+      const price = parseInvestmentNumber(item.tradePrice);
+      const proceeds = parseInvestmentNumber(item.proceeds) || (shares > 0 && price > 0 ? shares * price : 0);
+      const value = parseInvestmentNumber(item.accountTotal) || proceeds;
+      const isTrade = item.type === 'decision';
+      return {
+        ...item,
+        x: arr.length === 1 ? 50 : (index / (arr.length - 1)) * 100,
+        isTrade,
+        shares,
+        price,
+        proceeds,
+        value,
+        realizedGain: parseInvestmentNumber(item.realizedGain),
+        date: item.date || (item.createdAt || '').slice(0, 10) || '',
+      };
+    });
+  if (!points.length) {
+    return `<section class="investment-trade-graph empty" id="investment-trade-graph">
+      <div class="investment-portfolio-list-head">
+        <strong>투자 이벤트 그래프</strong>
+        <span>매매와 핵심 이벤트가 생기면 같은 시간축에 표시됩니다.</span>
+      </div>
+      <div class="investment-empty">아직 그래프로 표시할 투자 기록이 없습니다.</div>
+    </section>`;
+  }
+  const tradePoints = points.filter(item => item.isTrade && item.value > 0);
+  const eventPoints = points.filter(item => !item.isTrade);
+  const values = tradePoints.map(item => item.value);
+  const min = values.length ? Math.min(...values) : 0;
+  const max = values.length ? Math.max(...values) : 1;
+  const range = Math.max(1, max - min);
+  const placed = points.map(item => ({
+    ...item,
+    y: item.isTrade && item.value > 0
+      ? 86 - ((item.value - min) / range) * 66
+      : investmentTimelineEventLaneY(item.type),
+  }));
+  const tradePolyline = placed
+    .filter(item => item.isTrade && item.value > 0)
+    .map(item => `${item.x.toFixed(2)},${item.y.toFixed(2)}`)
+    .join(' ');
+  const eventPolyline = placed
+    .map(item => `${item.x.toFixed(2)},${item.y.toFixed(2)}`)
+    .join(' ');
+  const latest = placed.at(-1);
+  const graphWidth = Math.max(760, placed.length * 150);
+  return `<section class="investment-trade-graph" id="investment-trade-graph">
+    <div class="investment-portfolio-list-head">
+      <strong>투자 이벤트 그래프</strong>
+      <span>X축 시간순 · 매매는 자산/대금 축 · 뉴스·공시·일정은 이벤트 점</span>
+    </div>
+    <div class="investment-trade-graph-summary">
+      <div><span>전체 포인트</span><strong>${placed.length}개</strong></div>
+      <div><span>매매 포인트</span><strong>${tradePoints.length}개</strong></div>
+      <div><span>핵심 이벤트</span><strong>${eventPoints.length}개</strong></div>
+      <div><span>최근 기록</span><strong>${esc(investmentTimelineDisplayTitle(latest))}</strong></div>
+    </div>
+    <div class="investment-trade-graph-scroll">
+    <div class="investment-trade-graph-area" style="width:${graphWidth}px">
+      <div class="investment-trade-y-label">자산/이벤트</div>
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        ${tradePolyline ? `<polyline points="${esc(tradePolyline)}" fill="none" stroke="rgba(37,99,235,.72)" stroke-width="2.4" vector-effect="non-scaling-stroke"></polyline>` : ''}
+        ${eventPoints.length ? `<polyline points="${esc(eventPolyline)}" fill="none" stroke="rgba(15,23,42,.18)" stroke-width="1.2" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"></polyline>` : ''}
+      </svg>
+      <div class="investment-trade-point-layer">
+        ${placed.map(p => `<button type="button" class="${p.isTrade ? 'investment-trade-point' : 'investment-event-point'} ${p.realizedGain >= 0 ? 'up' : 'down'} ${esc(p.type || 'event')}"
+          style="left:${p.x.toFixed(2)}%;top:${p.y.toFixed(2)}%;" aria-label="${esc(investmentTimelineDisplayTitle(p))}">
+          <span></span>
+          <div class="investment-trade-tooltip">
+            <strong>${esc(investmentTimelineDisplayTitle(p))}</strong>
+            <small>${esc(p.date || '')} · ${esc(typeLabelForInvestmentTimelineGraph(p.type, p.action))}</small>
+            ${p.isTrade && p.shares ? `<small>${formatShares(p.shares)}주 · ${formatMoney(p.price)}</small>` : ''}
+            ${p.proceeds ? `<small>대금 ${formatMoney(p.proceeds)}</small>` : ''}
+            ${p.realizedGain ? `<small>실현손익 ${formatMoneySigned(p.realizedGain)}</small>` : ''}
+            ${p.body ? `<small>${esc(String(p.body).replace(/\s+/g, ' ').slice(0, 90))}</small>` : ''}
+          </div>
+        </button>`).join('')}
+      </div>
+      <div class="investment-trade-x-label">시간순 투자 기록</div>
+    </div>
+    </div>
+  </section>`;
+}
+
+function investmentTimelineEventLaneY(type) {
+  return ({
+    macro: 26,
+    earnings: 34,
+    event: 42,
+    news: 52,
+    signal: 62,
+    portfolio: 72,
+    review: 80,
+  })[type] || 58;
+}
+
+function typeLabelForInvestmentTimelineGraph(type, action = '') {
+  if (type === 'decision') return investmentActionLabel(action);
+  return ({
+    news: '뉴스',
+    signal: '신호',
+    event: '일정',
+    earnings: '실적',
+    macro: '거시 이벤트',
+    portfolio: '포트폴리오',
+    review: '회고',
+  })[type] || '이벤트';
+}
+
 function renderModalInvestmentTimeline() {
   const inv = state.investment = normalizeInvestmentState(state.investment);
   const rows = buildUnifiedInvestmentTimelineRows(inv);
@@ -1109,7 +1226,7 @@ function renderModalInvestmentTimeline() {
         <div><span>매도 포인트</span><strong>${sellCount}</strong></div>
       </section>
 
-      ${renderInvestmentSellPointGraph(inv.decisions || [])}
+      ${renderInvestmentTimelineEventGraph(rows)}
 
       <details class="investment-manage-tools investment-manual-tools" id="investment-gate-tools">
         <summary>

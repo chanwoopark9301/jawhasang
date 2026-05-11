@@ -526,3 +526,12 @@
 - Portfolio markdown accidentally pasted into core rules is stripped during portfolio updates and hidden from the portfolio report.
 - Verified the markdown-table rebuild path, the existing snapshot update path, and the snapshot-over-trade-word priority path with E2E tests.
 - Updated static asset cache to `20260511-11` and service worker cache to `jip-v113`.
+
+## 2026-05-11
+
+### Investment timeline event graph
+
+- The investment timeline graph now plots key events alongside trade points, so news, signals, earnings, macro events, portfolio updates, and reviews appear on the same time axis as trades.
+- Trade points keep the value/proceeds Y-axis, while non-trade events use stable event lanes with distinct colors and hover tooltips.
+- Updated the timeline E2E coverage to assert that saved events are rendered as graph points, not only as list items.
+- Updated static asset cache to `20260511-12` and service worker cache to `jip-v114`.
