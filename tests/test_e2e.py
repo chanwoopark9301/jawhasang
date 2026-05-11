@@ -2509,6 +2509,62 @@ class TestInvestmentPartner:
             'total': 157640,
         }
 
+    def test_server_cash_only_refresh_preserves_local_tradable_positions(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        result = logged_in_page.evaluate("""() => {
+            state.investment = normalizeInvestmentState({
+                positions: [{
+                    id: 'ip-iren-local',
+                    symbol: 'IREN',
+                    name: 'Iris Energy',
+                    shares: 510,
+                    avgPrice: 66.38,
+                    currentPrice: 64,
+                }, {
+                    id: 'ip-cash-local',
+                    assetType: 'cash',
+                    symbol: 'CASH',
+                    name: 'Cash',
+                    shares: 1000,
+                    cashAmount: 1000,
+                    avgPrice: 1,
+                    currentPrice: 1,
+                    currency: 'USD',
+                }],
+                decisions: [],
+                events: [],
+            });
+            const merged = _mergeIncomingInvestmentState({
+                positions: [{
+                    id: 'ip-cash-server',
+                    assetType: 'cash',
+                    symbol: 'CASH',
+                    name: 'Cash',
+                    shares: 42942,
+                    cashAmount: 42942,
+                    avgPrice: 1,
+                    currentPrice: 1,
+                    currency: 'USD',
+                }],
+                decisions: [],
+                events: [],
+            });
+            return {
+                symbols: merged.positions.map(p => p.symbol).sort(),
+                cash: merged.positions.find(p => p.assetType === 'cash')?.cashAmount,
+                investedValue: merged.positions
+                    .filter(p => p.assetType !== 'cash')
+                    .reduce((sum, p) => sum + investmentPositionValue(p, 'currentPrice'), 0),
+                totalValue: investmentTotals(merged.positions).totalValue,
+            };
+        }""")
+        assert result == {
+            'symbols': ['CASH', 'IREN'],
+            'cash': 42942,
+            'investedValue': 32640,
+            'totalValue': 75582,
+        }
+
     def test_duplicate_sell_summary_does_not_zero_position_or_double_cash(self, logged_in_page):
         self._open_investment(logged_in_page)
         logged_in_page.evaluate("""() => {

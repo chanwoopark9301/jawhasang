@@ -146,6 +146,7 @@ function _mergeIncomingInvestmentState(incomingInvestment) {
   const current = normalizeInvestmentState(state.investment);
   const incoming = normalizeInvestmentState(incomingInvestment);
   const merged = { ...incoming };
+  merged.positions = _mergeInvestmentPositionsForServerRefresh(current.positions, incoming.positions);
 
   if ((current.chat || []).length > (incoming.chat || []).length) {
     merged.chat = current.chat;
@@ -163,6 +164,43 @@ function _mergeIncomingInvestmentState(incomingInvestment) {
   }
 
   return normalizeInvestmentState(merged);
+}
+
+function _mergeInvestmentPositionsForServerRefresh(currentPositions, incomingPositions) {
+  const current = Array.isArray(currentPositions) ? currentPositions : [];
+  const incoming = Array.isArray(incomingPositions) ? incomingPositions : [];
+  const currentTradable = current.filter(p =>
+    !isCashInvestmentPosition(p) &&
+    (parseInvestmentNumber(p.shares) > 0 || parseInvestmentNumber(p.currentPrice) > 0 || parseInvestmentNumber(p.avgPrice) > 0)
+  );
+  const incomingHasTradable = incoming.some(p =>
+    !isCashInvestmentPosition(p) &&
+    (parseInvestmentNumber(p.shares) > 0 || parseInvestmentNumber(p.currentPrice) > 0 || parseInvestmentNumber(p.avgPrice) > 0)
+  );
+  if (incomingHasTradable || !currentTradable.length) return incoming;
+
+  const merged = [...incoming];
+  const preserved = [];
+  currentTradable.forEach(position => {
+    const symbol = String(position.symbol || '').toUpperCase();
+    const id = String(position.id || '');
+    const alreadyPresent = merged.some(item =>
+      (id && String(item.id || '') === id) ||
+      (symbol && String(item.symbol || '').toUpperCase() === symbol)
+    );
+    if (!alreadyPresent) {
+      merged.push(position);
+      preserved.push(symbol || id || 'position');
+    }
+  });
+  if (preserved.length) {
+    logger.warn('서버 투자 상태가 현금만 포함해 로컬 보유 종목을 보존함', {
+      preserved,
+      incomingPositions: incoming.length,
+      currentPositions: current.length,
+    });
+  }
+  return merged;
 }
 
 function _dataSignature() {

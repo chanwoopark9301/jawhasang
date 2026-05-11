@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v105'; // Harden portfolio snapshot updates
+const CACHE_NAME = 'jip-v106'; // Preserve tradable positions on cash-only refresh
 
 const STATIC_ASSETS = [
   '/style.css',
