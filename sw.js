@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v128'; // Unify investment timeline graph
+const CACHE_NAME = 'jip-v129'; // Scope timeline symbols to portfolio
 
 const STATIC_ASSETS = [
   '/style.css',

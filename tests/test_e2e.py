@@ -1771,6 +1771,38 @@ $11,717.55
                 title: 'IREN IREN 매도',
                 body: 'Q3 earnings call',
                 severity: 'info',
+            }, {
+                id: 'ie-timeline-noise',
+                date: '2026-05-06',
+                type: 'news',
+                symbol: 'NOISE',
+                title: 'Noise symbol should not appear',
+                body: 'Only portfolio symbols should become filters.',
+                severity: 'info',
+            }];
+            state.investment.positions = [{
+                id: 'ip-timeline-iren',
+                symbol: 'IREN',
+                name: 'Iris Energy',
+                shares: 510,
+                avgPrice: 66.38,
+                currentPrice: 61.2,
+            }, {
+                id: 'ip-timeline-crcl',
+                symbol: 'CRCL',
+                name: 'Circle',
+                shares: 113,
+                avgPrice: 128.91,
+                currentPrice: 113.67,
+            }, {
+                id: 'ip-timeline-cash',
+                symbol: 'CASH',
+                assetType: 'cash',
+                name: 'Cash',
+                cashAmount: 42135,
+                shares: 42135,
+                avgPrice: 1,
+                currentPrice: 1,
             }];
             state.investment.decisions = [{
                 id: 'id-timeline',
@@ -1808,6 +1840,10 @@ $11,717.55
         assert '종합 타임라인' in timeline_text
         assert logged_in_page.locator('#investment-timeline-detail').is_visible()
         assert logged_in_page.locator('#investment-timeline-symbol-select').is_visible()
+        options = logged_in_page.locator('#investment-timeline-symbol-select option').all_inner_texts()
+        assert options == ['종합', 'CRCL', 'IREN']
+        assert 'CASH' not in options
+        assert 'NOISE' not in options
         assert logged_in_page.locator('.investment-timeline').count() == 0
         assert logged_in_page.locator('.investment-timeline-item').count() == 0
         logged_in_page.select_option('#investment-timeline-symbol-select', 'IREN')

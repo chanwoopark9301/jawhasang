@@ -1021,21 +1021,19 @@ function buildUnifiedInvestmentTimelineRows(inv) {
     .slice(0, 120);
 }
 
-function investmentTimelineKnownSymbols(inv, rows) {
+function investmentTimelineKnownSymbols(inv) {
   const symbols = new Set();
-  (inv.positions || []).forEach(p => {
-    const symbol = String(p.symbol || '').trim().toUpperCase();
-    if (symbol && symbol !== 'CASH') symbols.add(symbol);
-  });
-  (rows || []).forEach(row => {
-    const symbol = String(row.symbol || '').trim().toUpperCase();
-    if (symbol && symbol !== 'CASH') symbols.add(symbol);
-  });
+  (inv.positions || [])
+    .filter(p => !isCashInvestmentPosition(p))
+    .forEach(p => {
+      const symbol = String(p.symbol || '').trim().toUpperCase();
+      if (symbol && symbol !== 'CASH') symbols.add(symbol);
+    });
   return [...symbols].sort();
 }
 
 function investmentTimelineSelectedSymbol(inv, rows) {
-  const symbols = investmentTimelineKnownSymbols(inv, rows);
+  const symbols = investmentTimelineKnownSymbols(inv);
   const current = String(state.investmentTimelineSymbol || '').trim().toUpperCase();
   if (current && (current === 'ALL' || symbols.includes(current))) return current;
   return 'ALL';
@@ -1231,7 +1229,7 @@ function investmentTimelineGraphStroke(graphType) {
 
 function renderInvestmentTimelineGraphs(inv, rows) {
   const selectedSymbol = investmentTimelineSelectedSymbol(inv, rows);
-  const symbols = investmentTimelineKnownSymbols(inv, rows);
+  const symbols = investmentTimelineKnownSymbols(inv);
   const visibleRows = investmentTimelineFilteredRows(rows, selectedSymbol);
   const selectorHtml = `<div class="investment-timeline-filter">
     <label for="investment-timeline-symbol-select">타임라인 보기</label>
