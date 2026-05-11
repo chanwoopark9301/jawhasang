@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v122'; // Hide successful desk batch internals
+const CACHE_NAME = 'jip-v123'; // Hide internal AI briefing prompts
 
 const STATIC_ASSETS = [
   '/style.css',

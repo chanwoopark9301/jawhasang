@@ -135,11 +135,16 @@ function renderInvestmentDeskStrip(desk) {
   const briefing = desk.marketBriefing || {};
   const topRisk = (desk.riskSignals || [])[0];
   const tone = (briefing.dataRequests || []).length ? 'watch' : topRisk?.severity || 'allow';
+  const stripBody = (briefing.portfolioImplications || [])[0]?.body
+    || (briefing.macroItems || [])[0]?.body
+    || (briefing.microItems || [])[0]?.body
+    || topRisk?.body
+    || '오늘 시장 변수와 내 보유 노출을 함께 점검하세요.';
   return `<section class="investment-desk-strip ${esc(tone)}" id="investment-daily-desk-strip">
     <div>
       <span class="investment-badge ${esc(tone)}">Market Desk</span>
       <h3>${esc(briefing.headline || topRisk?.title || '오늘의 투자 데스크')}</h3>
-      <p>${esc((briefing.briefingQuestions || [])[0] || topRisk?.body || '오늘 시장 변수와 내 보유 노출을 함께 점검하세요.')}</p>
+      <p>${esc(stripBody)}</p>
     </div>
     <div class="investment-desk-strip-metrics">
       <div><span>현금</span><strong>${formatMoney(snapshot.cashValue || 0)}</strong><small>${Number(snapshot.cashWeight || 0).toFixed(1)}%</small></div>
@@ -162,7 +167,6 @@ function renderModalInvestmentDesk() {
       <div class="modal-title">오늘의 투자 데스크</div>
       <div class="investment-action-row">
         <button class="investment-refresh-btn investment-modal-refresh-btn" id="investment-desk-prepare" onclick="prepareDailyInvestmentDesk({ force: true, silent: false, reason: 'manual' })">오늘 데스크 갱신</button>
-        <button class="investment-refresh-btn investment-modal-refresh-btn" onclick="fillInvestmentDeskBriefingPrompt()">브리핑 질문 채우기</button>
         <button class="investment-refresh-btn investment-modal-refresh-btn" onclick="syncInvestmentCalendarData()">일정 동기화</button>
         <button class="investment-refresh-btn investment-modal-refresh-btn" id="investment-desk-notification-permission" onclick="requestInvestmentNotifications()">알림 켜기</button>
         <button class="investment-refresh-btn investment-modal-refresh-btn" id="investment-desk-notification-test" onclick="sendInvestmentDeskTestNotification()">테스트 알림</button>
@@ -203,15 +207,6 @@ function renderModalInvestmentDesk() {
           <span>현재 보유 종목별 핵심 가격 변수와 시장 변수를 연결</span>
         </div>
         ${renderInvestmentBriefingImplications(briefing.portfolioImplications)}
-      </section>
-
-      <section class="investment-portfolio-alerts">
-        <div class="investment-portfolio-list-head">
-          <strong>AI 브리핑 질문</strong>
-          <span>대화창에 붙이면 최신 뉴스·공시·X 흐름까지 함께 물어볼 수 있는 질문</span>
-        </div>
-        <ul class="investment-desk-list">${(briefing.briefingQuestions || []).map(item => `<li>${esc(item)}</li>`).join('')}</ul>
-        <textarea class="form-input investment-textarea" id="investment-desk-briefing-prompt" readonly>${esc(briefing.aiBriefingPrompt || '')}</textarea>
       </section>
 
       ${(briefing.dataRequests || []).length ? `<section class="investment-portfolio-alerts">
@@ -285,17 +280,6 @@ function renderInvestmentBriefingImplications(items) {
       <p>${esc(item.body || '')}</p>
     </article>`).join('')}
   </div>`;
-}
-
-function fillInvestmentDeskBriefingPrompt() {
-  const input = document.getElementById('chat-input-bottom');
-  const prompt = document.getElementById('investment-desk-briefing-prompt')?.value || '';
-  if (input && prompt) {
-    input.value = prompt;
-    input.dispatchEvent(new Event('input'));
-    closeModal();
-    input.focus();
-  }
 }
 
 function renderInvestmentDeskPositionReviews(reviews) {

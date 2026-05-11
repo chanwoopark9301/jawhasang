@@ -1059,7 +1059,9 @@ class TestInvestmentPartner:
         assert '거시 브리핑' in modal_text
         assert '미시 브리핑' in modal_text
         assert 'IREN' in modal_text
-        assert 'AI 브리핑 질문' in modal_text
+        assert 'AI 브리핑 질문' not in modal_text
+        assert '브리핑 질문 채우기' not in modal_text
+        assert logged_in_page.locator('#investment-desk-briefing-prompt').count() == 0
 
         desk = logged_in_page.evaluate("() => buildDailyInvestmentDesk(state.investment)")
         assert desk['accountSnapshot']['cashValue'] == 71400
