@@ -535,3 +535,12 @@
 - Trade points keep the value/proceeds Y-axis, while non-trade events use stable event lanes with distinct colors and hover tooltips.
 - Updated the timeline E2E coverage to assert that saved events are rendered as graph points, not only as list items.
 - Updated static asset cache to `20260511-12` and service worker cache to `jip-v114`.
+
+## 2026-05-11
+
+### Investment desk news query hardening
+
+- Daily desk news queries now strip markdown links, URLs, angle brackets, and overly long event bodies before calling the news API.
+- The server news endpoint now sanitizes and skips malformed query fragments instead of failing the whole request with HTTP 400.
+- Added backend and E2E coverage for long markdown/event-derived news queries.
+- Updated static asset cache to `20260511-13` and service worker cache to `jip-v115`.

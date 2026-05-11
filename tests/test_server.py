@@ -6,6 +6,7 @@
 import json
 import os
 import pytest
+from urllib.parse import quote
 
 
 # ---------------------------------------------------------------------------
@@ -1026,6 +1027,46 @@ class TestDataAPI:
         assert data['news'][0]['kind'] == 'general-news'
         assert data['news'][0]['title'] == 'Crypto market structure clarity bill advances'
         assert data['news'][0]['publisher'] == 'CNBC'
+
+    def test_investment_news_endpoint_sanitizes_long_markdown_queries(self, client, monkeypatch):
+        import server
+
+        class FakeGoogleResp:
+            ok = True
+            status_code = 200
+            content = b'''<?xml version="1.0" encoding="UTF-8"?>
+            <rss version="2.0"><channel>
+              <item>
+                <title>Market risk update - Reuters</title>
+                <link>https://example.com/risk</link>
+                <pubDate>Tue, 05 May 2026 10:00:00 GMT</pubDate>
+                <description>Markets tracked policy and earnings risk.</description>
+              </item>
+            </channel></rss>'''
+
+        seen_queries = []
+
+        def fake_get(url, params=None, headers=None, timeout=None):
+            assert 'news.google.com' in url
+            seen_queries.append(params['q'])
+            assert '<' not in params['q']
+            assert '>' not in params['q']
+            assert 'http' not in params['q']
+            assert len(params['q']) <= 160
+            return FakeGoogleResp()
+
+        monkeypatch.setattr(server.requests, 'get', fake_get)
+        long_query = (
+            'IREN earnings [source](https://example.com/a-very-long-url) '
+            '<script>alert(1)</script> ' + ('AI cloud funding dilution ' * 20)
+        )
+        r = client.get('/api/investment/news?query=' + quote(long_query))
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert seen_queries
+        assert data['requestedQueries'] == seen_queries
+        assert data['news'][0]['kind'] == 'general-news'
 
     def test_unauthorized_api_returns_json_401(self, app):
         with app.test_client() as c:

@@ -1268,8 +1268,14 @@ def _parse_news_queries(raw: str):
         query = re.sub(r'\s+', ' ', part).strip()
         if not query:
             continue
+        query = re.sub(r'https?://\S+', ' ', query)
+        query = re.sub(r'[<>]', ' ', query)
+        query = re.sub(r'\s+', ' ', query).strip()[:160].strip()
+        if not query:
+            continue
         if not _NEWS_QUERY_RE.match(query):
-            raise ValueError(f'invalid news query: {query[:40]}')
+            log.warning('invalid news query skipped: %s', query[:80])
+            continue
         if query.lower() not in [q.lower() for q in queries]:
             queries.append(query)
     if len(queries) > 8:

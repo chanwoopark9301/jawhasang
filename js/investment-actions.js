@@ -438,7 +438,7 @@ function buildDailyInvestmentDeskNewsQueries(symbols, investment) {
   const positions = (inv.positions || []).filter(p => !isCashInvestmentPosition(p));
   const has = symbol => symbols.includes(symbol);
   const add = query => {
-    const clean = String(query || '').replace(/\s+/g, ' ').trim();
+    const clean = sanitizeDailyDeskNewsQuery(query);
     if (clean) set.add(clean);
   };
   if (has('CRCL') || has('ETH-USD') || has('ETH') || has('IREN')) {
@@ -478,13 +478,29 @@ function buildDailyInvestmentDeskNewsQueries(symbols, investment) {
     add('semiconductor AI capex Nasdaq momentum valuation');
   }
   (inv.events || []).slice(-12).forEach(event => {
-    const text = [event.title, event.symbol, event.body].filter(Boolean).join(' ');
+    const bodyHint = String(event.body || '')
+      .replace(/\[[^\]]+\]\([^)]+\)/g, '')
+      .replace(/https?:\/\/\S+/g, '')
+      .slice(0, 80);
+    const text = [event.title, event.symbol, bodyHint].filter(Boolean).join(' ');
     if (text) add(`${text} market impact`);
   });
   add('CPI Powell Fed rates market expectations this week');
   add('geopolitical oil shipping risk inflation markets this week');
   add('US China trade summit semiconductor AI supply chain market');
   return [...set].slice(0, 8);
+}
+
+function sanitizeDailyDeskNewsQuery(query) {
+  return String(query || '')
+    .replace(/\[[^\]]+\]\([^)]+\)/g, ' ')
+    .replace(/https?:\/\/\S+/g, ' ')
+    .replace(/[<>]/g, ' ')
+    .replace(/[|]{2,}/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 150)
+    .trim();
 }
 
 function saveDailyInvestmentDeskNewsEvent(item) {

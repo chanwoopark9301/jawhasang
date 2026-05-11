@@ -1300,7 +1300,7 @@ class TestInvestmentPartner:
                     id: 'macro-oil-test',
                     type: 'macro',
                     title: 'OPEC supply decision',
-                    body: 'Oil supply may affect energy stocks.',
+                    body: 'Oil supply may affect energy stocks. [source](https://example.com/very/long/path) <bad> ' + 'inflation risk '.repeat(30),
                     date: '2026-05-11',
                 }],
             });
@@ -1312,6 +1312,7 @@ class TestInvestmentPartner:
         assert 'XOM Exxon Mobil' in joined
         assert 'OPEC supply decision' in joined
         assert not any('Clarity Act' in query for query in result)
+        assert all(len(query) <= 150 and '<' not in query and 'http' not in query for query in result)
 
     def test_investment_prompt_includes_daily_desk_guardrails(self, logged_in_page):
         self._open_investment(logged_in_page)

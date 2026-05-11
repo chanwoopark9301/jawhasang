@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v114'; // Show key events on investment timeline graph
+const CACHE_NAME = 'jip-v115'; // Sanitize investment desk news queries
 
 const STATIC_ASSETS = [
   '/style.css',
