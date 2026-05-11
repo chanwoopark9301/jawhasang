@@ -983,6 +983,15 @@ class TestInvestmentPartner:
     def test_fetched_news_saved_to_timeline_as_korean_markdown(self, logged_in_page):
         self._open_investment(logged_in_page)
         logged_in_page.evaluate("""() => {
+            state.investment.positions = [{
+                id: 'ip-iren',
+                symbol: 'IREN',
+                name: 'IREN',
+                assetType: 'stock',
+                shares: 510,
+                avgPrice: 66.38,
+                currentPrice: 61.2,
+            }];
             state.investment.events = [];
             saveDailyInvestmentDeskNewsEvent({
                 symbol: 'IREN',
@@ -1011,6 +1020,51 @@ class TestInvestmentPartner:
         assert logged_in_page.locator('.investment-timeline').count() == 0
         assert logged_in_page.locator('.investment-timeline-item').count() == 0
         assert logged_in_page.locator('#investment-timeline-detail').is_visible()
+
+    def test_raw_etf_flow_news_is_structured_in_korean_on_timeline(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.investment.positions = [{
+                id: 'ip-qld',
+                symbol: 'QLD',
+                name: 'QLD',
+                assetType: 'stock',
+                shares: 312,
+                avgPrice: 88.88,
+                currentPrice: 91.72,
+            }];
+            state.investment.events = [{
+                id: 'ie-qld-flow',
+                date: '2026-05-11',
+                type: 'news',
+                symbol: 'QLD',
+                title: 'Daily ETF Flows: Investors Scoop Up QLD',
+                body: 'Here are the daily ETF fund flows for April 14, 2026.\\n\\nsource\\n\\nDesk rule: official filings, company IR, trusted financial media, and price/volume must confirm before acting.',
+                source: 'daily-desk-news',
+                sourceUrl: 'https://example.com/qld-flow',
+            }];
+            render();
+        }""")
+
+        logged_in_page.locator('#investment-menu-timeline').click()
+        logged_in_page.select_option('#investment-timeline-symbol-select', 'QLD')
+        logged_in_page.wait_for_selector('#investment-timeline-graph .investment-timeline-graph-point.news', timeout=8_000)
+        logged_in_page.locator('#investment-timeline-graph .investment-timeline-graph-point.news').first.click()
+        detail_text = logged_in_page.locator('#investment-timeline-detail').inner_text()
+        tooltip_text = logged_in_page.evaluate("""() =>
+            [...document.querySelectorAll('.investment-trade-tooltip')].map(el => el.innerText).join('\\n')
+        """)
+        assert 'ETF 일간 자금 흐름' in detail_text
+        assert '무슨 일이 있었나' in detail_text
+        assert '왜 중요한가' in detail_text
+        assert '내 원칙상 확인할 점' in detail_text
+        assert '2026-04-14 기준' in detail_text
+        assert '가격·거래량' in detail_text
+        assert 'Here are the daily ETF fund flows' not in detail_text
+        assert 'April 14' not in detail_text
+        assert 'Desk rule' not in detail_text
+        assert 'source' not in detail_text.lower()
+        assert 'Desk rule' not in tooltip_text
 
     def test_daily_investment_desk_blocks_reentry_after_sell_and_event(self, logged_in_page):
         self._open_investment(logged_in_page)

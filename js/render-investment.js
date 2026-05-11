@@ -919,6 +919,9 @@ function translateInvestmentTimelineText(text) {
   const replacements = [
     [/Circle news/gi, '\uc11c\ud074 \ub274\uc2a4'],
     [/Stablecoin policy update/gi, '\uc2a4\ud14c\uc774\ube14\ucf54\uc778 \uc815\ucc45 \uc5c5\ub370\uc774\ud2b8'],
+    [/Daily ETF Flows/gi, 'ETF 일간 자금 흐름'],
+    [/Investors Scoop Up/gi, '투자자 순매수'],
+    [/Here are the daily ETF fund flows for/gi, 'ETF 일간 자금 흐름 기준일'],
     [/Planned entry memo/gi, '\uacc4\ud68d \uc9c4\uc785 \uba54\ubaa8'],
     [/IREN expands AI cloud capacity/gi, 'IREN, AI \ud074\ub77c\uc6b0\ub4dc \uc6a9\ub7c9 \ud655\ub300'],
     [/IREN announced an AI data center update/gi, 'IREN\uc774 AI \ub370\uc774\ud130\uc13c\ud130 \uc5c5\ub370\uc774\ud2b8\ub97c \ubc1c\ud45c\ud588\uc2b5\ub2c8\ub2e4'],
@@ -990,6 +993,8 @@ function buildUnifiedInvestmentTimelineRows(inv) {
     symbol: e.symbol || '',
     title: e.title || '투자 이벤트',
     body: e.body || '',
+    source: e.source || '',
+    sourceUrl: e.sourceUrl || e.url || '',
     severity: e.severity || 'info',
   }));
   const decisions = (inv.decisions || []).map(d => ({
@@ -1208,7 +1213,7 @@ function renderInvestmentTimelineGraphPanel({ id, title, subtitle, rows, graphTy
               ${p.proceeds ? `<small>체결/대금: ${formatMoney(p.proceeds)}</small>` : ''}
               ${p.realizedGain ? `<small>실현손익: ${formatMoneySigned(p.realizedGain)}</small>` : ''}
               ${graphType === 'asset' && p.value ? `<small>Y값: ${formatMoney(p.value)}</small>` : ''}
-              ${p.body ? `<p>${esc(translateInvestmentTimelineText(String(p.body).replace(/\s+/g, ' ').slice(0, 180)))}</p>` : ''}
+              ${investmentTimelineTooltipBody(p) ? `<p>${esc(investmentTimelineTooltipBody(p))}</p>` : ''}
             </div>
           </button>`).join('')}
         </div>
@@ -1270,7 +1275,7 @@ function renderInvestmentTimelineDetailPanel(rows) {
   const price = parseInvestmentNumber(selected.tradePrice);
   const proceeds = parseInvestmentNumber(selected.proceeds) || (shares > 0 && price > 0 ? shares * price : 0);
   const realizedGain = parseInvestmentNumber(selected.realizedGain);
-  const body = translateInvestmentTimelineText(selected.body || '');
+  const body = investmentTimelineDetailBody(selected);
   return `<section class="investment-timeline-detail-panel" id="investment-timeline-detail">
     <div class="investment-portfolio-list-head">
       <strong>${esc(investmentTimelineDisplayTitle(selected))}</strong>
@@ -1287,6 +1292,127 @@ function renderInvestmentTimelineDetailPanel(rows) {
       ${body ? renderMarkdownBasic(body) : '<p>저장된 본문이 없습니다.</p>'}
     </div>
   </section>`;
+}
+
+function investmentTimelineTooltipBody(item) {
+  if (!item) return '';
+  const body = investmentTimelineDetailBody(item)
+    .replace(/^#+\s*/gm, '')
+    .replace(/^\s*[-*]\s*/gm, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return body.slice(0, 180);
+}
+
+function investmentTimelineDetailBody(item) {
+  if (!item) return '';
+  const type = String(item.type || '').toLowerCase();
+  if (type === 'news' || type === 'signal') return normalizeInvestmentTimelineNewsBody(item);
+  return translateInvestmentTimelineText(item.body || '');
+}
+
+function normalizeInvestmentTimelineNewsBody(item) {
+  const raw = String(item?.body || item?.summary || '').trim();
+  const title = String(item?.title || '').trim();
+  const structured = /##\s*(무슨 일이|왜 중요한|확인|원문|내 원칙|시장 영향)/.test(raw);
+  if (structured) return translateInvestmentTimelineText(raw);
+
+  const symbol = String(item?.symbol || '').trim().toUpperCase();
+  const topic = symbol || String(item?.topic || '').trim() || '시장';
+  const summary = cleanInvestmentTimelineRawNewsSummary(raw, title, topic);
+  const impact = inferInvestmentTimelineNewsImpact(`${title}\n${raw}`, topic);
+  const verification = inferInvestmentTimelineNewsVerification(item);
+  const source = buildInvestmentTimelineNewsSourceLine(item, title);
+
+  return [
+    '## 무슨 일이 있었나',
+    `- ${summary}`,
+    '',
+    '## 왜 중요한가',
+    `- ${impact}`,
+    '',
+    '## 내 원칙상 확인할 점',
+    `- ${verification}`,
+    '',
+    '## 원문 링크',
+    source,
+  ].join('\n');
+}
+
+function cleanInvestmentTimelineRawNewsSummary(raw, title, topic) {
+  const text = `${title || ''}\n${raw || ''}`;
+  if (/daily etf fund flows|ETF Flows|Investors Scoop Up/i.test(text)) {
+    const dateMatch = text.match(/for\s+([A-Z][a-z]+\s+\d{1,2},\s+\d{4})/);
+    const dateText = dateMatch ? `${formatEnglishNewsDateKorean(dateMatch[1])} 기준 ` : '';
+    return `${dateText}${topic} 관련 ETF 자금 유입/유출 흐름이 포착됐습니다. QLD는 나스닥 레버리지 ETF이므로, 플로우는 단기 위험 선호를 읽는 보조 신호로 보고 실제 가격·거래량·나스닥 흐름과 함께 확인해야 합니다.`;
+  }
+
+  const cleanedLines = String(raw || '')
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(line => line)
+    .filter(line => !/^source$/i.test(line))
+    .filter(line => !/^desk rule:/i.test(line))
+    .filter(line => !/^official filings, company IR/i.test(line));
+
+  const cleaned = cleanedLines.join(' ').replace(/\s+/g, ' ').trim();
+  const translated = translateInvestmentTimelineText(cleaned || title || '');
+  if (translated) return translated;
+  return `${topic} 관련 뉴스가 저장됐지만 본문 요약이 짧습니다. 원문을 열어 숫자, 일정, 회사 공식 확인 여부를 먼저 보강해야 합니다.`;
+}
+
+function formatEnglishNewsDateKorean(value) {
+  const match = String(value || '').trim().match(/^([A-Z][a-z]+)\s+(\d{1,2}),\s+(\d{4})$/);
+  if (!match) return value;
+  const months = {
+    january: '01',
+    february: '02',
+    march: '03',
+    april: '04',
+    may: '05',
+    june: '06',
+    july: '07',
+    august: '08',
+    september: '09',
+    october: '10',
+    november: '11',
+    december: '12',
+  };
+  const month = months[match[1].toLowerCase()];
+  if (!month) return value;
+  return `${match[3]}-${month}-${String(match[2]).padStart(2, '0')}`;
+}
+
+function inferInvestmentTimelineNewsImpact(text, topic = '') {
+  const raw = `${text || ''} ${topic || ''}`.toLowerCase();
+  if (/daily etf fund flows|etf flows|qld|qqq|nasdaq|semiconductor|ai capex/.test(raw)) return `${topic}는 나스닥·반도체 위험 선호와 직접 연결됩니다. 자금 유입은 강세 신호일 수 있지만 레버리지 ETF 특성상 추격매수 금지 기준과 손실 한도를 먼저 확인해야 합니다.`;
+  if (/sec|filing|424b|s-3|offering|atm|dilution|funding/.test(raw)) return '공시·자금 조달·희석 가능성은 보유 비중과 손절/추격매수 금지 조건에 바로 연결됩니다.';
+  if (/ai cloud|data center|gpu|contract|microsoft|iren/.test(raw)) return 'AI 클라우드 계약과 데이터센터 실행력은 IREN의 단기 주가 재평가와 실적 기대를 흔드는 핵심 변수입니다.';
+  if (/stablecoin|usdc|circle|crcl|clarity|genius|crypto|ethereum|eth/.test(raw)) return '스테이블코인·가상자산 정책 변화는 CRCL, ETH, 관련 성장주 밸류에이션에 동시에 영향을 줄 수 있습니다.';
+  if (/fed|rate|cpi|inflation|powell|fomc/.test(raw)) return '금리와 물가 변수는 성장주, 나스닥 레버리지, 가상자산의 할인율과 위험 선호를 함께 움직입니다.';
+  return '가격을 단정하기보다 보유 종목의 비중, 최근 수익률, 예정 이벤트와 연결해서 행동 기준을 점검해야 합니다.';
+}
+
+function inferInvestmentTimelineNewsVerification(item) {
+  const source = String(item?.source || '').toLowerCase();
+  const title = String(item?.title || '').toLowerCase();
+  if (source.includes('sec') || title.includes('sec')) return 'SEC 원문 공시, 회사 IR, 다음 실적 발표 자료에서 실제 숫자와 조건을 확인합니다.';
+  if (source.includes('rss') || source.includes('google')) return 'RSS 제목만으로 판단하지 말고 원문 기사, 공식 발표, 가격·거래량 반응을 함께 확인합니다.';
+  if (/etf|flows|qld|qqq/.test(`${source} ${title}`)) return 'ETF 플로우 원문, 나스닥 선물/현물 흐름, 거래량, 당일 금리 변화를 같이 확인합니다.';
+  return '공식 공시, 회사 IR, 신뢰 가능한 금융매체, 가격·거래량 데이터로 확인되기 전까지는 약한 신호로 취급합니다.';
+}
+
+function buildInvestmentTimelineNewsSourceLine(item, title = '') {
+  const url = String(item?.sourceUrl || item?.url || '').trim();
+  const source = String(item?.source || item?.publisher || '').trim();
+  if (url) return `- [${escMarkdownLabel(title || source || '원문 보기')}](${url})${source ? ` - ${source}` : ''}`;
+  if (source) return `- 출처: ${source}`;
+  return '- 원문 링크 없음';
+}
+
+function escMarkdownLabel(text) {
+  return String(text || '').replace(/[\[\]]/g, '').slice(0, 120);
 }
 
 function renderInvestmentSellPointGraph(decisions) {
