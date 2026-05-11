@@ -4219,6 +4219,26 @@ body { height: var(--app-height, 100dvh); }
   gap: 14px;
 }
 
+.investment-timeline-graph-stack {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+
+.investment-timeline-filter {
+  display: grid;
+  grid-template-columns: minmax(120px, auto) minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.investment-timeline-filter label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
 .investment-trade-graph {
   display: grid;
   gap: 12px;
@@ -4229,6 +4249,18 @@ body { height: var(--app-height, 100dvh); }
   padding: 14px;
   background: linear-gradient(180deg, rgba(37, 99, 235, .045), rgba(255, 255, 255, .72));
   overflow: hidden;
+}
+
+.investment-trade-graph.symbol {
+  background: linear-gradient(180deg, rgba(37, 99, 235, .055), rgba(255, 255, 255, .74));
+}
+
+.investment-trade-graph.market {
+  background: linear-gradient(180deg, rgba(124, 58, 237, .055), rgba(255, 255, 255, .74));
+}
+
+.investment-trade-graph.asset {
+  background: linear-gradient(180deg, rgba(15, 110, 86, .055), rgba(255, 255, 255, .74));
 }
 
 .investment-trade-graph-scroll {
@@ -4267,6 +4299,10 @@ body { height: var(--app-height, 100dvh); }
   gap: 8px;
 }
 
+.investment-trade-graph-summary.compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .investment-trade-graph-summary > div {
   border: 0.5px solid var(--color-border);
   border-radius: 8px;
@@ -4298,8 +4334,8 @@ body { height: var(--app-height, 100dvh); }
 .investment-trade-graph-area {
   position: relative;
   max-width: none;
-  min-width: 1560px;
-  height: 300px;
+  min-width: 920px;
+  height: 280px;
   border: 0.5px solid var(--color-border);
   border-radius: 8px;
   background:
@@ -4308,6 +4344,10 @@ body { height: var(--app-height, 100dvh); }
     var(--color-bg);
   background-size: 25% 100%, 100% 25%, auto;
   overflow: hidden;
+}
+
+.investment-timeline-graph-stack .investment-trade-graph-area {
+  height: 250px;
 }
 
 .investment-trade-graph-area svg {
@@ -4327,7 +4367,8 @@ body { height: var(--app-height, 100dvh); }
 }
 
 .investment-trade-point,
-.investment-event-point {
+.investment-event-point,
+.investment-timeline-graph-point {
   position: absolute;
   transform: translate(-50%, -50%);
   width: 22px;
@@ -4340,7 +4381,8 @@ body { height: var(--app-height, 100dvh); }
 }
 
 .investment-trade-point > span,
-.investment-event-point > span {
+.investment-event-point > span,
+.investment-timeline-graph-point > span {
   display: block;
   width: 12px;
   height: 12px;
@@ -4380,14 +4422,58 @@ body { height: var(--app-height, 100dvh); }
   background: #2563EB;
 }
 
+.investment-timeline-graph-point.trade-buy > span {
+  background: #2563EB;
+}
+
+.investment-timeline-graph-point.trade-sell > span {
+  background: #B91C1C;
+}
+
+.investment-timeline-graph-point.symbol-news > span {
+  background: #0EA5E9;
+}
+
+.investment-timeline-graph-point.symbol-event > span {
+  background: #2563EB;
+}
+
+.investment-timeline-graph-point.market-macro > span {
+  background: #7C3AED;
+}
+
+.investment-timeline-graph-point.market-earnings > span {
+  background: #D97706;
+}
+
+.investment-timeline-graph-point.market-signal > span {
+  background: #EF9F27;
+}
+
+.investment-timeline-graph-point.market-news > span {
+  background: #475569;
+}
+
+.investment-timeline-graph-point.asset-up > span {
+  background: #0F6E56;
+}
+
+.investment-timeline-graph-point.asset-down > span {
+  background: #B91C1C;
+}
+
+.investment-timeline-graph-point.asset-event > span {
+  background: #1D9E75;
+}
+
 .investment-trade-tooltip {
   display: none;
   position: absolute;
   left: 50%;
   bottom: 24px;
-  min-width: 170px;
-  max-width: min(220px, 70vw);
-  padding: 10px 11px;
+  min-width: 280px;
+  max-width: min(380px, 78vw);
+  padding: 13px 14px;
   border: 0.5px solid var(--color-border-strong);
   border-radius: 8px;
   background: var(--color-bg);
@@ -4401,20 +4487,29 @@ body { height: var(--app-height, 100dvh); }
 .investment-trade-point:hover .investment-trade-tooltip,
 .investment-trade-point:focus .investment-trade-tooltip,
 .investment-event-point:hover .investment-trade-tooltip,
-.investment-event-point:focus .investment-trade-tooltip {
+.investment-event-point:focus .investment-trade-tooltip,
+.investment-timeline-graph-point:hover .investment-trade-tooltip,
+.investment-timeline-graph-point:focus .investment-trade-tooltip {
   display: grid;
-  gap: 3px;
+  gap: 5px;
 }
 
 .investment-trade-tooltip strong {
-  font-size: 12px;
+  font-size: 13px;
   white-space: normal;
 }
 
 .investment-trade-tooltip small {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--color-text-secondary);
   white-space: normal;
+}
+
+.investment-trade-tooltip p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
 }
 
 .investment-trade-y-label,
@@ -4507,6 +4602,16 @@ body { height: var(--app-height, 100dvh); }
   color: var(--color-text-secondary);
   font-size: 11px;
   font-weight: 600;
+}
+
+@media (max-width: 1100px) {
+  .investment-timeline-graph-stack {
+    grid-template-columns: 1fr;
+  }
+
+  .investment-timeline-filter {
+    grid-template-columns: 1fr;
+  }
 }
 
 .investment-ai-compare-result {

@@ -982,6 +982,212 @@ function buildUnifiedInvestmentTimelineRows(inv) {
     .slice(0, 120);
 }
 
+function investmentTimelineKnownSymbols(inv, rows) {
+  const symbols = new Set();
+  (inv.positions || []).forEach(p => {
+    const symbol = String(p.symbol || '').trim().toUpperCase();
+    if (symbol && symbol !== 'CASH') symbols.add(symbol);
+  });
+  (rows || []).forEach(row => {
+    const symbol = String(row.symbol || '').trim().toUpperCase();
+    if (symbol && symbol !== 'CASH') symbols.add(symbol);
+  });
+  return [...symbols].sort();
+}
+
+function investmentTimelineSelectedSymbol(inv, rows) {
+  const symbols = investmentTimelineKnownSymbols(inv, rows);
+  if (!symbols.length) return '';
+  const current = String(state.investmentTimelineSymbol || '').trim().toUpperCase();
+  return symbols.includes(current) ? current : symbols[0];
+}
+
+function setInvestmentTimelineSymbol(symbol) {
+  state.investmentTimelineSymbol = String(symbol || '').trim().toUpperCase();
+  const box = document.getElementById('modal-box');
+  if (box) {
+    box.innerHTML = renderModalInvestmentTimeline();
+    requestAnimationFrame(initInvestmentTimelineDragScroll);
+  }
+}
+
+function investmentTimelineMarketRows(rows) {
+  const marketTypes = new Set(['macro', 'event', 'earnings', 'news', 'signal', 'review', 'calendar']);
+  return (rows || []).filter(row => row.type !== 'decision' && marketTypes.has(row.type || 'event'));
+}
+
+function investmentTimelineAssetRows(rows) {
+  return (rows || []).filter(row => {
+    if (row.type === 'decision') return true;
+    if (['portfolio', 'cash', 'asset'].includes(row.type)) return true;
+    return parseInvestmentNumber(row.accountTotal) > 0;
+  });
+}
+
+function investmentTimelinePointTone(item, graphType) {
+  if (graphType === 'symbol') {
+    if (item.type === 'decision') return item.action === 'sell' ? 'trade-sell' : 'trade-buy';
+    if (item.type === 'news') return 'symbol-news';
+    return 'symbol-event';
+  }
+  if (graphType === 'market') {
+    if (item.type === 'macro') return 'market-macro';
+    if (item.type === 'earnings') return 'market-earnings';
+    if (item.type === 'signal') return 'market-signal';
+    return 'market-news';
+  }
+  if (item.type === 'decision') return item.realizedGain >= 0 ? 'asset-up' : 'asset-down';
+  return 'asset-event';
+}
+
+function investmentTimelineValueForGraph(item, graphType, index) {
+  if (graphType === 'asset') {
+    return parseInvestmentNumber(item.accountTotal)
+      || parseInvestmentNumber(item.proceeds)
+      || parseInvestmentNumber(item.value)
+      || index + 1;
+  }
+  if (graphType === 'symbol' && item.type === 'decision') {
+    return parseInvestmentNumber(item.accountTotal)
+      || parseInvestmentNumber(item.proceeds)
+      || (parseInvestmentNumber(item.tradeShares) * parseInvestmentNumber(item.tradePrice))
+      || index + 1;
+  }
+  return index + 1;
+}
+
+function renderInvestmentTimelineGraphPanel({ id, title, subtitle, rows, graphType, emptyText, selectorHtml = '' }) {
+  const chronological = (Array.isArray(rows) ? rows : [])
+    .slice()
+    .sort((a, b) => String(a.createdAt || a.date || '').localeCompare(String(b.createdAt || b.date || '')));
+  const points = chronological
+    .filter(item => item && (item.date || item.createdAt || item.title || item.body))
+    .map((item, index, arr) => {
+      const shares = parseInvestmentNumber(item.tradeShares);
+      const price = parseInvestmentNumber(item.tradePrice);
+      const proceeds = parseInvestmentNumber(item.proceeds) || (shares > 0 && price > 0 ? shares * price : 0);
+      const realizedGain = parseInvestmentNumber(item.realizedGain);
+      const value = investmentTimelineValueForGraph({ ...item, proceeds, realizedGain }, graphType, index);
+      return {
+        ...item,
+        x: arr.length === 1 ? 50 : (index / (arr.length - 1)) * 100,
+        value,
+        shares,
+        price,
+        proceeds,
+        realizedGain,
+        tone: investmentTimelinePointTone({ ...item, realizedGain }, graphType),
+        date: item.date || (item.createdAt || '').slice(0, 10) || '',
+      };
+    });
+  if (!points.length) {
+    return `<section class="investment-trade-graph ${esc(graphType)} empty" id="${esc(id)}">
+      <div class="investment-portfolio-list-head">
+        <strong>${esc(title)}</strong>
+        <span>${esc(subtitle)}</span>
+      </div>
+      ${selectorHtml}
+      <div class="investment-empty">${esc(emptyText || '아직 그래프로 표시할 투자 기록이 없습니다.')}</div>
+    </section>`;
+  }
+  const values = points.map(p => p.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = Math.max(1, max - min);
+  const laneY = graphType === 'market'
+    ? item => investmentTimelineEventLaneY(item.type)
+    : item => 84 - ((item.value - min) / range) * 64;
+  const placed = points.map(item => ({ ...item, y: laneY(item) }));
+  const polyline = placed.map(p => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
+  const graphWidth = Math.max(920, placed.length * 150);
+  const latest = placed.at(-1);
+  return `<section class="investment-trade-graph ${esc(graphType)}" id="${esc(id)}">
+    <div class="investment-portfolio-list-head">
+      <strong>${esc(title)}</strong>
+      <span>${esc(subtitle)}</span>
+    </div>
+    ${selectorHtml}
+    <div class="investment-trade-graph-summary compact">
+      <div><span>포인트</span><strong>${placed.length}개</strong></div>
+      <div><span>최근 기록</span><strong>${esc(investmentTimelineDisplayTitle(latest))}</strong></div>
+      <div><span>최근 날짜</span><strong>${esc(latest.date || '-')}</strong></div>
+      <div><span>그래프 유형</span><strong>${esc(typeLabelForInvestmentTimelineGraph(graphType))}</strong></div>
+    </div>
+    <div class="investment-trade-graph-scroll" data-drag-scroll="investment-timeline">
+      <div class="investment-trade-graph-area ${esc(graphType)}" style="width:${graphWidth}px">
+        <div class="investment-trade-y-label">${graphType === 'asset' ? '총자산/현금' : graphType === 'symbol' ? '종목 흐름' : '시장 이벤트'}</div>
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <polyline points="${esc(polyline)}" fill="none" stroke="${investmentTimelineGraphStroke(graphType)}" stroke-width="2.2" vector-effect="non-scaling-stroke"></polyline>
+        </svg>
+        <div class="investment-trade-point-layer">
+          ${placed.map(p => `<button type="button" class="investment-timeline-graph-point ${p.type === 'decision' ? 'investment-trade-point' : 'investment-event-point'} ${esc(p.tone)} ${esc(p.type || 'event')}"
+            style="left:${p.x.toFixed(2)}%;top:${p.y.toFixed(2)}%;" aria-label="${esc(investmentTimelineDisplayTitle(p))}">
+            <span></span>
+            <div class="investment-trade-tooltip">
+              <strong>${esc(investmentTimelineDisplayTitle(p))}</strong>
+              <small>${esc(p.date || '')} · ${esc(typeLabelForInvestmentTimelineGraph(p.type, p.action))}</small>
+              ${p.symbol ? `<small>대상: ${esc(p.symbol)}</small>` : ''}
+              ${p.shares ? `<small>수량/가격: ${formatShares(p.shares)}주 · ${formatMoney(p.price)}</small>` : ''}
+              ${p.proceeds ? `<small>체결/대금: ${formatMoney(p.proceeds)}</small>` : ''}
+              ${p.realizedGain ? `<small>실현손익: ${formatMoneySigned(p.realizedGain)}</small>` : ''}
+              ${graphType === 'asset' && p.value ? `<small>Y값: ${formatMoney(p.value)}</small>` : ''}
+              ${p.body ? `<p>${esc(String(p.body).replace(/\s+/g, ' ').slice(0, 180))}</p>` : ''}
+            </div>
+          </button>`).join('')}
+        </div>
+        <div class="investment-trade-x-label">시간 순서</div>
+      </div>
+    </div>
+  </section>`;
+}
+
+function investmentTimelineGraphStroke(graphType) {
+  return ({
+    symbol: 'rgba(37,99,235,.76)',
+    market: 'rgba(124,58,237,.7)',
+    asset: 'rgba(15,110,86,.78)',
+  })[graphType] || 'rgba(37,99,235,.72)';
+}
+
+function renderInvestmentTimelineGraphs(inv, rows) {
+  const selectedSymbol = investmentTimelineSelectedSymbol(inv, rows);
+  const symbols = investmentTimelineKnownSymbols(inv, rows);
+  const symbolRows = selectedSymbol ? rows.filter(row => String(row.symbol || '').toUpperCase() === selectedSymbol) : [];
+  const selectorHtml = symbols.length ? `<div class="investment-timeline-filter">
+    <label for="investment-timeline-symbol-select">종목별 타임라인</label>
+    <select class="form-input" id="investment-timeline-symbol-select" onchange="setInvestmentTimelineSymbol(this.value)">
+      ${symbols.map(symbol => `<option value="${esc(symbol)}"${symbol === selectedSymbol ? ' selected' : ''}>${esc(symbol)}</option>`).join('')}
+    </select>
+  </div>` : '';
+  return `<div class="investment-timeline-graph-stack">
+    ${renderInvestmentTimelineGraphPanel({
+      id: 'investment-timeline-symbol-graph',
+      title: '종목별 타임라인',
+      subtitle: '선택한 종목의 뉴스·이벤트·매매 기록만 분리해서 봅니다.',
+      rows: symbolRows,
+      graphType: 'symbol',
+      emptyText: '선택한 종목에 연결된 뉴스나 매매 기록이 아직 없습니다.',
+      selectorHtml,
+    })}
+    ${renderInvestmentTimelineGraphPanel({
+      id: 'investment-timeline-market-graph',
+      title: '시장 뉴스 및 이벤트',
+      subtitle: '거시·정책·섹터·실적 일정처럼 보유 종목에 영향을 주는 시장 변수를 봅니다.',
+      rows: investmentTimelineMarketRows(rows),
+      graphType: 'market',
+      emptyText: '아직 시장 뉴스나 핵심 일정이 없습니다.',
+    })}
+    ${renderInvestmentTimelineGraphPanel({
+      id: 'investment-timeline-asset-graph',
+      title: '총 자산 변동 이벤트',
+      subtitle: '매수·매도·현금 변동이 계좌 총액과 예수금에 남긴 흔적을 봅니다.',
+      rows: investmentTimelineAssetRows(rows),
+      graphType: 'asset',
+      emptyText: '아직 자산 변동으로 볼 매매 기록이 없습니다.',
+    })}
+  </div>`;
+}
+
 function renderInvestmentSellPointGraph(decisions) {
   const sells = (Array.isArray(decisions) ? decisions : [])
     .filter(d => d && d.action === 'sell' && parseInvestmentNumber(d.tradeShares) > 0 && parseInvestmentNumber(d.tradePrice) > 0)
@@ -1206,6 +1412,9 @@ function investmentTimelineEventLaneY(type) {
 function typeLabelForInvestmentTimelineGraph(type, action = '') {
   if (type === 'decision') return investmentActionLabel(action);
   return ({
+    symbol: '종목',
+    market: '시장',
+    asset: '자산',
     news: '뉴스',
     signal: '신호',
     event: '일정',
@@ -1256,7 +1465,7 @@ function renderModalInvestmentTimeline() {
         <div><span>매도 포인트</span><strong>${sellCount}</strong></div>
       </section>
 
-      ${renderInvestmentTimelineEventGraph(rows)}
+      ${renderInvestmentTimelineGraphs(inv, rows)}
 
       <details class="investment-manage-tools investment-manual-tools" id="investment-gate-tools">
         <summary>

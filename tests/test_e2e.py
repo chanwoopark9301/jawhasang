@@ -1660,16 +1660,19 @@ class TestInvestmentPartner:
         assert 'Circle news' in timeline_text
         assert 'IREN' in timeline_text
         assert 'Planned entry memo' in timeline_text
-        assert '투자 이벤트 그래프' in timeline_text
+        assert '종목별 타임라인' in timeline_text
+        assert '시장 뉴스 및 이벤트' in timeline_text
+        assert '총 자산 변동 이벤트' in timeline_text
         assert logged_in_page.locator('.investment-trade-point').count() == 2
-        assert logged_in_page.locator('.investment-event-point').count() == 2
+        assert logged_in_page.locator('.investment-event-point').count() >= 3
+        assert logged_in_page.locator('#investment-timeline-symbol-select').is_visible()
         tooltip_text = logged_in_page.evaluate("""() =>
             [...document.querySelectorAll('.investment-trade-tooltip')].map(el => el.innerText).join('\\n')
         """)
         assert '71,400' in tooltip_text
         graph_bounds = logged_in_page.evaluate("""() => {
             const modal = document.querySelector('#modal-box').getBoundingClientRect();
-            const graph = document.querySelector('#investment-trade-graph').getBoundingClientRect();
+            const graph = document.querySelector('#investment-timeline-symbol-graph').getBoundingClientRect();
             const scroll = document.querySelector('.investment-trade-graph-scroll');
             return {
                 left: graph.left >= modal.left,
@@ -1705,7 +1708,7 @@ class TestInvestmentPartner:
                 clientY: rect.top + 40,
             }));
             return {
-                wider: area.getBoundingClientRect().width >= 1500,
+                wider: area.getBoundingClientRect().width >= 900,
                 overflow: scroll.scrollWidth > scroll.clientWidth,
                 moved: scroll.scrollLeft > 0,
             };
