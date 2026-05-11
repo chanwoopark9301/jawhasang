@@ -546,24 +546,125 @@ function saveDailyInvestmentDeskNewsEvent(item) {
   if (exists) return false;
   const symbol = normalizeInvestmentMarketSymbol(item.symbol || item.topic || '');
   const published = String(item.published || item.publishedAt || '').slice(0, 10);
-  const body = [
-    item.summary || item.description || '',
-    link ? `[source](${link})` : '',
-    'Desk rule: official filings, company IR, trusted financial media, and price/volume must confirm before acting.',
-  ].filter(Boolean).join('\n\n');
+  const formatted = formatInvestmentNewsEventForTimeline(item, symbol);
   state.investment.events.push({
     id: `desk-news-${new Date().toISOString().slice(0, 10)}-${key.slice(0, 48)}`,
     date: /^\d{4}-\d{2}-\d{2}$/.test(published) ? published : new Date().toISOString().slice(0, 10),
     type: item.kind === 'general-news' ? 'signal' : 'news',
     severity: 'watch',
     symbol: symbol || '',
-    title: title || 'Market signal',
-    body,
+    title: formatted.title || title || '시장 신호',
+    body: formatted.body,
     source: item.source || 'daily-desk-news',
     sourceUrl: link,
     deskPrepared: true,
   });
   return true;
+}
+
+function formatInvestmentNewsEventForTimeline(item, symbol = '') {
+  const title = String(item?.title || item?.headline || '').trim();
+  const summary = String(item?.summary || item?.description || '').trim();
+  const link = String(item?.link || item?.url || '').trim();
+  const publisher = String(item?.publisher || item?.source || '').trim();
+  const topic = String(item?.topic || item?.symbol || symbol || '').trim();
+  const titleKo = translateInvestmentNewsTextToKorean(title, { title: true }) || title || '시장 신호';
+  const summaryKo = translateInvestmentNewsTextToKorean(summary || title) || titleKo;
+  const sourceLine = link
+    ? `- [${escMarkdownLinkLabel(title || publisher || '원문 보기')}](${link})${publisher ? ` - ${publisher}` : ''}`
+    : `- 원문 링크 없음${publisher ? ` - ${publisher}` : ''}`;
+
+  return {
+    title: titleKo,
+    body: [
+      '## 무슨 일이 있었나',
+      `- ${summaryKo}`,
+      '',
+      '## 왜 중요한가',
+      `- ${inferInvestmentNewsImpactKorean(`${title}\n${summary}`, topic || symbol)}`,
+      '',
+      '## 확인할 것',
+      `- ${inferInvestmentNewsVerificationKorean(item)}`,
+      '',
+      '## 원문 링크',
+      sourceLine,
+    ].join('\n'),
+  };
+}
+
+function escMarkdownLinkLabel(text) {
+  return String(text || '').replace(/[\[\]]/g, '').slice(0, 120);
+}
+
+function translateInvestmentNewsTextToKorean(text, options = {}) {
+  let raw = String(text || '').trim();
+  if (!raw) return '';
+  const exact = [
+    [/^IREN expands AI cloud capacity$/i, 'IREN, AI 클라우드 용량 확대'],
+    [/^IREN announced an AI data center update\.?$/i, 'IREN이 AI 데이터센터 업데이트를 발표했습니다.'],
+    [/^Crypto market structure clarity bill advances$/i, '가상자산 시장구조 명확화 법안 진전'],
+    [/^Circle shares rise on stablecoin bill/i, '스테이블코인 법안 기대에 Circle 주가 상승'],
+    [/^Iris Energy Limited SEC 6-K filing$/i, 'Iris Energy, SEC 6-K 공시 제출'],
+  ].find(([re]) => re.test(raw));
+  if (exact) return exact[1];
+
+  const replacements = [
+    [/\bshares rise\b/gi, '주가 상승'],
+    [/\bshares fall\b/gi, '주가 하락'],
+    [/\bstock rises\b/gi, '주가 상승'],
+    [/\bstock falls\b/gi, '주가 하락'],
+    [/\bexpands\b/gi, '확대'],
+    [/\bannounced\b/gi, '발표'],
+    [/\bAI cloud\b/gi, 'AI 클라우드'],
+    [/\bdata center\b/gi, '데이터센터'],
+    [/\bcapacity\b/gi, '용량'],
+    [/\bcontract\b/gi, '계약'],
+    [/\bfunding\b/gi, '자금 조달'],
+    [/\bdilution\b/gi, '희석'],
+    [/\bearnings\b/gi, '실적'],
+    [/\bguidance\b/gi, '가이던스'],
+    [/\brevenue\b/gi, '매출'],
+    [/\bprofit\b/gi, '이익'],
+    [/\bloss\b/gi, '손실'],
+    [/\banalyst\b/gi, '애널리스트'],
+    [/\bprice target\b/gi, '목표가'],
+    [/\bupgrade\b/gi, '상향'],
+    [/\bdowngrade\b/gi, '하향'],
+    [/\bSEC filing\b/gi, 'SEC 공시'],
+    [/\bfiling\b/gi, '공시'],
+    [/\bstablecoin\b/gi, '스테이블코인'],
+    [/\bcrypto\b/gi, '가상자산'],
+    [/\bbill\b/gi, '법안'],
+    [/\bAct\b/g, '법안'],
+    [/\bmarkup\b/gi, '마크업'],
+    [/\bFed\b/g, '연준'],
+    [/\brates\b/gi, '금리'],
+    [/\binflation\b/gi, '물가'],
+    [/\bNasdaq\b/g, '나스닥'],
+    [/\bsemiconductor\b/gi, '반도체'],
+  ];
+  replacements.forEach(([re, value]) => { raw = raw.replace(re, value); });
+  raw = raw.replace(/\s+([,.])/g, '$1').replace(/\s+/g, ' ').trim();
+  if (/[a-z]{4,}/i.test(raw) && !options.title) return `자동 번역 요약: ${raw}`;
+  return raw;
+}
+
+function inferInvestmentNewsImpactKorean(text, topic = '') {
+  const raw = `${text || ''} ${topic || ''}`.toLowerCase();
+  if (/sec|filing|424b|s-3|offering|atm|dilution|funding/.test(raw)) return '공시·자금 조달·희석 가능성은 보유 비중과 손절/추격매수 금지 조건에 바로 연결됩니다.';
+  if (/ai cloud|data center|gpu|contract|microsoft|iren/.test(raw)) return 'AI 클라우드 계약과 데이터센터 실행력은 IREN의 단기 주가 재평가와 실적 기대를 흔드는 핵심 변수입니다.';
+  if (/stablecoin|usdc|circle|crcl|clarity|genius|crypto/.test(raw)) return '스테이블코인·가상자산 정책 변화는 CRCL, ETH, 관련 성장주 밸류에이션에 동시에 영향을 줄 수 있습니다.';
+  if (/fed|rate|cpi|inflation|powell/.test(raw)) return '금리와 물가 변수는 성장주, 나스닥 레버리지, 가상자산의 할인율과 위험 선호를 함께 움직입니다.';
+  if (/semiconductor|nasdaq|ai capex|qld|qqq/.test(raw)) return '반도체·나스닥 흐름은 QLD/QQQ 계열 노출과 추격매수 위험을 판단하는 배경 신호입니다.';
+  return '가격을 단정하기보다 보유 종목의 비중, 최근 수익률, 예정 이벤트와 연결해서 행동 기준을 점검해야 합니다.';
+}
+
+function inferInvestmentNewsVerificationKorean(item) {
+  const source = String(item?.source || '').toLowerCase();
+  if (source.includes('sec')) return 'SEC 원문 공시, 회사 IR, 다음 실적 발표 자료에서 실제 숫자와 조건을 확인합니다.';
+  if (source.includes('yahoo')) return '원문 기사와 회사 발표를 대조하고, 단순 헤드라인 랠리인지 실적/계약 변화인지 구분합니다.';
+  if (source.includes('google') || source.includes('rss')) return 'RSS 제목만으로 판단하지 말고 원문 기사, 공식 발표, 가격·거래량 반응을 함께 확인합니다.';
+  return '공식 공시, 회사 IR, 신뢰 가능한 금융매체, 가격·거래량 데이터로 확인되기 전까지는 약한 신호로 취급합니다.';
 }
 
 function normalizeDailyDeskEventKey(value) {

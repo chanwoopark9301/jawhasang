@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v120'; // Sync chat prompt with investment ledger
+const CACHE_NAME = 'jip-v121'; // Format fetched investment news for timeline
 
 const STATIC_ASSETS = [
   '/style.css',

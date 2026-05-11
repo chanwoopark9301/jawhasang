@@ -975,6 +975,35 @@ class TestInvestmentPartner:
         assert '주문 전 확인' in journal_text
         logged_in_page.locator('.modal-close').click()
 
+    def test_fetched_news_saved_to_timeline_as_korean_markdown(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.investment.events = [];
+            saveDailyInvestmentDeskNewsEvent({
+                symbol: 'IREN',
+                title: 'IREN expands AI cloud capacity',
+                summary: 'IREN announced an AI data center update.',
+                link: 'https://finance.yahoo.com/news/iren-test',
+                publisher: 'Yahoo Finance',
+                source: 'yahoo-finance-rss',
+                kind: 'news',
+                published: '2026-05-11',
+            });
+            render();
+        }""")
+
+        logged_in_page.locator('#investment-menu-timeline').click()
+        logged_in_page.wait_for_selector('.investment-timeline-item.news .chat-markdown h5', timeout=8_000)
+        headings = logged_in_page.locator('.investment-timeline-item.news .chat-markdown h5').all_inner_texts()
+        timeline_text = logged_in_page.locator('#modal-box').inner_text()
+        assert 'IREN, AI 클라우드 용량 확대' in timeline_text
+        assert '무슨 일이 있었나' in headings
+        assert '왜 중요한가' in headings
+        assert '확인할 것' in headings
+        assert 'AI 클라우드' in timeline_text
+        assert '원문 기사와 회사 발표' in timeline_text
+        assert logged_in_page.locator('.investment-timeline-item.news .chat-markdown a').get_attribute('href') == 'https://finance.yahoo.com/news/iren-test'
+
     def test_daily_investment_desk_blocks_reentry_after_sell_and_event(self, logged_in_page):
         self._open_investment(logged_in_page)
 
