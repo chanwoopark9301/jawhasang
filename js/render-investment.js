@@ -1032,7 +1032,7 @@ function renderInvestmentSellPointGraph(decisions) {
   });
   const polyline = points.map(p => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
   const latest = points.at(-1);
-  const graphWidth = Math.max(760, points.length * 150);
+  const graphWidth = Math.max(1560, points.length * 220);
   return `<section class="investment-trade-graph" id="investment-trade-graph">
     <div class="investment-portfolio-list-head">
       <strong>매도 포인트 그래프</strong>
@@ -1044,7 +1044,7 @@ function renderInvestmentSellPointGraph(decisions) {
       <div><span>최근 매도대금</span><strong>${formatMoney(latest.proceeds)}</strong></div>
       <div><span>최근 실현손익</span><strong class="${latest.realizedGain >= 0 ? 'up' : 'down'}">${formatMoneySigned(latest.realizedGain)}</strong></div>
     </div>
-    <div class="investment-trade-graph-scroll">
+    <div class="investment-trade-graph-scroll" data-drag-scroll="investment-timeline">
     <div class="investment-trade-graph-area" style="width:${graphWidth}px">
       <div class="investment-trade-y-label">자산/매도대금</div>
       <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
@@ -1122,7 +1122,7 @@ function renderInvestmentTimelineEventGraph(rows) {
     .map(item => `${item.x.toFixed(2)},${item.y.toFixed(2)}`)
     .join(' ');
   const latest = placed.at(-1);
-  const graphWidth = Math.max(760, placed.length * 150);
+  const graphWidth = Math.max(1560, placed.length * 220);
   return `<section class="investment-trade-graph" id="investment-trade-graph">
     <div class="investment-portfolio-list-head">
       <strong>투자 이벤트 그래프</strong>
@@ -1134,7 +1134,7 @@ function renderInvestmentTimelineEventGraph(rows) {
       <div><span>핵심 이벤트</span><strong>${eventPoints.length}개</strong></div>
       <div><span>최근 기록</span><strong>${esc(investmentTimelineDisplayTitle(latest))}</strong></div>
     </div>
-    <div class="investment-trade-graph-scroll">
+    <div class="investment-trade-graph-scroll" data-drag-scroll="investment-timeline">
     <div class="investment-trade-graph-area" style="width:${graphWidth}px">
       <div class="investment-trade-y-label">자산/이벤트</div>
       <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
@@ -1159,6 +1159,48 @@ function renderInvestmentTimelineEventGraph(rows) {
     </div>
     </div>
   </section>`;
+}
+
+function initInvestmentTimelineDragScroll() {
+  document.querySelectorAll('.investment-trade-graph-scroll').forEach(scroller => {
+    if (scroller.dataset.dragReady === '1') return;
+    scroller.dataset.dragReady = '1';
+    let startX = 0;
+    let startLeft = 0;
+    let dragging = false;
+
+    scroller.addEventListener('pointerdown', event => {
+      if (event.button != null && event.button !== 0) return;
+      startX = event.clientX;
+      startLeft = scroller.scrollLeft;
+      dragging = false;
+      scroller.classList.add('is-dragging');
+      scroller.setPointerCapture?.(event.pointerId);
+    });
+
+    scroller.addEventListener('pointermove', event => {
+      if (!scroller.classList.contains('is-dragging')) return;
+      const dx = event.clientX - startX;
+      if (Math.abs(dx) > 3) dragging = true;
+      scroller.scrollLeft = startLeft - dx;
+      if (dragging) event.preventDefault();
+    });
+
+    const stop = event => {
+      if (!scroller.classList.contains('is-dragging')) return;
+      scroller.classList.remove('is-dragging');
+      scroller.releasePointerCapture?.(event.pointerId);
+    };
+    scroller.addEventListener('pointerup', stop);
+    scroller.addEventListener('pointercancel', stop);
+    scroller.addEventListener('pointerleave', stop);
+    scroller.addEventListener('click', event => {
+      if (!dragging) return;
+      event.preventDefault();
+      event.stopPropagation();
+      dragging = false;
+    }, true);
+  });
 }
 
 function investmentTimelineEventLaneY(type) {

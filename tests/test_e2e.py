@@ -1530,6 +1530,39 @@ class TestInvestmentPartner:
             };
         }""")
         assert graph_bounds == {'left': True, 'right': True, 'scrollReady': True}
+        drag_result = logged_in_page.evaluate("""() => {
+            const scroll = document.querySelector('.investment-trade-graph-scroll');
+            const area = document.querySelector('.investment-trade-graph-area');
+            const rect = scroll.getBoundingClientRect();
+            scroll.scrollLeft = 0;
+            scroll.dispatchEvent(new PointerEvent('pointerdown', {
+                bubbles: true,
+                pointerId: 1,
+                button: 0,
+                clientX: rect.left + 300,
+                clientY: rect.top + 40,
+            }));
+            scroll.dispatchEvent(new PointerEvent('pointermove', {
+                bubbles: true,
+                pointerId: 1,
+                button: 0,
+                clientX: rect.left + 80,
+                clientY: rect.top + 40,
+            }));
+            scroll.dispatchEvent(new PointerEvent('pointerup', {
+                bubbles: true,
+                pointerId: 1,
+                button: 0,
+                clientX: rect.left + 80,
+                clientY: rect.top + 40,
+            }));
+            return {
+                wider: area.getBoundingClientRect().width >= 1500,
+                overflow: scroll.scrollWidth > scroll.clientWidth,
+                moved: scroll.scrollLeft > 0,
+            };
+        }""")
+        assert drag_result == {'wider': True, 'overflow': True, 'moved': True}
         titles = logged_in_page.evaluate("""() =>
             [...document.querySelectorAll('.investment-timeline-item strong')].map(el => el.textContent)
         """)

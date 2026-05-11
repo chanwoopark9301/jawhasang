@@ -16,6 +16,9 @@ function openModal(id, data = {}) {
   box.className = `modal-box modal-${id}`;
   box.innerHTML = buildModalHTML(id, data);
   document.getElementById('modal-overlay').classList.add('open');
+  if (id === 'investment-timeline' && typeof initInvestmentTimelineDragScroll === 'function') {
+    requestAnimationFrame(initInvestmentTimelineDragScroll);
+  }
 }
 
 function closeModal() {
