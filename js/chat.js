@@ -275,15 +275,40 @@ async function saveInvestmentChatArtifacts(userText, aiText) {
       tradePrice: trade.price,
       tradeKey: buildInvestmentTradeArtifactKey(position?.symbol || symbol || '', action, trade.shares, trade.price),
     };
-    state.investment.decisions.push(decision);
     if (position && (action === 'buy' || action === 'add' || action === 'sell') && trade.shares > 0 && trade.price > 0) {
-      const tradeResult = applyTradeToPortfolio(position.id, action, trade.shares, trade.price);
-      decision.portfolioApplied = true;
-      decision.cashApplied = true;
-      decision.realizedGain = tradeResult.realizedGain || 0;
-      decision.cashDelta = tradeResult.cashDelta || 0;
-      decision.proceeds = tradeResult.proceeds || 0;
+      let serverApplied = false;
+      if (typeof apiCreateInvestmentTransaction === 'function') {
+        try {
+          const saved = await apiCreateInvestmentTransaction({
+            ...decision,
+            positionId: position.id,
+            quantity: trade.shares,
+            price: trade.price,
+            idempotencyKey: decision.tradeKey,
+          });
+          if (saved.investment) {
+            state.investment = typeof _mergeIncomingInvestmentState === 'function'
+              ? _mergeIncomingInvestmentState(saved.investment)
+              : normalizeInvestmentState(saved.investment);
+          }
+          if (saved.transaction) Object.assign(decision, saved.transaction);
+          serverApplied = true;
+        } catch (e) {
+          logger.warn('투자 원장 서버 저장 실패 - 로컬 반영으로 대체', e);
+        }
+      }
+      if (!serverApplied) {
+        state.investment.decisions.push(decision);
+        const tradeResult = applyTradeToPortfolio(position.id, action, trade.shares, trade.price);
+        decision.portfolioApplied = true;
+        decision.cashApplied = true;
+        decision.realizedGain = tradeResult.realizedGain || 0;
+        decision.cashDelta = tradeResult.cashDelta || 0;
+        decision.proceeds = tradeResult.proceeds || 0;
+      }
       decision.summary = `${decision.summary}\n\n---\n포트폴리오 반영: ${investmentActionLabel(action)} ${formatShares(trade.shares)}주 @ ${formatMoney(trade.price)}`;
+    } else {
+      state.investment.decisions.push(decision);
     }
     if (decision.cashApplied) {
       if (action === 'sell') {

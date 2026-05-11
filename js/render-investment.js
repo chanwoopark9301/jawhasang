@@ -1029,6 +1029,7 @@ function renderInvestmentSellPointGraph(decisions) {
   });
   const polyline = points.map(p => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
   const latest = points.at(-1);
+  const graphWidth = Math.max(760, points.length * 150);
   return `<section class="investment-trade-graph" id="investment-trade-graph">
     <div class="investment-portfolio-list-head">
       <strong>매도 포인트 그래프</strong>
@@ -1040,7 +1041,8 @@ function renderInvestmentSellPointGraph(decisions) {
       <div><span>최근 매도대금</span><strong>${formatMoney(latest.proceeds)}</strong></div>
       <div><span>최근 실현손익</span><strong class="${latest.realizedGain >= 0 ? 'up' : 'down'}">${formatMoneySigned(latest.realizedGain)}</strong></div>
     </div>
-    <div class="investment-trade-graph-area">
+    <div class="investment-trade-graph-scroll">
+    <div class="investment-trade-graph-area" style="width:${graphWidth}px">
       <div class="investment-trade-y-label">자산/매도대금</div>
       <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
         <polyline points="${esc(polyline)}" fill="none" stroke="rgba(37,99,235,.72)" stroke-width="2.4" vector-effect="non-scaling-stroke"></polyline>
@@ -1059,6 +1061,7 @@ function renderInvestmentSellPointGraph(decisions) {
         </button>`).join('')}
       </div>
       <div class="investment-trade-x-label">매도 포인트</div>
+    </div>
     </div>
   </section>`;
 }

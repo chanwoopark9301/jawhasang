@@ -18,7 +18,7 @@ import requests
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from functools import wraps
-from investment_backend import upsert_position
+from investment_backend import normalize_position, upsert_position
 from investment_broker import build_order_intent
 from investment_calendar import sync_investment_calendar
 from kis_broker import sync_kis_account
@@ -341,6 +341,265 @@ def _ensure_storage_ready(conn):
         _STORAGE_DATA_TYPE_CACHE = _storage_data_type(conn)
     return _STORAGE_DATA_TYPE_CACHE
 
+_INVESTMENT_TABLES_READY = False
+
+def _ensure_investment_tables(conn):
+    global _INVESTMENT_TABLES_READY
+    if _INVESTMENT_TABLES_READY:
+        return
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS investment_accounts (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL DEFAULT 'Primary',
+                base_currency TEXT NOT NULL DEFAULT 'USD',
+                cash_balance NUMERIC NOT NULL DEFAULT 0,
+                total_capital NUMERIC,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS investment_positions (
+                id TEXT PRIMARY KEY,
+                account_id TEXT NOT NULL REFERENCES investment_accounts(id) ON DELETE CASCADE,
+                symbol TEXT NOT NULL,
+                name TEXT,
+                asset_type TEXT NOT NULL DEFAULT 'stock',
+                quantity NUMERIC NOT NULL DEFAULT 0,
+                avg_price NUMERIC NOT NULL DEFAULT 0,
+                current_price NUMERIC NOT NULL DEFAULT 0,
+                currency TEXT NOT NULL DEFAULT 'USD',
+                metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                UNIQUE(account_id, symbol)
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS investment_transactions (
+                id TEXT PRIMARY KEY,
+                account_id TEXT NOT NULL REFERENCES investment_accounts(id) ON DELETE CASCADE,
+                position_id TEXT REFERENCES investment_positions(id) ON DELETE SET NULL,
+                symbol TEXT NOT NULL,
+                action TEXT NOT NULL,
+                quantity NUMERIC NOT NULL DEFAULT 0,
+                price NUMERIC NOT NULL DEFAULT 0,
+                fee NUMERIC NOT NULL DEFAULT 0,
+                tax NUMERIC NOT NULL DEFAULT 0,
+                proceeds NUMERIC NOT NULL DEFAULT 0,
+                realized_gain NUMERIC NOT NULL DEFAULT 0,
+                trade_date DATE NOT NULL DEFAULT CURRENT_DATE,
+                idempotency_key TEXT NOT NULL,
+                source TEXT NOT NULL DEFAULT 'manual',
+                memo TEXT,
+                metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                UNIQUE(account_id, idempotency_key)
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS investment_cash_ledger (
+                id TEXT PRIMARY KEY,
+                account_id TEXT NOT NULL REFERENCES investment_accounts(id) ON DELETE CASCADE,
+                transaction_id TEXT REFERENCES investment_transactions(id) ON DELETE SET NULL,
+                entry_type TEXT NOT NULL,
+                amount NUMERIC NOT NULL DEFAULT 0,
+                currency TEXT NOT NULL DEFAULT 'USD',
+                balance_after NUMERIC NOT NULL DEFAULT 0,
+                memo TEXT,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS investment_events (
+                id TEXT PRIMARY KEY,
+                account_id TEXT NOT NULL REFERENCES investment_accounts(id) ON DELETE CASCADE,
+                symbol TEXT,
+                event_type TEXT NOT NULL DEFAULT 'event',
+                title TEXT NOT NULL,
+                body TEXT,
+                source TEXT,
+                source_url TEXT,
+                event_date DATE,
+                severity TEXT,
+                metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+    conn.commit()
+    _INVESTMENT_TABLES_READY = True
+
+def _investment_account_id(inv=None):
+    account = (inv or {}).get('account') if isinstance(inv, dict) else {}
+    return str((account or {}).get('id') or 'primary')
+
+def _num(value, default=0.0):
+    try:
+        if value in (None, ''):
+            return default
+        return float(str(value).replace(',', '').strip())
+    except (TypeError, ValueError):
+        return default
+
+def _upsert_investment_account(cur, inv):
+    account_id = _investment_account_id(inv)
+    cash = 0.0
+    for position in inv.get('positions') or []:
+        if str(position.get('assetType') or '').lower() == 'cash' or str(position.get('symbol') or '').upper() == 'CASH':
+            cash += _num(position.get('cashAmount'), _num(position.get('shares')))
+    total_capital = _num((inv.get('account') or {}).get('totalCapital'), None)
+    cur.execute("""
+        INSERT INTO investment_accounts (id, name, base_currency, cash_balance, total_capital)
+        VALUES (%s, %s, %s, %s, %s)
+        ON CONFLICT (id) DO UPDATE SET
+            cash_balance = EXCLUDED.cash_balance,
+            total_capital = COALESCE(EXCLUDED.total_capital, investment_accounts.total_capital),
+            updated_at = NOW()
+    """, (account_id, 'Primary', (inv.get('account') or {}).get('baseCurrency') or 'USD', cash, total_capital))
+    return account_id
+
+def _upsert_investment_position_row(cur, account_id, position):
+    import psycopg2.extras
+    pos = dict(position or {})
+    pos_id = str(pos.get('id') or f"ip-{str(pos.get('symbol') or 'asset').lower()}-{int(time.time() * 1000)}")
+    symbol = str(pos.get('symbol') or '').upper()
+    asset_type = str(pos.get('assetType') or 'stock').lower()
+    quantity = _num(pos.get('shares') if asset_type != 'cash' else pos.get('cashAmount'), 0)
+    avg_price = _num(pos.get('avgPrice'), 1 if asset_type == 'cash' else 0)
+    current_price = _num(pos.get('currentPrice'), 1 if asset_type == 'cash' else 0)
+    cur.execute("""
+        INSERT INTO investment_positions
+            (id, account_id, symbol, name, asset_type, quantity, avg_price, current_price, currency, metadata)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (account_id, symbol) DO UPDATE SET
+            id = EXCLUDED.id,
+            name = EXCLUDED.name,
+            asset_type = EXCLUDED.asset_type,
+            quantity = EXCLUDED.quantity,
+            avg_price = EXCLUDED.avg_price,
+            current_price = EXCLUDED.current_price,
+            currency = EXCLUDED.currency,
+            metadata = EXCLUDED.metadata,
+            updated_at = NOW()
+    """, (
+        pos_id, account_id, symbol, pos.get('name') or symbol, asset_type,
+        quantity, avg_price, current_price, pos.get('currency') or 'USD',
+        psycopg2.extras.Json(pos),
+    ))
+    return {**pos, 'id': pos_id, 'symbol': symbol}
+
+def _mirror_investment_position_to_tables(position, inv):
+    if not DATABASE_URL:
+        return False
+    conn = _get_db_conn()
+    try:
+        _ensure_investment_tables(conn)
+        with conn.cursor() as cur:
+            account_id = _upsert_investment_account(cur, inv)
+            _upsert_investment_position_row(cur, account_id, position)
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+def _mirror_investment_snapshot_to_tables(data):
+    if not DATABASE_URL:
+        return False
+    inv = _normalize_data(data).get('investment') or {}
+    conn = _get_db_conn()
+    try:
+        _ensure_investment_tables(conn)
+        with conn.cursor() as cur:
+            account_id = _upsert_investment_account(cur, inv)
+            for position in inv.get('positions') or []:
+                if position.get('symbol'):
+                    _upsert_investment_position_row(cur, account_id, position)
+            for decision in inv.get('decisions') or []:
+                _upsert_investment_transaction_row(cur, account_id, decision)
+            for event in inv.get('events') or []:
+                _upsert_investment_event_row(cur, account_id, event)
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+def _upsert_investment_transaction_row(cur, account_id, decision):
+    import psycopg2.extras
+    d = dict(decision or {})
+    symbol = str(d.get('symbol') or '').upper()
+    action = str(d.get('action') or d.get('type') or '').lower()
+    quantity = _num(d.get('tradeShares') or d.get('quantity'), 0)
+    price = _num(d.get('tradePrice') or d.get('price'), 0)
+    if not symbol or action not in {'buy', 'add', 'sell'} or quantity <= 0 or price <= 0:
+        return False
+    tx_id = str(d.get('transactionId') or d.get('id') or f"tx-{int(time.time() * 1000)}")
+    idempotency_key = str(d.get('idempotencyKey') or d.get('tradeKey') or tx_id)
+    proceeds = _num(d.get('proceeds'), quantity * price if action == 'sell' else 0)
+    realized_gain = _num(d.get('realizedGain'), 0)
+    trade_date = str(d.get('tradeDate') or d.get('date') or d.get('createdAt') or '')[:10] or datetime.now().date().isoformat()
+    cur.execute("""
+        INSERT INTO investment_transactions
+            (id, account_id, position_id, symbol, action, quantity, price, fee, tax, proceeds,
+             realized_gain, trade_date, idempotency_key, source, memo, metadata)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (account_id, idempotency_key) DO UPDATE SET
+            memo = COALESCE(EXCLUDED.memo, investment_transactions.memo),
+            metadata = investment_transactions.metadata || EXCLUDED.metadata
+    """, (
+        tx_id, account_id, d.get('positionId'), symbol, 'buy' if action == 'add' else action,
+        quantity, price, _num(d.get('fee'), 0), _num(d.get('tax'), 0), proceeds,
+        realized_gain, trade_date, idempotency_key, d.get('source') or d.get('context') or 'app',
+        d.get('summary') or d.get('reason') or '', psycopg2.extras.Json(d),
+    ))
+    if _num(d.get('cashDelta'), 0) != 0 or proceeds:
+        amount = _num(d.get('cashDelta'), proceeds if action == 'sell' else -(quantity * price))
+        balance_after = 0
+        cur.execute("SELECT cash_balance FROM investment_accounts WHERE id = %s", (account_id,))
+        row = cur.fetchone()
+        if row:
+            balance_after = _num(row[0], 0) + amount
+        ledger_id = f"cash-{idempotency_key}"[:120]
+        cur.execute("""
+            INSERT INTO investment_cash_ledger
+                (id, account_id, transaction_id, entry_type, amount, currency, balance_after, memo)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (id) DO NOTHING
+        """, (ledger_id, account_id, tx_id, action, amount, d.get('currency') or 'USD', balance_after, d.get('summary') or ''))
+    return True
+
+def _upsert_investment_event_row(cur, account_id, event):
+    import psycopg2.extras
+    e = dict(event or {})
+    title = str(e.get('title') or '').strip()
+    if not title:
+        return False
+    event_id = str(e.get('id') or f"event-{int(time.time() * 1000)}")
+    event_date = str(e.get('date') or e.get('eventDate') or e.get('createdAt') or '')[:10] or None
+    cur.execute("""
+        INSERT INTO investment_events
+            (id, account_id, symbol, event_type, title, body, source, source_url, event_date, severity, metadata)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (id) DO UPDATE SET
+            symbol = EXCLUDED.symbol,
+            event_type = EXCLUDED.event_type,
+            title = EXCLUDED.title,
+            body = EXCLUDED.body,
+            source = EXCLUDED.source,
+            source_url = EXCLUDED.source_url,
+            event_date = EXCLUDED.event_date,
+            severity = EXCLUDED.severity,
+            metadata = EXCLUDED.metadata,
+            updated_at = NOW()
+    """, (
+        event_id, account_id, str(e.get('symbol') or '').upper(), e.get('type') or 'event',
+        title, e.get('body') or e.get('summary') or '', e.get('source') or '',
+        e.get('sourceUrl') or e.get('url') or '', event_date, e.get('severity') or '',
+        psycopg2.extras.Json(e),
+    ))
+    return True
+
 def _decode_stored_data(raw):
     if raw is None:
         return EMPTY()
@@ -600,8 +859,9 @@ def save_data_route():
         return jsonify({'error': '유효하지 않은 데이터 형식'}), 400
     try:
         payload = _normalize_data(payload)
+        mirrored = _mirror_investment_snapshot_to_tables(payload)
         write_data(payload)
-        return jsonify({'ok': True})
+        return jsonify({'ok': True, 'investmentNormalized': mirrored})
     except Exception as e:
         log.error('POST /api/data 저장 실패: %s', e, exc_info=True)
         return jsonify({'error': '데이터 저장 실패'}), 500
@@ -622,10 +882,11 @@ def save_investment_position_route():
         before_count = len(((data.get('investment') or {}).get('positions') or []))
         log.info('POST /api/investment/positions [%s] start symbol=%s before=%d', request_id, raw_symbol or '-', before_count)
         data, inv, position = upsert_position(data, raw_position, _normalize_data, _MARKET_SYMBOL_RE)
+        mirrored = _mirror_investment_position_to_tables(position, inv)
         write_data(data)
         after_count = len(inv.get('positions') or [])
-        log.info('POST /api/investment/positions [%s] saved symbol=%s id=%s before=%d after=%d', request_id, position.get('symbol'), position.get('id'), before_count, after_count)
-        return jsonify({'ok': True, 'investment': inv, 'position': position, 'requestId': request_id})
+        log.info('POST /api/investment/positions [%s] saved symbol=%s id=%s before=%d after=%d normalized=%s', request_id, position.get('symbol'), position.get('id'), before_count, after_count, mirrored)
+        return jsonify({'ok': True, 'investment': inv, 'position': position, 'requestId': request_id, 'normalized': mirrored})
     except ValueError as e:
         log.warning('POST /api/investment/positions [%s] validation failed: %s', request_id, e, exc_info=True)
         return jsonify({'error': str(e), 'requestId': request_id}), 400
@@ -646,6 +907,142 @@ def save_investment_position_route():
             'errorDetail': _safe_error_detail(e),
             'storageType': storage_type,
         }), 500
+
+@app.route('/api/investment/transactions', methods=['POST'])
+@require_auth
+def create_investment_transaction_route():
+    request_id = f"itx-{int(time.time() * 1000)}"
+    payload = request.get_json(silent=True)
+    tx = payload.get('transaction') if isinstance(payload, dict) else None
+    if not isinstance(tx, dict):
+        return jsonify({'error': 'transaction data is required', 'requestId': request_id}), 400
+    try:
+        data = _normalize_data(read_data())
+        inv = data['investment']
+        result = _apply_transaction_to_investment_snapshot(inv, tx)
+        if result.get('duplicate'):
+            return jsonify({'ok': True, 'duplicate': True, 'investment': inv, 'transaction': result['decision'], 'requestId': request_id})
+        _mirror_investment_snapshot_to_tables(data)
+        write_data(data)
+        log.info('POST /api/investment/transactions [%s] saved %s %s %s@%s',
+                 request_id, result['decision'].get('symbol'), result['decision'].get('action'),
+                 result['decision'].get('tradeShares'), result['decision'].get('tradePrice'))
+        return jsonify({'ok': True, 'investment': inv, 'transaction': result['decision'], 'requestId': request_id})
+    except ValueError as e:
+        log.warning('POST /api/investment/transactions [%s] validation failed: %s', request_id, e, exc_info=True)
+        return jsonify({'error': str(e), 'requestId': request_id}), 400
+    except Exception as e:
+        log.error('POST /api/investment/transactions [%s] failed: %s', request_id, e, exc_info=True)
+        return jsonify({'error': 'investment transaction save failed', 'requestId': request_id, 'errorDetail': _safe_error_detail(e)}), 500
+
+def _apply_transaction_to_investment_snapshot(inv, tx):
+    symbol = str(tx.get('symbol') or '').strip().upper()
+    action = str(tx.get('action') or '').strip().lower()
+    if action == 'add':
+        action = 'buy'
+    shares = _num(tx.get('tradeShares') or tx.get('quantity') or tx.get('shares'), 0)
+    price = _num(tx.get('tradePrice') or tx.get('price'), 0)
+    if not symbol or not _MARKET_SYMBOL_RE.match(symbol):
+        raise ValueError('valid symbol is required')
+    if action not in {'buy', 'sell'}:
+        raise ValueError('action must be buy or sell')
+    if shares <= 0 or price <= 0:
+        raise ValueError('quantity and price must be greater than zero')
+
+    positions = inv.setdefault('positions', [])
+    decisions = inv.setdefault('decisions', [])
+    idempotency_key = str(tx.get('idempotencyKey') or tx.get('tradeKey') or f"{symbol}|{action}|{shares:.6f}|{price:.4f}")
+    existing = next((d for d in decisions if str(d.get('idempotencyKey') or d.get('tradeKey') or d.get('id')) == idempotency_key), None)
+    if existing:
+        return {'duplicate': True, 'decision': existing}
+
+    idx = next((i for i, p in enumerate(positions) if str(p.get('symbol') or '').upper() == symbol and str(p.get('assetType') or '').lower() != 'cash'), -1)
+    if idx < 0:
+        if action == 'sell':
+            raise ValueError('cannot sell a position that does not exist')
+        positions.append(normalize_position({
+            'id': tx.get('positionId') or f"ip-{symbol.lower()}-{int(time.time() * 1000)}",
+            'symbol': symbol,
+            'name': tx.get('name') or symbol,
+            'shares': 0,
+            'avgPrice': price,
+            'currentPrice': price,
+        }, _MARKET_SYMBOL_RE))
+        idx = len(positions) - 1
+
+    position = dict(positions[idx])
+    old_shares = _num(position.get('shares'), 0)
+    old_avg = _num(position.get('avgPrice'), 0)
+    old_cost = old_shares * old_avg
+    realized_gain = 0.0
+    cash_delta = 0.0
+    applied_shares = shares
+    if action == 'buy':
+        next_shares = old_shares + shares
+        next_avg = (old_cost + shares * price) / next_shares if next_shares else price
+        cash_delta = -(shares * price)
+    else:
+        applied_shares = min(shares, old_shares)
+        if applied_shares <= 0:
+            raise ValueError('sell quantity exceeds current position')
+        next_shares = old_shares - applied_shares
+        next_avg = old_avg if next_shares > 0 else 0
+        cash_delta = applied_shares * price
+        realized_gain = (price - old_avg) * applied_shares
+
+    position.update({
+        'shares': next_shares,
+        'avgPrice': next_avg,
+        'currentPrice': price,
+        'manualPrice': True,
+        'marketUpdatedAt': datetime.now().isoformat(),
+    })
+    positions[idx] = position
+    _adjust_investment_cash_position(inv, cash_delta)
+    decision = {
+        **tx,
+        'id': tx.get('id') or f"id{int(time.time() * 1000)}",
+        'createdAt': tx.get('createdAt') or datetime.now().isoformat(),
+        'symbol': symbol,
+        'action': action,
+        'tradeShares': applied_shares,
+        'tradePrice': price,
+        'cashDelta': cash_delta,
+        'proceeds': cash_delta if action == 'sell' else 0,
+        'realizedGain': realized_gain,
+        'portfolioApplied': True,
+        'cashApplied': True,
+        'idempotencyKey': idempotency_key,
+        'tradeKey': idempotency_key,
+    }
+    decisions.append(decision)
+    return {'duplicate': False, 'decision': decision}
+
+def _adjust_investment_cash_position(inv, delta):
+    if not delta:
+        return
+    positions = inv.setdefault('positions', [])
+    idx = next((i for i, p in enumerate(positions) if str(p.get('assetType') or '').lower() == 'cash' or str(p.get('symbol') or '').upper() == 'CASH'), -1)
+    current = _num(positions[idx].get('cashAmount') if idx >= 0 else 0, _num(positions[idx].get('shares') if idx >= 0 else 0, 0))
+    amount = max(0, current + delta)
+    cash = {
+        **(positions[idx] if idx >= 0 else {}),
+        'id': (positions[idx].get('id') if idx >= 0 else 'ip-cash-auto'),
+        'assetType': 'cash',
+        'symbol': 'CASH',
+        'name': (positions[idx].get('name') if idx >= 0 else 'Cash'),
+        'shares': amount,
+        'cashAmount': amount,
+        'avgPrice': 1.0,
+        'currentPrice': 1.0,
+        'currency': 'USD',
+        'manualPrice': True,
+        'marketUpdatedAt': datetime.now().isoformat(),
+    }
+    if idx >= 0:
+        positions[idx] = cash
+    else:
+        positions.append(cash)
 
 # ---------------------------------------------------------------------------
 # 시장 데이터 API — 현재가/지수 조회 프록시

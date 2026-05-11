@@ -1412,12 +1412,14 @@ class TestInvestmentPartner:
         graph_bounds = logged_in_page.evaluate("""() => {
             const modal = document.querySelector('#modal-box').getBoundingClientRect();
             const graph = document.querySelector('#investment-trade-graph').getBoundingClientRect();
+            const scroll = document.querySelector('.investment-trade-graph-scroll');
             return {
                 left: graph.left >= modal.left,
                 right: graph.right <= modal.right + 1,
+                scrollReady: !!scroll,
             };
         }""")
-        assert graph_bounds == {'left': True, 'right': True}
+        assert graph_bounds == {'left': True, 'right': True, 'scrollReady': True}
         titles = logged_in_page.evaluate("""() =>
             [...document.querySelectorAll('.investment-timeline-item strong')].map(el => el.textContent)
         """)

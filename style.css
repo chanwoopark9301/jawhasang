@@ -4100,6 +4100,11 @@ body { height: var(--app-height, 100dvh); }
   padding: 26px;
 }
 
+.modal-box.modal-investment-timeline {
+  width: min(1360px, 98vw);
+  max-height: min(92vh, 980px);
+}
+
 .investment-news-modal {
   display: grid;
   gap: 14px;
@@ -4226,6 +4231,19 @@ body { height: var(--app-height, 100dvh); }
   overflow: hidden;
 }
 
+.investment-trade-graph-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  padding-bottom: 4px;
+  touch-action: pan-x;
+  cursor: grab;
+}
+
+.investment-trade-graph-scroll:active {
+  cursor: grabbing;
+}
+
 .investment-trade-graph-summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -4262,7 +4280,7 @@ body { height: var(--app-height, 100dvh); }
 
 .investment-trade-graph-area {
   position: relative;
-  max-width: 100%;
+  max-width: none;
   min-width: 0;
   height: 260px;
   border: 0.5px solid var(--color-border);

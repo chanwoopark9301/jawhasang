@@ -150,6 +150,55 @@ class TestDataAPI:
         assert pos['avgPrice'] == 1.0
         assert pos['currentPrice'] == 1.0
 
+    def test_investment_transaction_updates_position_cash_and_blocks_duplicate(self, client):
+        client.post('/api/investment/positions',
+                    data=json.dumps({'position': {
+                        'id': 'ip-iren',
+                        'symbol': 'IREN',
+                        'shares': 1700,
+                        'avgPrice': 46.06,
+                        'currentPrice': 60,
+                    }}),
+                    content_type='application/json')
+
+        payload = {
+            'transaction': {
+                'id': 'tx-iren-sell',
+                'positionId': 'ip-iren',
+                'symbol': 'IREN',
+                'action': 'sell',
+                'quantity': 1190,
+                'price': 60,
+                'idempotencyKey': 'IREN|sell|1190|60',
+            }
+        }
+        r = client.post('/api/investment/transactions',
+                        data=json.dumps(payload),
+                        content_type='application/json')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['ok'] is True
+        inv = data['investment']
+        iren = next(p for p in inv['positions'] if p['symbol'] == 'IREN')
+        cash = next(p for p in inv['positions'] if p['symbol'] == 'CASH')
+        assert iren['shares'] == 510
+        assert cash['cashAmount'] == 71400
+        assert round(data['transaction']['realizedGain'], 2) == 16588.6
+
+        r2 = client.post('/api/investment/transactions',
+                         data=json.dumps(payload),
+                         content_type='application/json')
+        assert r2.status_code == 200
+        data2 = r2.get_json()
+        assert data2['duplicate'] is True
+        inv2 = client.get('/api/data').get_json()['investment']
+        iren2 = next(p for p in inv2['positions'] if p['symbol'] == 'IREN')
+        cash2 = next(p for p in inv2['positions'] if p['symbol'] == 'CASH')
+        assert iren2['shares'] == 510
+        assert cash2['cashAmount'] == 71400
+        assert len(inv2['decisions']) == 1
+
     def test_investment_order_intent_endpoint_creates_draft(self, client):
         payload = {
             'symbol': 'IREN',

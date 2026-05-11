@@ -117,6 +117,24 @@ async function apiCreateInvestmentOrderIntent(payload) {
   return data;
 }
 
+async function apiCreateInvestmentTransaction(transaction) {
+  const res = await fetch('/api/investment/transactions', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ transaction }),
+  });
+  const text = await res.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch (e) {
+    throw new Error(`investment transaction returned non-json: ${res.status}`);
+  }
+  if (!res.ok || !data.ok) throw new Error(data?.error || `investment transaction failed: ${res.status}`);
+  return data;
+}
+
 async function apiSyncKisBroker(days = 30) {
   const res = await fetch('/api/investment/broker/sync', {
     method: 'POST',

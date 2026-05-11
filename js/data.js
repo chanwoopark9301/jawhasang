@@ -209,9 +209,24 @@ function _mergeInvestmentPositionsForServerRefresh(currentPositions, incomingPos
     !isCashInvestmentPosition(p) &&
     (parseInvestmentNumber(p.shares) > 0 || parseInvestmentNumber(p.currentPrice) > 0 || parseInvestmentNumber(p.avgPrice) > 0)
   );
-  if (incomingHasTradable || !currentTradable.length) return incoming;
-
   const merged = [...incoming];
+  if (incomingHasTradable) {
+    current.forEach(position => {
+      const symbol = String(position.symbol || '').toUpperCase();
+      const id = String(position.id || '');
+      const idx = merged.findIndex(item =>
+        (id && String(item.id || '') === id) ||
+        (symbol && String(item.symbol || '').toUpperCase() === symbol)
+      );
+      if (idx < 0) return;
+      const incomingUpdated = Date.parse(merged[idx].marketUpdatedAt || merged[idx].updatedAt || 0) || 0;
+      const currentUpdated = Date.parse(position.marketUpdatedAt || position.updatedAt || 0) || 0;
+      if (currentUpdated > incomingUpdated) merged[idx] = { ...merged[idx], ...position };
+    });
+    return merged;
+  }
+  if (!currentTradable.length) return incoming;
+
   const preserved = [];
   currentTradable.forEach(position => {
     const symbol = String(position.symbol || '').toUpperCase();

@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v109'; // Dynamic daily desk research queries
+const CACHE_NAME = 'jip-v110'; // Normalize investment ledger and timeline graph
 
 const STATIC_ASSETS = [
   '/style.css',
