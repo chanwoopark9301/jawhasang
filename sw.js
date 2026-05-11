@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v107'; // Prepare investment desk with morning market sync
+const CACHE_NAME = 'jip-v108'; // Harden Supabase storage and investment state merge
 
 const STATIC_ASSETS = [
   '/style.css',

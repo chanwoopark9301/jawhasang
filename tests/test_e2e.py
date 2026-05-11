@@ -2689,6 +2689,62 @@ class TestInvestmentPartner:
             'totalValue': 75582,
         }
 
+    def test_server_refresh_merges_investment_records_by_id(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        result = logged_in_page.evaluate("""() => {
+            state.investment = normalizeInvestmentState({
+                positions: [],
+                events: [{
+                    id: 'local-event',
+                    type: 'news',
+                    title: 'local news note',
+                    date: '2026-05-11',
+                }],
+                decisions: [{
+                    id: 'local-decision',
+                    type: 'trade',
+                    symbol: 'IREN',
+                    action: 'sell',
+                    summary: 'local sell record',
+                }],
+                orderIntents: [{
+                    id: 'local-intent',
+                    symbol: 'QQQM',
+                    action: 'buy',
+                }],
+            });
+            const merged = _mergeIncomingInvestmentState({
+                positions: [],
+                events: [{
+                    id: 'server-event',
+                    type: 'macro',
+                    title: 'server CPI event',
+                    date: '2026-05-12',
+                }],
+                decisions: [{
+                    id: 'server-decision',
+                    type: 'rule',
+                    symbol: 'CRCL',
+                    summary: 'server rule',
+                }],
+                orderIntents: [{
+                    id: 'server-intent',
+                    symbol: 'IREN',
+                    action: 'sell',
+                }],
+            });
+            return {
+                events: merged.events.map(item => item.id).sort(),
+                decisions: merged.decisions.map(item => item.id).sort(),
+                orderIntents: merged.orderIntents.map(item => item.id).sort(),
+            };
+        }""")
+        assert result == {
+            'events': ['local-event', 'server-event'],
+            'decisions': ['local-decision', 'server-decision'],
+            'orderIntents': ['local-intent', 'server-intent'],
+        }
+
     def test_duplicate_sell_summary_does_not_zero_position_or_double_cash(self, logged_in_page):
         self._open_investment(logged_in_page)
         logged_in_page.evaluate("""() => {

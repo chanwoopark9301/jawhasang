@@ -80,7 +80,7 @@ async function refreshInvestmentMarketData() {
   try {
     const data = await fetchMarketQuoteData(symbols);
     applyInvestmentQuotes(data.quotes, { forceCurrentPrice: true });
-    saveData();
+    await saveData();
     const found = new Set((data.quotes || []).map(q => String(q.symbol || '').toUpperCase()));
     const missing = symbols.filter(sym => !found.has(String(sym).toUpperCase()));
     if (missing.length) {

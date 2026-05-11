@@ -302,6 +302,9 @@ def _get_db_conn():
     import psycopg2
     return psycopg2.connect(DATABASE_URL, sslmode='require')
 
+_STORAGE_READY = False
+_STORAGE_DATA_TYPE_CACHE = None
+
 def _ensure_table(conn):
     with conn.cursor() as cur:
         cur.execute("""
@@ -328,6 +331,15 @@ def _storage_data_type(conn):
     if data_type == 'USER-DEFINED' and udt_name:
         return udt_name
     return udt_name or data_type or 'unknown'
+
+def _ensure_storage_ready(conn):
+    global _STORAGE_READY, _STORAGE_DATA_TYPE_CACHE
+    if not _STORAGE_READY:
+        _ensure_table(conn)
+        _STORAGE_READY = True
+    if not _STORAGE_DATA_TYPE_CACHE:
+        _STORAGE_DATA_TYPE_CACHE = _storage_data_type(conn)
+    return _STORAGE_DATA_TYPE_CACHE
 
 def _decode_stored_data(raw):
     if raw is None:
@@ -375,8 +387,7 @@ def read_data() -> dict:
     if DATABASE_URL:
         try:
             conn = _get_db_conn()
-            _ensure_table(conn)
-            data_type = _storage_data_type(conn)
+            data_type = _ensure_storage_ready(conn)
             with conn.cursor() as cur:
                 cur.execute("SELECT data FROM app_storage WHERE id = 1")
                 row = cur.fetchone()
@@ -430,8 +441,7 @@ def write_data(data: dict):
     if DATABASE_URL:
         try:
             conn = _get_db_conn()
-            _ensure_table(conn)
-            data_type = _storage_data_type(conn)
+            data_type = _ensure_storage_ready(conn)
             stored_data = _adapt_data_for_storage(data, encrypted, data_type)
             with conn.cursor() as cur:
                 cur.execute("""

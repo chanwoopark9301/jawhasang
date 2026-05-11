@@ -13,6 +13,27 @@ import pytest
 # ---------------------------------------------------------------------------
 
 class TestDataAPI:
+    def test_storage_ready_caches_schema_metadata(self, monkeypatch):
+        import server
+
+        calls = {'ensure': 0, 'type': 0}
+
+        def fake_ensure_table(conn):
+            calls['ensure'] += 1
+
+        def fake_storage_data_type(conn):
+            calls['type'] += 1
+            return 'bytea'
+
+        monkeypatch.setattr(server, '_STORAGE_READY', False)
+        monkeypatch.setattr(server, '_STORAGE_DATA_TYPE_CACHE', None)
+        monkeypatch.setattr(server, '_ensure_table', fake_ensure_table)
+        monkeypatch.setattr(server, '_storage_data_type', fake_storage_data_type)
+
+        assert server._ensure_storage_ready(object()) == 'bytea'
+        assert server._ensure_storage_ready(object()) == 'bytea'
+        assert calls == {'ensure': 1, 'type': 1}
+
     def test_get_data_returns_empty_structure(self, client):
         r = client.get('/api/data')
         assert r.status_code == 200

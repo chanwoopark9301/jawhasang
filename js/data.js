@@ -88,6 +88,9 @@ async function refreshDataFromServer(options = {}) {
   const now = Date.now();
   if (_syncInFlight) return false;
   if (!options.force && now - _lastSyncAt < minInterval) return false;
+  if (options.waitForSave !== false) {
+    await _saveQueue.catch(() => {});
+  }
   _syncInFlight = true;
   _lastSyncAt = now;
 
@@ -150,23 +153,49 @@ function _mergeIncomingInvestmentState(incomingInvestment) {
   const incoming = normalizeInvestmentState(incomingInvestment);
   const merged = { ...incoming };
   merged.positions = _mergeInvestmentPositionsForServerRefresh(current.positions, incoming.positions);
+  merged.events = _mergeInvestmentArrayById(current.events, incoming.events, 'event');
+  merged.decisions = _mergeInvestmentArrayById(current.decisions, incoming.decisions, 'decision');
+  merged.orderIntents = _mergeInvestmentArrayById(current.orderIntents, incoming.orderIntents, 'orderIntent');
+  merged.journal = _mergeInvestmentArrayById(current.journal, incoming.journal, 'journal');
+  merged.chatSessions = _mergeInvestmentArrayById(current.chatSessions, incoming.chatSessions, 'chatSession');
 
   if ((current.chat || []).length > (incoming.chat || []).length) {
     merged.chat = current.chat;
   }
   if ((current.chatSessions || []).length > (incoming.chatSessions || []).length) {
-    merged.chatSessions = current.chatSessions;
     merged.activeChatSessionId = current.activeChatSessionId;
-  }
-  if ((current.decisions || []).length > (incoming.decisions || []).length) {
-    merged.decisions = current.decisions;
-    merged.positions = current.positions;
-  }
-  if ((current.events || []).length > (incoming.events || []).length) {
-    merged.events = current.events;
   }
 
   return normalizeInvestmentState(merged);
+}
+
+function _mergeInvestmentArrayById(currentItems, incomingItems, fallbackPrefix) {
+  const current = Array.isArray(currentItems) ? currentItems : [];
+  const incoming = Array.isArray(incomingItems) ? incomingItems : [];
+  const merged = [];
+  const seen = new Set();
+  const keyOf = (item, index, source) => {
+    if (!item || typeof item !== 'object') return `${source}-${index}`;
+    if (item.id) return String(item.id);
+    const parts = [
+      fallbackPrefix || 'item',
+      item.type || '',
+      item.symbol || '',
+      item.date || item.createdAt || item.savedAt || '',
+      item.action || '',
+      item.title || item.summary || item.text || '',
+    ].map(value => String(value || '').trim()).filter(Boolean);
+    return parts.length ? parts.join('|') : `${source}-${index}`;
+  };
+  const push = (item, index, source) => {
+    const key = keyOf(item, index, source);
+    if (seen.has(key)) return;
+    seen.add(key);
+    merged.push(item);
+  };
+  incoming.forEach((item, index) => push(item, index, 'incoming'));
+  current.forEach((item, index) => push(item, index, 'current'));
+  return merged;
 }
 
 function _mergeInvestmentPositionsForServerRefresh(currentPositions, incomingPositions) {
