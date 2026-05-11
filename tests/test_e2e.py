@@ -935,7 +935,7 @@ class TestInvestmentPartner:
         logged_in_page.locator('#investment-news-form button[type="submit"]').click()
         logged_in_page.wait_for_function("() => !document.getElementById('modal-overlay').classList.contains('open')", timeout=8_000)
         logged_in_page.locator('#investment-menu-timeline').click()
-        logged_in_page.wait_for_selector('#investment-timeline-market-graph .investment-timeline-graph-point.news', timeout=8_000)
+        logged_in_page.wait_for_selector('#investment-timeline-graph .investment-timeline-graph-point.news', timeout=8_000)
         news_text = logged_in_page.locator('#modal-box').inner_text()
         assert '투자 타임라인' in news_text
         assert '뉴스·신호' in news_text
@@ -946,6 +946,8 @@ class TestInvestmentPartner:
         """)
         assert 'Clarity Act' in tooltip_text
         assert 'update' not in tooltip_text.lower()
+        logged_in_page.locator('#investment-timeline-graph .investment-timeline-graph-point.news').first.click()
+        assert 'Clarity Act' in logged_in_page.locator('#investment-timeline-detail').inner_text()
         logged_in_page.locator('.modal-close').click()
 
         logged_in_page.locator('#investment-menu-desk').click()
@@ -996,7 +998,8 @@ class TestInvestmentPartner:
         }""")
 
         logged_in_page.locator('#investment-menu-timeline').click()
-        logged_in_page.wait_for_selector('#investment-timeline-market-graph .investment-timeline-graph-point.news', timeout=8_000)
+        logged_in_page.select_option('#investment-timeline-symbol-select', 'IREN')
+        logged_in_page.wait_for_selector('#investment-timeline-graph .investment-timeline-graph-point.news', timeout=8_000)
         timeline_text = logged_in_page.locator('#modal-box').inner_text()
         tooltip_text = logged_in_page.evaluate("""() =>
             [...document.querySelectorAll('.investment-trade-tooltip')].map(el => el.innerText).join('\\n')
@@ -1007,6 +1010,7 @@ class TestInvestmentPartner:
         assert 'AI data center update' not in tooltip_text
         assert logged_in_page.locator('.investment-timeline').count() == 0
         assert logged_in_page.locator('.investment-timeline-item').count() == 0
+        assert logged_in_page.locator('#investment-timeline-detail').is_visible()
 
     def test_daily_investment_desk_blocks_reentry_after_sell_and_event(self, logged_in_page):
         self._open_investment(logged_in_page)
@@ -1801,14 +1805,15 @@ $11,717.55
         assert 'IREN' in timeline_text
         assert 'Circle news' not in timeline_text
         assert 'Planned entry memo' not in timeline_text
-        assert '종목별 타임라인' in timeline_text
-        assert '시장 뉴스 및 이벤트' in timeline_text
-        assert '총 자산 변동 이벤트' in timeline_text
-        assert logged_in_page.locator('.investment-trade-point').count() == 2
-        assert logged_in_page.locator('.investment-event-point').count() >= 3
+        assert '종합 타임라인' in timeline_text
+        assert logged_in_page.locator('#investment-timeline-detail').is_visible()
         assert logged_in_page.locator('#investment-timeline-symbol-select').is_visible()
         assert logged_in_page.locator('.investment-timeline').count() == 0
         assert logged_in_page.locator('.investment-timeline-item').count() == 0
+        logged_in_page.select_option('#investment-timeline-symbol-select', 'IREN')
+        logged_in_page.wait_for_selector('#investment-timeline-graph .investment-timeline-graph-point.decision', timeout=8_000)
+        assert logged_in_page.locator('.investment-trade-point').count() == 2
+        assert logged_in_page.locator('.investment-event-point').count() >= 1
         tooltip_text = logged_in_page.evaluate("""() =>
             [...document.querySelectorAll('.investment-trade-tooltip')].map(el => el.innerText).join('\\n')
         """)
@@ -1818,7 +1823,7 @@ $11,717.55
         assert 'Q3 earnings call' not in tooltip_text
         graph_bounds = logged_in_page.evaluate("""() => {
             const modal = document.querySelector('#modal-box').getBoundingClientRect();
-            const graph = document.querySelector('#investment-timeline-symbol-graph').getBoundingClientRect();
+            const graph = document.querySelector('#investment-timeline-graph').getBoundingClientRect();
             const scroll = document.querySelector('.investment-trade-graph-scroll');
             const graphs = [...document.querySelectorAll('.investment-timeline-graph-stack > .investment-trade-graph')]
                 .map(el => el.getBoundingClientRect());
@@ -1827,11 +1832,11 @@ $11,717.55
                 right: graph.right <= modal.right + 1,
                 scrollReady: !!scroll,
                 count: graphs.length,
-                stacked: graphs.length === 3 && graphs[1].top > graphs[0].bottom && graphs[2].top > graphs[1].bottom,
+                oneGraph: graphs.length === 1,
                 fullWidth: graphs.every(g => g.width >= modal.width * 0.85),
             };
         }""")
-        assert graph_bounds == {'left': True, 'right': True, 'scrollReady': True, 'count': 3, 'stacked': True, 'fullWidth': True}
+        assert graph_bounds == {'left': True, 'right': True, 'scrollReady': True, 'count': 1, 'oneGraph': True, 'fullWidth': True}
         drag_result = logged_in_page.evaluate("""() => {
             const scroll = document.querySelector('.investment-trade-graph-scroll');
             const area = document.querySelector('.investment-trade-graph-area');
@@ -1871,6 +1876,10 @@ $11,717.55
         assert any('IREN' in title for title in aria_titles)
         assert 'IREN IREN 매도' not in aria_titles
         assert 'IREN · IREN IREN 매도' not in aria_titles
+        logged_in_page.locator('#investment-timeline-graph .investment-timeline-graph-point.decision').last.click()
+        detail_text = logged_in_page.locator('#investment-timeline-detail').inner_text()
+        assert 'IREN' in detail_text
+        assert '실적 전 일부 익절' in detail_text
 
     def test_investment_ai_compare_modal_renders_two_provider_cards(self, logged_in_page):
         self._open_investment(logged_in_page)
@@ -2770,7 +2779,7 @@ $11,717.55
         logged_in_page.locator('.modal-close').click()
 
         logged_in_page.locator('#investment-menu-timeline').click()
-        logged_in_page.wait_for_selector('#investment-timeline-asset-graph .investment-timeline-graph-point.decision', timeout=8_000)
+        logged_in_page.wait_for_selector('#investment-timeline-graph .investment-timeline-graph-point.decision', timeout=8_000)
         assert logged_in_page.locator('.investment-timeline').count() == 0
         assert logged_in_page.locator('.investment-timeline-item').count() == 0
         tooltip_text = logged_in_page.evaluate("""() =>
@@ -2778,6 +2787,8 @@ $11,717.55
         """)
         assert 'IREN' in tooltip_text
         assert '2,500' in tooltip_text or '2500' in tooltip_text
+        logged_in_page.locator('#investment-timeline-graph .investment-timeline-graph-point.decision').first.click()
+        assert 'IREN' in logged_in_page.locator('#investment-timeline-detail').inner_text()
 
     def test_investment_chat_refreshes_open_portfolio_and_desk_modals(self, logged_in_page):
         self._open_investment(logged_in_page)
