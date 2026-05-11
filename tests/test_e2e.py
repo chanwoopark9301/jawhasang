@@ -1620,11 +1620,58 @@ class TestInvestmentPartner:
         logged_in_page.locator('#chat-input-bottom').press('Enter')
         logged_in_page.wait_for_function("() => window.__capturedAnalyzePayload", timeout=8_000)
         system_prompt = logged_in_page.evaluate("() => window.__capturedAnalyzePayload.system[0].text")
-        assert len(system_prompt) < 35000
+        payload = logged_in_page.evaluate("() => window.__capturedAnalyzePayload")
+        assert payload['model'] == 'claude-haiku-4-5'
+        assert payload['max_tokens'] <= 900
+        assert len(system_prompt) < 26000
         assert 'truncated' in system_prompt
+        assert 'haiku-briefing' in system_prompt
+        assert '포트폴리오 표를 반복하지 않습니다' in system_prompt
+        assert '오늘의 뷰' in system_prompt
         assert 'IREN' in system_prompt
         assert 'QLD' in system_prompt
         assert logged_in_page.locator('.chat-bubble-ai').last.inner_text().startswith('오늘 브리핑')
+
+    def test_investment_deep_event_analysis_uses_sonnet(self, logged_in_page):
+        self._open_investment(logged_in_page)
+        logged_in_page.evaluate("""() => {
+            state.investment.positions = [
+                { id: 'ip-deep-iren', symbol: 'IREN', name: 'Iris Energy', shares: 510, avgPrice: 66.38, currentPrice: 61.2 },
+            ];
+            window.__capturedAnalyzePayload = null;
+            const originalFetch = window.fetch.bind(window);
+            window.saveData = async () => true;
+            window.fetch = (url, opts = {}) => {
+                const target = String(url);
+                if (target.includes('/api/investment/ledger')) {
+                    return Promise.resolve(new Response(JSON.stringify({ ok: true, investment: state.investment, positions: state.investment.positions }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                if (target.includes('/api/investment/news')) {
+                    return Promise.resolve(new Response(JSON.stringify({ news: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                if (target.includes('/api/market/quote')) {
+                    return Promise.resolve(new Response(JSON.stringify({ quotes: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                if (target.includes('/api/analyze')) {
+                    window.__capturedAnalyzePayload = JSON.parse(opts.body);
+                    return Promise.resolve(new Response(JSON.stringify({
+                        content: [{ text: '## IREN 실적 시나리오\\n- Sonnet으로 깊게 분석했습니다.' }],
+                    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+                }
+                return originalFetch(url, opts);
+            };
+            render();
+        }""")
+
+        logged_in_page.locator('#chat-input-bottom').fill('IREN 실적 발표 전후 시나리오를 깊게 분석해줘')
+        logged_in_page.locator('#chat-input-bottom').press('Enter')
+        logged_in_page.wait_for_function("() => window.__capturedAnalyzePayload", timeout=8_000)
+        payload = logged_in_page.evaluate("() => window.__capturedAnalyzePayload")
+        system_prompt = logged_in_page.evaluate("() => window.__capturedAnalyzePayload.system[0].text")
+        assert payload['model'] == 'claude-sonnet-4-5-20250929'
+        assert payload['max_tokens'] >= 1200
+        assert 'sonnet-deep' in system_prompt
+        assert '컨센서스와 어긋날 수 있는 핵심 지점' in system_prompt
 
     def test_investment_briefing_chat_falls_back_when_ai_errors(self, logged_in_page):
         self._open_investment(logged_in_page)

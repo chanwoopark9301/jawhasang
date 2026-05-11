@@ -147,12 +147,13 @@ async function continueContextChat(text) {
     }
   }
 
+  const chatPlan = planContextChatRequest({ isInvestment, text });
   // AI 역할: state.currentRole → AI_ROLE_PRESETS에서 prompt 조회. 없으면 topic.aiPrompt 폴백
-  const sysPrompt = _buildChatSysPrompt(isMyRecords, topic, student, [investmentNewsContext, investmentMarketContext, investmentFxContext].filter(Boolean).join('\n'));
+  const sysPrompt = _buildChatSysPrompt(isMyRecords, topic, student, [investmentNewsContext, investmentMarketContext, investmentFxContext].filter(Boolean).join('\n'), text, chatPlan);
 
-  // 슬라이딩 윈도우: 최근 20개만 전송 (토큰 절약)
+  // 슬라이딩 윈도우: 비용 모드에 따라 최근 대화만 전송
   // 장기 맥락은 topic.patternAnalysis(사용자가 저장한 분석)가 시스템 프롬프트로 대체
-  const WINDOW = 20;
+  const WINDOW = chatPlan.historyWindow;
   const messages = state.currentChatMessages
     .filter(m => m.role !== 'system')
     .slice(-WINDOW)
@@ -166,6 +167,9 @@ async function continueContextChat(text) {
     messageCount: messages.length,
     messageChars: messages.reduce((sum, msg) => sum + String(msg.content || '').length, 0),
     extraContextChars: [investmentNewsContext, investmentMarketContext, investmentFxContext].join('').length,
+    model: chatPlan.model,
+    maxTokens: chatPlan.maxTokens,
+    tier: chatPlan.tier,
   });
 
   try {
@@ -174,7 +178,7 @@ async function continueContextChat(text) {
       headers: { 'Content-Type': 'application/json', 'X-Client-Request-Id': clientRequestId },
       body: JSON.stringify({
         clientRequestId,
-        model: 'claude-sonnet-4-6', max_tokens: isInvestment ? 1600 : 800,
+        model: chatPlan.model, max_tokens: chatPlan.maxTokens,
         system: [{ type: 'text', text: sysPrompt, cache_control: { type: 'ephemeral' } }],
         messages,
       }),
@@ -233,6 +237,47 @@ async function continueContextChat(text) {
   } finally {
     state._ctxChatLoading = false;
   }
+}
+
+function planContextChatRequest({ isInvestment, text }) {
+  const ask = String(text || '');
+  const deep = isInvestment && isInvestmentDeepAnalysisIntent(ask);
+  const briefing = isInvestment && isInvestmentBriefingIntent(ask);
+  if (deep) {
+    return {
+      tier: 'sonnet-deep',
+      model: 'claude-sonnet-4-5-20250929',
+      maxTokens: 1400,
+      historyWindow: 12,
+    };
+  }
+  if (briefing) {
+    return {
+      tier: 'haiku-briefing',
+      model: 'claude-haiku-4-5',
+      maxTokens: 900,
+      historyWindow: 8,
+    };
+  }
+  if (isInvestment) {
+    return {
+      tier: 'haiku-investment',
+      model: 'claude-haiku-4-5',
+      maxTokens: 700,
+      historyWindow: 10,
+    };
+  }
+  return {
+    tier: 'haiku-chat',
+    model: 'claude-haiku-4-5',
+    maxTokens: 700,
+    historyWindow: 14,
+  };
+}
+
+function isInvestmentDeepAnalysisIntent(text) {
+  const ask = String(text || '');
+  return /깊게|심층|자세히|실적|어닝|컨콜|컨퍼런스콜|큰\s*(?:매수|매도|손절)|중요\s*(?:매수|매도|판단)|시나리오|컨센서스|가이던스|희석|유상증자|손절\s*조건|매매\s*계획|추가매수\s*판단|deep|earnings|guidance|consensus|scenario/i.test(ask);
 }
 
 function isInvestmentBriefingIntent(text) {
@@ -1360,10 +1405,11 @@ function clampInvestmentPromptBlock(value, max = 6000) {
 }
 
 // AI 대화용 시스템 프롬프트 생성 (현재 역할 기준으로 매 메시지마다 최신 반영)
-function _buildChatSysPrompt(isMyRecords, topic, student, extraContext = '') {
+function _buildChatSysPrompt(isMyRecords, topic, student, extraContext = '', userText = '', chatPlan = null) {
   const modePrompt = _replyModePrompt(state.replyMode || 'dictation');
   if (state.view === 'investment') {
     const inv = state.investment || defaultInvestmentState();
+    const isBriefing = isInvestmentBriefingIntent(userText);
     const totals = typeof investmentTotals === 'function'
       ? investmentTotals(inv.positions || [])
       : { totalValue: 0, totalCost: 0, totalGain: 0, totalGainPercent: 0 };
@@ -1379,32 +1425,36 @@ function _buildChatSysPrompt(isMyRecords, topic, student, extraContext = '') {
     ].join('\n');
     const dailyDesk = typeof buildDailyInvestmentDesk === 'function' ? buildDailyInvestmentDesk(inv) : null;
     const dailyDeskBrief = dailyDesk && typeof renderDailyDeskBrief === 'function'
-      ? clampInvestmentPromptBlock(renderDailyDeskBrief(dailyDesk), 5500)
+      ? clampInvestmentPromptBlock(renderDailyDeskBrief(dailyDesk), isBriefing ? 1800 : 4200)
       : 'Daily Investment Desk: unavailable';
     const recentNews = inv.events
       .filter(e => e.type === 'news')
-      .slice(-5)
-      .map(e => `- ${e.date} ${e.symbol || ''} ${clampInvestmentPromptText(e.title, 160)}: ${clampInvestmentPromptText(e.body, 650)}`)
+      .slice(isBriefing ? -3 : -5)
+      .map(e => `- ${e.date} ${e.symbol || ''} ${clampInvestmentPromptText(e.title, 140)}: ${clampInvestmentPromptText(e.body, isBriefing ? 280 : 650)}`)
       .join('\n') || '- 기록된 뉴스 없음';
     const recentSignals = (inv.events || [])
       .filter(e => e.type === 'signal')
-      .slice(-8)
-      .map(e => `- ${e.date || ''} ${e.symbol || ''} ${clampInvestmentPromptText(e.title || 'Signal', 160)}${e.handle ? ` (@${e.handle})` : ''}: ${clampInvestmentPromptText(e.body, 520)}`)
+      .slice(isBriefing ? -3 : -8)
+      .map(e => `- ${e.date || ''} ${e.symbol || ''} ${clampInvestmentPromptText(e.title || 'Signal', 140)}${e.handle ? ` (@${e.handle})` : ''}: ${clampInvestmentPromptText(e.body, isBriefing ? 240 : 520)}`)
       .join('\n') || '- No saved market signals';
     const todayIso = new Date().toISOString().slice(0, 10);
     const upcomingEvents = (inv.events || [])
       .filter(e => e.date && e.date >= todayIso && ['earnings', 'macro', 'analyst'].includes(e.type))
       .sort((a, b) => String(a.date).localeCompare(String(b.date)))
-      .slice(0, 10)
-      .map(e => `- ${e.date} [${e.type}] ${e.symbol || ''} ${clampInvestmentPromptText(e.title, 160)}: ${clampInvestmentPromptText(e.body, 360)}`)
+      .slice(0, isBriefing ? 6 : 10)
+      .map(e => `- ${e.date} [${e.type}] ${e.symbol || ''} ${clampInvestmentPromptText(e.title, 140)}: ${clampInvestmentPromptText(e.body, isBriefing ? 220 : 360)}`)
       .join('\n') || '- 예정된 투자 일정 없음';
     const recentDecisions = inv.decisions.slice(-5).map(d =>
       `- ${d.createdAt?.slice(0, 10) || ''} ${d.symbol} ${d.action}: ${clampInvestmentPromptText(d.label, 120)} — ${clampInvestmentPromptText(d.summary, 520)}`
     ).join('\n') || '- 기록된 매매 판단 없음';
-    const compactExtraContext = clampInvestmentPromptBlock(extraContext, 8000);
+    const compactExtraContext = clampInvestmentPromptBlock(extraContext, isBriefing ? 3500 : 8000);
+    const budgetLine = chatPlan?.tier
+      ? `Model/cost mode: ${chatPlan.tier}. Be concise and do not spend tokens repeating account tables.`
+      : 'Model/cost mode: concise.';
     return `당신은 개인 투자자의 이성적 매매 통제 파트너입니다.
 목표는 수익률 예측이나 종목 추천이 아니라, 사용자가 사전에 정한 원칙을 기억하고 감정적 매매를 줄이는 것입니다.
 감정 상태를 묻지 말고, 원칙·숫자·기록·뉴스 해석을 기준으로 짧고 분명하게 돕습니다.
+${budgetLine}
 매수/매도 단정이나 수익률 보장은 금지하지만, 원칙 수립·비중 축소·손절 조건·추가매수 조건에 대해서는 앱의 기본 원칙과 보유 데이터에 근거한 "원칙 후보" 또는 "보수적 기본안"을 먼저 제시할 수 있습니다.
 사용자가 "너가 추천해줘", "알아서 정해줘", "어떻게 세우면 좋을까"처럼 원칙 설계를 요청하면 "제 역할 밖"이라고 말하지 말고, 단정적 투자 조언이 아닌 실행 가능한 원칙안으로 답합니다.
 앱은 '/api/market/quote'를 통해 보유 종목 현재가와 지수를 조회할 수 있습니다. 시세/상태 컨텍스트가 제공된 경우 절대 "실시간 시세 조회 기능이 없다"고 말하지 않습니다.
@@ -1420,6 +1470,10 @@ function _buildChatSysPrompt(isMyRecords, topic, student, extraContext = '') {
 사용자가 실제 투자금, 평단, 익절 비율, 실현익을 말하면 반드시 대략 계산을 먼저 합니다. 남은 원가, 남은 평가액, 남은 미실현 손익, 현재 총 이익, 세금 예비금, 남은 포지션의 변동폭을 "추정"으로 분리해 보여줍니다.
 실적 발표, 어닝콜, 공시, 인수, 규제처럼 날짜가 있는 이벤트를 물으면 먼저 이벤트 시간과 현재가/평단/비중을 확인하고, 주가 예측 단정 대신 상승/중립/하락 시나리오별 행동 규칙을 제시합니다.
 좋은 답변은 애널리스트 보고서가 아니라 "내 계좌에 바로 적용할 수 있는 행동 계획"이어야 합니다. 핵심 구조는 결론 → 내 포지션 계산 → 지금 하지 말 것 → 시나리오별 행동표 → 확인할 체크포인트 → 최종 액션 플랜입니다.
+브리핑 요청에서는 포트폴리오 표를 반복하지 않습니다. 포트폴리오 숫자는 필요한 1~2개만 인용하고, 핵심은 "오늘의 뷰"입니다.
+브리핑은 반드시 다음 구조로 답합니다: 1) 오늘의 뷰 한 줄, 2) 시장이 이미 가격에 반영한 것, 3) 아직 확인되지 않은 것, 4) 내 계좌에서 제일 위험한 오판 1개, 5) 오늘 하지 말아야 할 행동 2개, 6) 뷰가 틀렸다고 인정할 반증 조건.
+브리핑은 모든 종목을 공평하게 다루지 않습니다. 오늘 의사결정에 영향을 주는 상위 2~3개 이슈만 고릅니다. 엣지가 없으면 "오늘은 하지 않는 것이 액션"이라고 말합니다.
+브리핑 답변은 650단어를 넘기지 않습니다. 표는 시나리오 표 1개까지만 허용합니다.
 실적 분석은 컨센서스 숫자를 반복하지 말고 "컨센서스가 빗나갈 수 있는 지점"을 분석합니다. 매출/EPS 컨센서스, 옵션 기대 변동폭, 애널리스트 코멘트, 회사 공시, 최근 뉴스가 서로 어디서 충돌하는지 비교합니다.
 실적 이벤트 답변은 최소한 다음 항목을 분리합니다: 1) 시장 컨센서스, 2) 내 베이스 케이스, 3) 컨센서스와 어긋날 수 있는 핵심 지점, 4) 강한 발표 조합, 5) 위험한 발표 조합, 6) 발표 직후 판정표, 7) 내 계좌 액션 플랜.
 AI/데이터센터/채굴주처럼 스토리 주식은 headline EPS보다 실제 주가 반응 변수를 우선합니다. 예: AI Cloud revenue, contracted ARR, revenue-generating ARR, RPO, 대형 고객 acceptance, capex funding, ATM/유상증자 사용량, 희석 리스크, 고객명 직접 언급 여부.
