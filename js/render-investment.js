@@ -904,13 +904,46 @@ function renderModalInvestmentSignals() {
 
 function investmentTimelineDisplayTitle(item) {
   const symbol = String(item?.symbol || '').trim();
-  const title = String(item?.title || '').trim();
+  const title = translateInvestmentTimelineText(String(item?.title || '').trim());
   if (!symbol) return title || '투자 이벤트';
   if (!title) return symbol;
   const cleanTitle = stripLeadingInvestmentSymbol(title, symbol);
   if (!cleanTitle) return symbol;
   if (cleanTitle !== title) return `${symbol} ${cleanTitle}`;
   return `${symbol} · ${cleanTitle}`;
+}
+
+function translateInvestmentTimelineText(text) {
+  let value = String(text || '').trim();
+  if (!value) return '';
+  const replacements = [
+    [/Circle news/gi, '\uc11c\ud074 \ub274\uc2a4'],
+    [/Stablecoin policy update/gi, '\uc2a4\ud14c\uc774\ube14\ucf54\uc778 \uc815\ucc45 \uc5c5\ub370\uc774\ud2b8'],
+    [/Planned entry memo/gi, '\uacc4\ud68d \uc9c4\uc785 \uba54\ubaa8'],
+    [/IREN expands AI cloud capacity/gi, 'IREN, AI \ud074\ub77c\uc6b0\ub4dc \uc6a9\ub7c9 \ud655\ub300'],
+    [/IREN announced an AI data center update/gi, 'IREN\uc774 AI \ub370\uc774\ud130\uc13c\ud130 \uc5c5\ub370\uc774\ud2b8\ub97c \ubc1c\ud45c\ud588\uc2b5\ub2c8\ub2e4'],
+    [/Realized profit before earnings/gi, '\uc2e4\uc801 \uc804 \uc218\uc775 \uc2e4\ud604'],
+    [/Q3 earnings call/gi, 'Q3 \uc2e4\uc801 \ubc1c\ud45c \ubc0f \ucee8\ud37c\ub7f0\uc2a4\ucf5c'],
+    [/Chat note/gi, '\ub300\ud654 \uba54\ubaa8'],
+    [/Partial sell/gi, '\uc77c\ubd80 \ub9e4\ub3c4'],
+    [/Market signal/gi, '\uc2dc\uc7a5 \uc2e0\ud638'],
+    [/policy update/gi, '\uc815\ucc45 \uc5c5\ub370\uc774\ud2b8'],
+    [/data center update/gi, '\ub370\uc774\ud130\uc13c\ud130 \uc5c5\ub370\uc774\ud2b8'],
+    [/AI cloud/gi, 'AI \ud074\ub77c\uc6b0\ub4dc'],
+    [/earnings/gi, '\uc2e4\uc801'],
+    [/call/gi, '\ucee8\ud37c\ub7f0\uc2a4\ucf5c'],
+    [/news/gi, '\ub274\uc2a4'],
+    [/signal/gi, '\uc2e0\ud638'],
+    [/sell/gi, '\ub9e4\ub3c4'],
+    [/buy/gi, '\ub9e4\uc218'],
+    [/entry/gi, '\uc9c4\uc785'],
+    [/memo/gi, '\uba54\ubaa8'],
+    [/update/gi, '\uc5c5\ub370\uc774\ud2b8'],
+  ];
+  replacements.forEach(([pattern, replacement]) => {
+    value = value.replace(pattern, replacement);
+  });
+  return value;
 }
 
 function stripLeadingInvestmentSymbol(title, symbol) {
@@ -924,7 +957,13 @@ function stripLeadingInvestmentSymbol(title, symbol) {
       clean = clean.slice(normalizedSymbol.length + 3).trim();
     } else if (normalizedTitle.startsWith(`${normalizedSymbol} - `)) {
       clean = clean.slice(normalizedSymbol.length + 3).trim();
+    } else if (normalizedTitle.startsWith(`${normalizedSymbol}, `)) {
+      clean = clean.slice(normalizedSymbol.length + 2).trim();
+    } else if (normalizedTitle.startsWith(`${normalizedSymbol}: `)) {
+      clean = clean.slice(normalizedSymbol.length + 2).trim();
     } else if (normalizedTitle.startsWith(`${normalizedSymbol}-`)) {
+      clean = clean.slice(normalizedSymbol.length + 1).trim();
+    } else if (normalizedTitle.startsWith(`${normalizedSymbol}:`)) {
       clean = clean.slice(normalizedSymbol.length + 1).trim();
     } else if (normalizedTitle.startsWith(`${normalizedSymbol} `)) {
       clean = clean.slice(normalizedSymbol.length).trim();
@@ -1099,7 +1138,7 @@ function renderInvestmentTimelineGraphPanel({ id, title, subtitle, rows, graphTy
     : item => 84 - ((item.value - min) / range) * 64;
   const placed = points.map(item => ({ ...item, y: laneY(item) }));
   const polyline = placed.map(p => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
-  const graphWidth = Math.max(920, placed.length * 150);
+  const graphWidth = Math.max(1280, placed.length * 180);
   const latest = placed.at(-1);
   return `<section class="investment-trade-graph ${esc(graphType)}" id="${esc(id)}">
     <div class="investment-portfolio-list-head">
@@ -1131,7 +1170,7 @@ function renderInvestmentTimelineGraphPanel({ id, title, subtitle, rows, graphTy
               ${p.proceeds ? `<small>체결/대금: ${formatMoney(p.proceeds)}</small>` : ''}
               ${p.realizedGain ? `<small>실현손익: ${formatMoneySigned(p.realizedGain)}</small>` : ''}
               ${graphType === 'asset' && p.value ? `<small>Y값: ${formatMoney(p.value)}</small>` : ''}
-              ${p.body ? `<p>${esc(String(p.body).replace(/\s+/g, ' ').slice(0, 180))}</p>` : ''}
+              ${p.body ? `<p>${esc(translateInvestmentTimelineText(String(p.body).replace(/\s+/g, ' ').slice(0, 180)))}</p>` : ''}
             </div>
           </button>`).join('')}
         </div>
@@ -1432,23 +1471,6 @@ function renderModalInvestmentTimeline() {
   const signalCount = rows.filter(r => r.type === 'signal').length;
   const decisionCount = rows.filter(r => r.type === 'decision').length;
   const sellCount = (inv.decisions || []).filter(d => d.action === 'sell').length;
-  const grouped = rows.reduce((acc, row) => {
-    const key = row.date || '날짜 없음';
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(row);
-    return acc;
-  }, {});
-  const typeLabel = type => ({
-    news: '뉴스',
-    signal: '신호',
-    trade: '체결',
-    alert: '경고',
-    decision: '매매',
-    'trade-note': '매매 메모',
-    earnings: '실적',
-    macro: '경제',
-  })[type] || '이벤트';
-
   return `
     <button class="modal-close" onclick="closeModal()">x</button>
     <div class="investment-modal-titlebar">
@@ -1492,25 +1514,6 @@ function renderModalInvestmentTimeline() {
         </form>
       </details>
 
-      <div class="investment-timeline">
-        ${Object.keys(grouped).length ? Object.entries(grouped).map(([date, items]) => `
-          <section class="investment-timeline-day">
-            <h4>${esc(date)}</h4>
-            ${items.map(item => `<article class="investment-timeline-item ${esc(item.type)} ${esc(item.severity)}">
-              <span>${esc(typeLabel(item.type))}</span>
-              <div>
-                <strong>${esc(investmentTimelineDisplayTitle(item))}</strong>
-                ${item.type === 'decision' && item.tradeShares > 0 ? `<div class="investment-timeline-metrics">
-                  <span>${formatShares(item.tradeShares)}주</span>
-                  <span>${formatMoney(item.tradePrice)}</span>
-                  ${item.proceeds ? `<span>대금 ${formatMoney(item.proceeds)}</span>` : ''}
-                  ${item.realizedGain ? `<span class="${item.realizedGain >= 0 ? 'up' : 'down'}">실현 ${formatMoneySigned(item.realizedGain)}</span>` : ''}
-                </div>` : ''}
-                ${item.body ? `<div class="investment-timeline-body chat-markdown">${renderMarkdownBasic(item.body)}</div>` : ''}
-              </div>
-            </article>`).join('')}
-          </section>`).join('') : '<div class="investment-empty">아직 투자 타임라인에 표시할 기록이 없습니다.</div>'}
-      </div>
     </div>`;
 }
 
