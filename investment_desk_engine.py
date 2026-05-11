@@ -499,6 +499,132 @@ def build_research_queue(investment: Dict[str, Any], theses: List[Dict[str, Any]
     return queue[:24]
 
 
+def build_scenarios(investment: Dict[str, Any], theses: List[Dict[str, Any]], controls: List[Dict[str, Any]], evidence_map: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
+    rows, _totals = _portfolio_rows(investment)
+    row_map = {row["symbol"]: row for row in rows}
+    control_map = {control["symbol"]: control for control in controls}
+    scenarios: List[Dict[str, Any]] = []
+    for thesis in theses:
+        symbol = thesis["symbol"]
+        row = row_map.get(symbol, {})
+        control = control_map.get(symbol, {})
+        evidence = evidence_map.get(symbol, {})
+        profile = thesis.get("profile") or "single_equity"
+        bullish = evidence.get("bullishEvidence") or []
+        bearish = evidence.get("bearishEvidence") or []
+        unconfirmed = evidence.get("unconfirmedEvidence") or []
+        blocked = control.get("blockedActions") or []
+        scenario = {
+            "symbol": symbol,
+            "profile": profile,
+            "weight": round(_num(row.get("weight")), 2),
+            "status": evidence.get("status") or "unproven",
+            "bullCase": _build_bull_case(symbol, thesis, bullish, unconfirmed, control),
+            "baseCase": _build_base_case(symbol, thesis, evidence, control),
+            "bearCase": _build_bear_case(symbol, thesis, bearish, control),
+            "blockedActions": blocked,
+        }
+        scenarios.append(scenario)
+    return scenarios
+
+
+def _driver_label(thesis: Dict[str, Any], fallback: str) -> str:
+    drivers = thesis.get("drivers") or []
+    return ", ".join(drivers[:3]) if drivers else fallback
+
+
+def _build_bull_case(symbol: str, thesis: Dict[str, Any], bullish: List[Dict[str, Any]], unconfirmed: List[Dict[str, Any]], control: Dict[str, Any]) -> Dict[str, Any]:
+    profile = thesis.get("profile") or ""
+    if bullish and not unconfirmed and not control.get("blockedActions"):
+        return {
+            "condition": f"{symbol} thesis drivers are supported by A/B quality evidence.",
+            "action": "hold_or_planned_add_only",
+            "requiredEvidence": ["Position size still below max rule", "Order has price, size, and invalidation"],
+            "blockedUntil": "",
+            "rationale": ["Evidence supports thesis, but execution still needs a pre-written order plan."],
+        }
+    if profile == "stablecoin_issuer":
+        required = ["Official bill text or committee schedule", "USDC supply/reserve trend", "Earnings call commentary"]
+    elif profile == "ai_miner_infrastructure":
+        required = ["Company IR/SEC confirmation of AI contract execution", "RPO/ARR or acceptance evidence", "Funding/dilution update"]
+    elif profile == "growth_index_semiconductor":
+        required = ["Nasdaq breadth confirmation", "Rates not moving against duration assets", "Pullback or clear stop level"]
+    elif profile == "crypto_beta":
+        required = ["ETF/on-chain/flow confirmation", "Policy signal from official or trusted source", "Risk appetite confirmation"]
+    else:
+        required = ["A/B quality evidence for key drivers", "Defined invalidation rule"]
+    return {
+        "condition": f"{symbol} bull case needs confirmation across {_driver_label(thesis, 'key drivers')}.",
+        "action": "wait_for_confirmation",
+        "requiredEvidence": required,
+        "blockedUntil": "A/B evidence confirms the thesis and behavior controls clear",
+        "rationale": ["Positive or relevant signals are not enough until they are confirmed by reliable evidence."],
+    }
+
+
+def _build_base_case(symbol: str, thesis: Dict[str, Any], evidence: Dict[str, Any], control: Dict[str, Any]) -> Dict[str, Any]:
+    status = evidence.get("status") or "unproven"
+    if status == "needs_confirmation":
+        return {
+            "condition": f"{symbol} has relevant but unconfirmed signals.",
+            "action": "wait_for_confirmation",
+            "requiredEvidence": ["A/B evidence before action", "Official source or trusted financial media confirmation"],
+            "blockedUntil": "unconfirmed evidence is upgraded or expires",
+            "rationale": ["Do not convert rumor, X flow, or weak RSS into a trade."],
+        }
+    if status == "under_pressure":
+        return {
+            "condition": f"{symbol} thesis is under pressure but not fully invalidated.",
+            "action": "review_before_hold_or_add",
+            "requiredEvidence": ["Read bearish evidence", "Rewrite invalidation rule", "Decide reduce/hold threshold"],
+            "blockedUntil": "thesis review is written",
+            "rationale": ["Holding can be valid, but adding risk before review is not."],
+        }
+    if not thesis.get("lastReviewedAt") and status == "unproven":
+        return {
+            "condition": f"{symbol} has exposure before a reviewed thesis history.",
+            "action": "write_plan_before_trade",
+            "requiredEvidence": ["Thesis", "Invalidation rule", "Next catalyst"],
+            "blockedUntil": "plan exists",
+            "rationale": ["The app should slow down trades when the thesis is not reviewed."],
+        }
+    if control.get("blockedActions"):
+        return {
+            "condition": f"{symbol} has behavior-control blocks.",
+            "action": "obey_control_gate",
+            "requiredEvidence": control.get("requiredBeforeAction") or ["Clear blocked actions"],
+            "blockedUntil": ", ".join(control.get("blockedActions") or []),
+            "rationale": control.get("reasons") or ["Behavior control is active."],
+        }
+    return {
+        "condition": f"{symbol} remains in observation mode.",
+        "action": "hold_or_observe",
+        "requiredEvidence": ["Keep price, event, and thesis checks updated"],
+        "blockedUntil": "",
+        "rationale": ["No decisive new evidence; avoid unnecessary action."],
+    }
+
+
+def _build_bear_case(symbol: str, thesis: Dict[str, Any], bearish: List[Dict[str, Any]], control: Dict[str, Any]) -> Dict[str, Any]:
+    if bearish:
+        titles = [str(item.get("title") or "") for item in bearish[:3]]
+        return {
+            "condition": f"{symbol} bearish evidence hits thesis drivers.",
+            "action": "reduce_or_exit_review",
+            "requiredEvidence": ["Compare bearish evidence with invalidation rules", "Decide reduce/exit trigger before next trade"],
+            "blockedUntil": "bearish evidence is disproved or position action is reviewed",
+            "rationale": titles or ["Bearish evidence is present."],
+        }
+    rules = thesis.get("invalidationRules") or []
+    return {
+        "condition": f"{symbol} bear case is triggered if invalidation rules are met.",
+        "action": "prepare_reduce_rule",
+        "requiredEvidence": rules[:3] or ["Written invalidation rule"],
+        "blockedUntil": "",
+        "rationale": ["No bearish evidence yet, but the exit rule must be ready before volatility."],
+    }
+
+
 def build_market_view(investment: Dict[str, Any], theses: List[Dict[str, Any]], controls: List[Dict[str, Any]], today_value: Any = None, evidence_map: Dict[str, Dict[str, Any]] | None = None) -> Dict[str, Any]:
     today = _today(today_value)
     rows, totals = _portfolio_rows(investment)
@@ -598,21 +724,24 @@ def build_investment_desk_engine(investment: Dict[str, Any], today_value: Any = 
     for thesis in theses:
         thesis.update(evidence_map.get(thesis["symbol"], {}))
     controls = build_behavior_controls(inv, theses, today, evidence_map)
+    scenarios = build_scenarios(inv, theses, controls, evidence_map)
     market_view = build_market_view(inv, theses, controls, today, evidence_map)
     research_queue = build_research_queue(inv, theses)
     return {
-        "version": "2026-05-11.py-engine-2",
+        "version": "2026-05-11.py-engine-3",
         "generatedAt": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "date": today.isoformat(),
         "marketView": market_view,
         "theses": theses,
         "behaviorControls": controls,
         "thesisEvidence": evidence_map,
+        "scenarios": scenarios,
         "researchQueue": research_queue,
         "summary": render_engine_brief({
             "marketView": market_view,
             "behaviorControls": controls,
             "theses": theses,
+            "scenarios": scenarios,
         }),
     }
 
@@ -621,6 +750,7 @@ def render_engine_brief(engine: Dict[str, Any]) -> str:
     view = engine.get("marketView") or {}
     controls = engine.get("behaviorControls") or []
     theses = engine.get("theses") or []
+    scenarios = engine.get("scenarios") or []
     blocked = [c for c in controls if c.get("blockedActions")]
     lines = [
         f"Top line: {view.get('topLine') or 'No view generated.'}",
@@ -639,4 +769,11 @@ def render_engine_brief(engine: Dict[str, Any]) -> str:
     lines.append("Thesis drivers:")
     for thesis in theses[:4]:
         lines.append(f"- {thesis.get('symbol')}: {', '.join((thesis.get('drivers') or [])[:4])}")
+    lines.append("Scenarios:")
+    for scenario in scenarios[:3]:
+        lines.append(
+            f"- {scenario.get('symbol')}: bull={scenario.get('bullCase', {}).get('action')} / "
+            f"base={scenario.get('baseCase', {}).get('action')} / "
+            f"bear={scenario.get('bearCase', {}).get('action')}"
+        )
     return "\n".join(lines)

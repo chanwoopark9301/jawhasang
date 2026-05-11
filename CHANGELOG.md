@@ -8,6 +8,14 @@
 
 ## 2026-05-08
 
+### 투자 엔진 구현 계획서와 시나리오 엔진
+
+- `INVESTMENT_ENGINE_IMPLEMENTATION_PLAN.md`를 추가해 투자 엔진 완성 단계, 행동 통제 흐름, 가계부/전체 자산 확장 구조를 문서화했다.
+- Python 투자 판단 엔진에 종목별 bull/base/bear case 시나리오 생성 단계를 추가했다.
+- 시나리오는 thesis 상태, 증거 품질, 행동 통제 금지 조건을 읽어 `wait_for_confirmation`, `review_before_hold_or_add`, `reduce_or_exit_review`, `write_plan_before_trade` 같은 행동 기준을 만든다.
+- 오늘의 데스크 서버 엔진 매핑에 시나리오 요약을 추가해 종목별 핵심 뷰 카드에서 bull/base/bear 행동 기준을 볼 수 있게 했다.
+- 서버 테스트는 CRCL 확인 대기, IREN thesis 압박, 신규 미검토 종목의 계획 우선 시나리오를 검증한다.
+
 ### 투자 thesis 증거 압력 엔진
 
 - Python 투자 판단 엔진에 저장된 이벤트/뉴스/공시를 종목별 thesis driver에 연결하는 증거 분류 단계를 추가했다.

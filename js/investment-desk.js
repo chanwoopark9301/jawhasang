@@ -236,6 +236,7 @@ function applyInvestmentServerDeskEngine(baseDesk, investment) {
   const keyIssues = Array.isArray(view.keyIssues) ? view.keyIssues : [];
   const evidence = Array.isArray(view.evidence) ? view.evidence : [];
   const doNotDo = Array.isArray(view.doNotDo) ? view.doNotDo : [];
+  const scenarios = Array.isArray(engine.scenarios) ? engine.scenarios : [];
 
   const riskSignals = controls.map(control => ({
     id: `server-control-${control.symbol}-${control.state}`,
@@ -274,7 +275,14 @@ function applyInvestmentServerDeskEngine(baseDesk, investment) {
     portfolioImplications: keyIssues.length ? keyIssues.map(item => ({
       symbol: item.symbol,
       title: `${item.controlState || 'observe'} · ${item.thesisStatus || 'unproven'}`,
-      body: item.view || '',
+      body: [
+        item.view || '',
+        (() => {
+          const scenario = scenarios.find(row => row.symbol === item.symbol);
+          if (!scenario) return '';
+          return `Scenario: bull=${scenario.bullCase?.action || '-'}, base=${scenario.baseCase?.action || '-'}, bear=${scenario.bearCase?.action || '-'}.`;
+        })(),
+      ].filter(Boolean).join(' '),
       tone: ['blocked', 'review', 'confirmation_wait'].includes(item.controlState) ? 'block' : 'watch',
     })) : baseDesk.marketBriefing?.portfolioImplications,
     dataRequests: (engine.researchQueue || []).slice(0, 6).map(item => `${item.symbol}: ${item.driver} - ${item.evidenceNeeded}`),

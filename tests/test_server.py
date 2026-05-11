@@ -267,7 +267,7 @@ class TestDataAPI:
         data = r.get_json()
         assert data['ok'] is True
         engine = data['engine']
-        assert engine['version'].startswith('2026-05-11.py-engine-2')
+        assert engine['version'].startswith('2026-05-11.py-engine-3')
         thesis = {item['symbol']: item for item in engine['theses']}
         assert thesis['CRCL']['profile'] == 'stablecoin_issuer'
         assert 'stablecoin legislation' in thesis['CRCL']['drivers']
@@ -284,6 +284,11 @@ class TestDataAPI:
         assert 'add before thesis review' in controls['IREN']['blockedActions']
         assert engine['marketView']['topLine']
         assert engine['marketView']['thesisEvidence']['IREN']['status'] == 'under_pressure'
+        scenarios = {item['symbol']: item for item in engine['scenarios']}
+        assert scenarios['CRCL']['baseCase']['action'] == 'wait_for_confirmation'
+        assert 'A/B evidence' in scenarios['CRCL']['baseCase']['requiredEvidence'][0]
+        assert scenarios['IREN']['bearCase']['action'] == 'reduce_or_exit_review'
+        assert 'dilution' in ' '.join(scenarios['IREN']['bearCase']['rationale']).lower()
         assert any(item['symbol'] == 'CRCL' and item['driver'] == 'stablecoin legislation'
                    for item in engine['researchQueue'])
 
@@ -306,6 +311,8 @@ class TestDataAPI:
         thesis = engine['theses'][0]
         assert thesis['symbol'] == 'UEC'
         assert thesis['profile'] == 'single_equity'
+        assert engine['scenarios'][0]['symbol'] == 'UEC'
+        assert engine['scenarios'][0]['baseCase']['action'] == 'write_plan_before_trade'
         assert any('UEC' in item['query'] for item in engine['researchQueue'])
 
     def test_investment_order_intent_endpoint_creates_draft(self, client):
