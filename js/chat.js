@@ -8,6 +8,7 @@
 // ---------------------------------------------------------------------------
 
 function handleChatKey(e) {
+  if (e.isComposing || e.keyCode === 229) return;
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     sendCurrentChat();
@@ -19,11 +20,15 @@ function handleChatKey(e) {
 // ---------------------------------------------------------------------------
 
 function sendCurrentChat() {
-  console.log('[chat] sendCurrentChat 호출됨');
   const input = document.getElementById('chat-input-bottom');
-  console.log('[chat] input 요소:', input, '| 값:', input?.value);
   const text  = input?.value.trim();
-  if (!text) { console.warn('[chat] 빈 입력 — 전송 중단'); return; }
+  if (!text) return;
+  if (state._ctxChatLoading) {
+    logger.info('AI 응답 중이라 새 채팅 전송을 보류', { length: text.length });
+    if (typeof showToast === 'function') showToast('아직 답변 중이에요. 잠시 후 다시 보내주세요.');
+    input.focus();
+    return;
+  }
   input.value = '';
 
   // 일기 변환 모드: AI 없이 혼자 쓰기
@@ -39,7 +44,6 @@ function sendCurrentChat() {
     return;
   }
 
-  console.log('[chat] continueContextChat 호출, text=', text);
   continueContextChat(text);
 }
 

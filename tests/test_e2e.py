@@ -659,6 +659,46 @@ class TestChatRoleAndReplyMode:
         assert logged_in_page.locator('.chat-bubble-ai').count() == 0
         assert logged_in_page.locator('#chat-typing-indicator').count() == 0
 
+    def test_chat_enter_during_loading_keeps_input_text(self, logged_in_page):
+        logged_in_page.wait_for_selector('#nav-invest', timeout=8_000)
+        logged_in_page.click('#nav-invest')
+        logged_in_page.wait_for_selector('#investment-view', timeout=8_000)
+        logged_in_page.evaluate("""() => {
+            state._ctxChatLoading = true;
+            state.currentChatMessages = [];
+        }""")
+        input_el = logged_in_page.locator('#chat-input-bottom')
+        input_el.fill('응답 중에 보낸 말')
+        input_el.press('Enter')
+
+        assert input_el.input_value() == '응답 중에 보낸 말'
+        assert logged_in_page.evaluate("() => state.currentChatMessages.length") == 0
+
+    def test_chat_enter_during_ime_composition_does_not_send(self, logged_in_page):
+        logged_in_page.wait_for_selector('#nav-invest', timeout=8_000)
+        logged_in_page.click('#nav-invest')
+        logged_in_page.wait_for_selector('#investment-view', timeout=8_000)
+        result = logged_in_page.evaluate("""() => {
+            const input = document.getElementById('chat-input-bottom');
+            input.value = '한글 조합 중';
+            state._ctxChatLoading = false;
+            state.currentChatMessages = [];
+            let prevented = false;
+            handleChatKey({
+                key: 'Enter',
+                shiftKey: false,
+                isComposing: true,
+                keyCode: 229,
+                preventDefault: () => { prevented = true; },
+            });
+            return {
+                value: input.value,
+                prevented,
+                count: state.currentChatMessages.length,
+            };
+        }""")
+        assert result == {'value': '한글 조합 중', 'prevented': False, 'count': 0}
+
     def test_ai_does_not_start_chat_first(self, logged_in_page):
         self._select_topic_with_role(logged_in_page, 'listener')
 

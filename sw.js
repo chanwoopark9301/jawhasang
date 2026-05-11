@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v111'; // Silent market-close chat summaries
+const CACHE_NAME = 'jip-v112'; // Prevent chat input loss
 
 const STATIC_ASSETS = [
   '/style.css',
