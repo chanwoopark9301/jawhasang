@@ -18,6 +18,7 @@ import requests
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from functools import wraps
+from urllib.parse import urlparse
 from investment_backend import normalize_position, upsert_position
 from investment_broker import build_order_intent
 from investment_calendar import sync_investment_calendar
@@ -30,6 +31,7 @@ from flask import (
 )
 from dotenv import load_dotenv
 from cryptography.fernet import Fernet, InvalidToken
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 load_dotenv('ecrk.env')
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
@@ -84,11 +86,80 @@ def _setup_logger() -> logging.Logger:
 log = _setup_logger()
 
 app = Flask(__name__, static_folder='.')
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.secret_key = hashlib.sha256((APP_PASSWORD + '_sk').encode()).hexdigest()
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 # HTTPS 환경에서만 Secure 플래그 활성화 (로컬 개발 호환)
 app.config['SESSION_COOKIE_SECURE'] = bool(os.getenv('DATABASE_URL'))
+
+_SENSITIVE_STATIC_NAMES = {
+    'ecrk.env',
+    '.env',
+    'data.json',
+    'server.py',
+    'server.log',
+    'requirements.txt',
+}
+_SENSITIVE_STATIC_EXTENSIONS = {
+    '.env',
+    '.py',
+    '.pyc',
+    '.db',
+    '.sqlite',
+    '.sqlite3',
+    '.log',
+    '.pem',
+    '.key',
+}
+
+
+def _is_sensitive_static_path(filename: str) -> bool:
+    clean = str(filename or '').replace('\\', '/').strip().lower()
+    if not clean or '..' in clean.split('/'):
+        return True
+    base = clean.rsplit('/', 1)[-1]
+    if base in _SENSITIVE_STATIC_NAMES:
+        return True
+    return any(base.endswith(ext) for ext in _SENSITIVE_STATIC_EXTENSIONS)
+
+
+def _same_origin_request() -> bool:
+    origin = request.headers.get('Origin')
+    if not origin:
+        return True
+    try:
+        origin_url = urlparse(origin)
+        host_url = urlparse(request.host_url)
+        return (
+            origin_url.scheme == host_url.scheme
+            and origin_url.netloc == host_url.netloc
+        )
+    except Exception:
+        return False
+
+
+@app.before_request
+def _reject_cross_site_api_writes():
+    if request.path.startswith('/api/') and request.method in {'POST', 'PUT', 'PATCH', 'DELETE'}:
+        if not _same_origin_request():
+            log.warning('차단된 외부 Origin API 쓰기 요청: path=%s origin=%s', request.path, request.headers.get('Origin'))
+            return jsonify({'error': 'forbidden_origin'}), 403
+    return None
+
+
+@app.after_request
+def _security_headers(response):
+    response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    response.headers.setdefault('X-Frame-Options', 'DENY')
+    response.headers.setdefault('Referrer-Policy', 'no-referrer')
+    response.headers.setdefault('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()')
+    if request.path.startswith('/api/'):
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+    if request.is_secure or request.headers.get('X-Forwarded-Proto', '').lower() == 'https':
+        response.headers.setdefault('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+    return response
 
 # ---------------------------------------------------------------------------
 # 암호화 — APP_PASSWORD로 Fernet 키 유도 (PBKDF2 강화)
@@ -732,11 +803,13 @@ def _adapt_data_for_storage(data, encrypted, data_type):
 
 def _safe_error_detail(e):
     text = str(e) or e.__class__.__name__
-    for key in ('password=', 'apikey=', 'api_key=', 'DATABASE_URL=', 'postgres://', 'postgresql://'):
-        idx = text.lower().find(key.lower())
-        if idx >= 0:
-            text = text[:idx] + '[redacted]'
-            break
+    secret_patterns = [
+        r'(?i)(APP_PASSWORD|ANTHROPIC_API_KEY|OPENAI_API_KEY|X_BEARER_TOKEN|KIS_APP_KEY|KIS_APP_SECRET|BITHUMB_API_KEY|BITHUMB_SECRET_KEY|DATABASE_URL|password|apikey|api_key|appkey|appsecret)\s*[:=]\s*[^ \n\r;&]+',
+        r'(?i)authorization\s*:\s*bearer\s+[^ \n\r;&]+',
+        r'(?i)postgres(?:ql)?://[^ \n\r]+',
+    ]
+    for pattern in secret_patterns:
+        text = re.sub(pattern, lambda m: f"{m.group(1) if m.lastindex else 'secret'}=[redacted]", text)
     return text[:300]
 
 def read_data() -> dict:
@@ -927,6 +1000,9 @@ _PUBLIC_EXTENSIONS = {'.js', '.css', '.png', '.svg', '.ico', '.webp', '.woff', '
 
 @app.route('/<path:filename>')
 def static_files(filename):
+    if _is_sensitive_static_path(filename):
+        log.warning('민감 정적 파일 접근 차단: /%s', filename)
+        return jsonify({'error': 'not_found'}), 404
     is_public_ext = any(filename.endswith(ext) for ext in _PUBLIC_EXTENSIONS)
     if not is_public_ext and filename not in _PUBLIC_FILES and not session.get('auth'):
         log.debug('인증 없는 접근 → 로그인 리다이렉트: /%s', filename)

@@ -8,6 +8,13 @@
 
 ## 2026-05-08
 
+### Railway 배포 보안 하드닝
+
+- 로그인된 상태에서도 `ecrk.env`, `data.json`, `server.py`, `server.log` 같은 민감 프로젝트 파일은 정적 라우트로 내려가지 않게 차단했다.
+- API 응답에 `no-store`, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` 보안 헤더를 추가했다.
+- 외부 Origin에서 들어오는 상태 변경 API 요청을 403으로 거부해 기본 CSRF 방어선을 추가했다.
+- 에러 상세 메시지에서 KIS/빗썸/AI/DB 관련 시크릿이 로그나 응답에 노출되지 않도록 마스킹 범위를 넓혔다.
+
 ### 자유 대화 투자 게이트
 
 - 자유 투자 대화에서 매수/추매/매도/손절/보유 의도를 서버 Python 엔진이 먼저 감지하는 `/api/investment/chat-gate` API를 추가했다.

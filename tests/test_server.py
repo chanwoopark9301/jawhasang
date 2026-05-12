@@ -14,6 +14,41 @@ from urllib.parse import quote
 # ---------------------------------------------------------------------------
 
 class TestDataAPI:
+    def test_sensitive_project_files_are_never_served(self, client):
+        for path in ('/ecrk.env', '/data.json', '/server.py', '/server.log'):
+            r = client.get(path)
+            assert r.status_code in (403, 404)
+            assert b'APP_PASSWORD' not in r.data
+            assert b'KIS_APP_SECRET' not in r.data
+
+    def test_security_headers_are_applied_to_api_responses(self, client):
+        r = client.get('/api/data')
+        assert r.status_code == 200
+        assert r.headers['X-Content-Type-Options'] == 'nosniff'
+        assert r.headers['X-Frame-Options'] == 'DENY'
+        assert r.headers['Referrer-Policy'] == 'no-referrer'
+        assert 'no-store' in r.headers['Cache-Control']
+
+    def test_cross_site_state_changing_api_is_rejected(self, client):
+        r = client.post('/api/data',
+                        data=json.dumps({'students': []}),
+                        headers={'Origin': 'https://evil.example'},
+                        content_type='application/json')
+        assert r.status_code == 403
+        assert r.get_json()['error'] == 'forbidden_origin'
+
+    def test_safe_error_detail_redacts_broker_and_exchange_secrets(self, app):
+        import server
+
+        detail = server._safe_error_detail(
+            RuntimeError('KIS_APP_SECRET=abc BITHUMB_SECRET_KEY=def appsecret=ghi Authorization: Bearer token')
+        )
+        assert 'abc' not in detail
+        assert 'def' not in detail
+        assert 'ghi' not in detail
+        assert 'token' not in detail
+        assert '[redacted]' in detail
+
     def test_storage_ready_caches_schema_metadata(self, monkeypatch):
         import server
 
