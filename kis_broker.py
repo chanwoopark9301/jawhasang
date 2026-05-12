@@ -18,6 +18,16 @@ DOMESTIC_BALANCE_TR = 'TTTC8434R'
 DOMESTIC_DAILY_CCLD_TR = 'TTTC8001R'
 OVERSEAS_BALANCE_TR = 'TTTS3012R'
 OVERSEAS_EXCHANGES = ('NASD', 'NYSE', 'AMEX')
+READ_ONLY_TR_IDS = {
+    DOMESTIC_BALANCE_TR,
+    DOMESTIC_DAILY_CCLD_TR,
+    OVERSEAS_BALANCE_TR,
+}
+READ_ONLY_PATHS = {
+    '/uapi/domestic-stock/v1/trading/inquire-balance',
+    '/uapi/domestic-stock/v1/trading/inquire-daily-ccld',
+    '/uapi/overseas-stock/v1/trading/inquire-balance',
+}
 
 
 @dataclass
@@ -49,6 +59,9 @@ class KisConfig:
         if not self.product_code:
             missing.append('KIS_ACNT_PRDT_CD')
         return missing
+
+    def trading_enabled(self):
+        return str(os.getenv('KIS_ENABLE_TRADING') or '').strip().lower() in {'1', 'true', 'yes', 'on'}
 
 
 def _num(value, default=0.0):
@@ -85,6 +98,8 @@ def _token(config: KisConfig):
 
 
 def _kis_get(config: KisConfig, access_token: str, path: str, tr_id: str, params: dict):
+    if path not in READ_ONLY_PATHS or tr_id not in READ_ONLY_TR_IDS:
+        raise RuntimeError(f'KIS read-only adapter blocked non-read-only request: {tr_id} {path}')
     res = requests.get(
         f'{config.base_url}{path}',
         params=params,
@@ -213,11 +228,20 @@ def _merge_decisions(existing, synced):
 
 def sync_kis_account(investment: dict, days: int = 30):
     config = KisConfig.from_env()
+    if config.trading_enabled():
+        return {
+            'ok': False,
+            'configured': True,
+            'readOnly': True,
+            'error': 'kis_trading_mode_forbidden',
+            'message': 'KIS sync is locked to read-only mode. Disable KIS_ENABLE_TRADING.',
+        }
     missing = config.missing()
     if missing:
         return {
             'ok': False,
             'configured': False,
+            'readOnly': True,
             'missing': missing,
             'message': 'KIS API credentials are not configured',
         }
@@ -319,11 +343,22 @@ def sync_kis_account(investment: dict, days: int = 30):
         'status': 'connected',
         'provider': 'kis',
         'orderIntentOnly': True,
+        'readOnly': True,
+        'providers': {
+            **((inv.get('broker') or {}).get('providers') if isinstance((inv.get('broker') or {}).get('providers'), dict) else {}),
+            'kis': {
+                'status': 'connected',
+                'readOnly': True,
+                'orderIntentOnly': True,
+                'lastSyncedAt': datetime.now(timezone.utc).isoformat(),
+            },
+        },
         'lastSyncedAt': datetime.now(timezone.utc).isoformat(),
     }
     return {
         'ok': True,
         'configured': True,
+        'readOnly': True,
         'investment': inv,
         'positionsSynced': len(positions),
         'tradesSynced': len(decisions),

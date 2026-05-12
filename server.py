@@ -19,6 +19,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 from functools import wraps
 from urllib.parse import urlparse
+from bithumb_broker import sync_bithumb_account
 from investment_backend import normalize_position, upsert_position
 from investment_broker import build_order_intent
 from investment_calendar import sync_investment_calendar
@@ -1447,6 +1448,30 @@ def investment_broker_sync_route():
     except Exception as e:
         log.error('POST /api/investment/broker/sync failed: %s', e, exc_info=True)
         return jsonify({'ok': False, 'error': 'KIS sync failed', 'errorDetail': _safe_error_detail(e)}), 500
+
+@app.route('/api/investment/crypto/bithumb/sync', methods=['POST'])
+@require_auth
+def investment_bithumb_sync_route():
+    payload = request.get_json(silent=True) or {}
+    days = payload.get('days', 30) if isinstance(payload, dict) else 30
+    try:
+        data = _normalize_data(read_data())
+        result = sync_bithumb_account(data.get('investment') or {}, days=days)
+        if not result.get('ok'):
+            return jsonify(result), 400
+        data['investment'] = _normalize_data({'investment': result['investment']})['investment']
+        write_data(data)
+        return jsonify({
+            'ok': True,
+            'readOnly': True,
+            'investment': data['investment'],
+            'positionsSynced': result.get('positionsSynced', 0),
+            'tradesSynced': result.get('tradesSynced', 0),
+            'brokerReady': True,
+        })
+    except Exception as e:
+        log.error('POST /api/investment/crypto/bithumb/sync failed: %s', e, exc_info=True)
+        return jsonify({'ok': False, 'error': 'Bithumb sync failed', 'errorDetail': _safe_error_detail(e)}), 500
 
 @app.route('/api/investment/calendar/sync', methods=['POST'])
 @require_auth

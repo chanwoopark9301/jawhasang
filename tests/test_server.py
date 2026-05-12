@@ -505,6 +505,111 @@ class TestDataAPI:
         assert 'KIS_APP_KEY' in data['missing']
         assert 'KIS_CANO' in data['missing']
 
+    def test_kis_adapter_refuses_trading_mode_even_if_configured(self, monkeypatch):
+        import kis_broker
+
+        monkeypatch.setenv('KIS_APP_KEY', 'app')
+        monkeypatch.setenv('KIS_APP_SECRET', 'secret')
+        monkeypatch.setenv('KIS_CANO', '12345678')
+        monkeypatch.setenv('KIS_ACNT_PRDT_CD', '01')
+        monkeypatch.setenv('KIS_ENABLE_TRADING', 'true')
+
+        result = kis_broker.sync_kis_account({}, days=1)
+
+        assert result['ok'] is False
+        assert result['readOnly'] is True
+        assert result['error'] == 'kis_trading_mode_forbidden'
+
+    def test_kis_adapter_rejects_non_readonly_tr_id(self):
+        import kis_broker
+
+        cfg = kis_broker.KisConfig('app', 'secret', '12345678', '01')
+
+        with pytest.raises(RuntimeError, match='read-only'):
+            kis_broker._kis_get(cfg, 'token', '/uapi/domestic-stock/v1/trading/order-cash', 'TTTC0802U', {})
+
+    def test_bithumb_adapter_refuses_trading_mode_even_if_configured(self, monkeypatch):
+        import bithumb_broker
+
+        monkeypatch.setenv('BITHUMB_API_KEY', 'access')
+        monkeypatch.setenv('BITHUMB_SECRET_KEY', 'secret')
+        monkeypatch.setenv('BITHUMB_ENABLE_TRADING', 'true')
+
+        result = bithumb_broker.sync_bithumb_account({}, days=1)
+
+        assert result['ok'] is False
+        assert result['readOnly'] is True
+        assert result['error'] == 'bithumb_trading_mode_forbidden'
+
+    def test_bithumb_adapter_rejects_non_readonly_paths(self):
+        import bithumb_broker
+
+        cfg = bithumb_broker.BithumbConfig('access', 'secret')
+
+        with pytest.raises(RuntimeError, match='read-only'):
+            bithumb_broker._bithumb_request(cfg, 'POST', '/v1/orders', {'market': 'KRW-BTC'})
+
+        with pytest.raises(RuntimeError, match='read-only'):
+            bithumb_broker._bithumb_request(cfg, 'GET', '/v1/withdraws', {})
+
+    def test_bithumb_sync_normalizes_accounts_and_filled_orders(self, monkeypatch):
+        import bithumb_broker
+
+        monkeypatch.setenv('BITHUMB_API_KEY', 'access')
+        monkeypatch.setenv('BITHUMB_SECRET_KEY', 'secret')
+        monkeypatch.delenv('BITHUMB_ENABLE_TRADING', raising=False)
+
+        def fake_get(config, path, params=None):
+            if path == '/v1/accounts':
+                return [
+                    {'currency': 'KRW', 'balance': '1200000', 'locked': '0', 'avg_buy_price': '0', 'unit_currency': 'KRW'},
+                    {'currency': 'ETH', 'balance': '2.5', 'locked': '0.1', 'avg_buy_price': '4100000', 'unit_currency': 'KRW'},
+                ]
+            if path == '/v1/orders':
+                return [
+                    {'uuid': 'ord-1', 'market': 'KRW-ETH', 'side': 'bid', 'executed_volume': '1.2', 'price': '4000000', 'paid_fee': '1000', 'created_at': '2026-05-12T09:00:00+09:00'},
+                ]
+            return []
+
+        monkeypatch.setattr(bithumb_broker, '_bithumb_get', fake_get)
+
+        result = bithumb_broker.sync_bithumb_account({'positions': [], 'decisions': [], 'events': []}, days=7)
+
+        assert result['ok'] is True
+        assert result['readOnly'] is True
+        assert result['positionsSynced'] == 2
+        assert result['tradesSynced'] == 1
+        inv = result['investment']
+        assert inv['broker']['providers']['bithumb']['readOnly'] is True
+        assert any(p['symbol'] == 'CASH' and p['currency'] == 'KRW' for p in inv['positions'])
+        assert any(p['symbol'] == 'ETH-KRW' and p['assetType'] == 'crypto' for p in inv['positions'])
+        assert inv['decisions'][0]['source'] == 'bithumb'
+
+    def test_bithumb_sync_endpoint_persists_readonly_crypto_data(self, client, monkeypatch):
+        import server
+
+        def fake_sync(investment, days=30):
+            inv = dict(investment or {})
+            inv['positions'] = [{'id': 'bithumb-ETH-KRW', 'symbol': 'ETH-KRW', 'assetType': 'crypto', 'shares': 2, 'avgPrice': 4000000, 'currency': 'KRW'}]
+            inv['decisions'] = [{'id': 'bithumb-order-1', 'type': 'trade', 'source': 'bithumb', 'symbol': 'ETH-KRW', 'action': 'buy', 'tradeShares': 2, 'tradePrice': 4000000}]
+            inv['broker'] = {'status': 'connected', 'provider': 'multi', 'orderIntentOnly': True, 'providers': {'bithumb': {'status': 'connected', 'readOnly': True}}}
+            return {'ok': True, 'configured': True, 'readOnly': True, 'investment': inv, 'positionsSynced': 1, 'tradesSynced': 1}
+
+        monkeypatch.setattr(server, 'sync_bithumb_account', fake_sync)
+
+        r = client.post('/api/investment/crypto/bithumb/sync',
+                        data=json.dumps({'days': 7}),
+                        content_type='application/json')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['ok'] is True
+        assert data['readOnly'] is True
+        assert data['positionsSynced'] == 1
+        loaded = client.get('/api/data').get_json()
+        assert loaded['investment']['broker']['providers']['bithumb']['readOnly'] is True
+        assert loaded['investment']['positions'][0]['symbol'] == 'ETH-KRW'
+
     def test_investment_broker_sync_persists_synced_positions_and_trades(self, client, monkeypatch):
         import server
 
