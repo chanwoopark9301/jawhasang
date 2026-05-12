@@ -6,6 +6,7 @@ pure and testable: no Flask, no network, no storage writes.
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Tuple
 
@@ -805,6 +806,150 @@ def evaluate_trade_intent_gate(investment: Dict[str, Any], intent: Dict[str, Any
     if not required:
         required.append("confirm size, price, thesis, and invalidation before order")
     return _trade_gate_result(engine, symbol, action, status, reasons, required, blocked_actions, scenario)
+
+
+def parse_trade_intent_from_text(investment: Dict[str, Any], text: Any) -> Dict[str, Any] | None:
+    raw = str(text or "").strip()
+    if not raw:
+        return None
+    lower = raw.lower()
+    if not _looks_like_trade_intent(lower):
+        return None
+
+    action = _parse_trade_action(lower)
+    if not action:
+        return None
+
+    positions = _tradable_positions(investment if isinstance(investment, dict) else {})
+    symbols = [_symbol(p) for p in positions if _symbol(p)]
+    symbol = _parse_trade_symbol(raw, positions)
+    quantity = _parse_quantity(raw)
+    price = _parse_price(raw)
+    return {
+        "source": "chat",
+        "rawText": raw,
+        "symbol": symbol,
+        "action": action,
+        "quantity": quantity,
+        "price": price,
+        "symbolCandidates": symbols[:12],
+    }
+
+
+def evaluate_chat_trade_gate(investment: Dict[str, Any], text: Any, today_value: Any = None) -> Dict[str, Any]:
+    intent = parse_trade_intent_from_text(investment, text)
+    if not intent:
+        return {
+            "intentDetected": False,
+            "intent": None,
+            "gate": None,
+            "reply": "",
+        }
+    gate = evaluate_trade_intent_gate(investment, intent, today_value)
+    return {
+        "intentDetected": True,
+        "intent": intent,
+        "gate": gate,
+        "reply": render_trade_gate_reply(gate),
+    }
+
+
+def _looks_like_trade_intent(lower: str) -> bool:
+    action_words = [
+        "매수", "추매", "추가매수", "진입", "살까", "사도", "사자", "담을까", "들어갈까",
+        "매도", "팔까", "팔자", "손절", "익절", "축소", "줄일까", "정리할까", "정리하자",
+        "보유", "홀딩", "기다릴까", "hold", "buy", "add", "sell", "reduce", "exit",
+        "stop loss", "take profit",
+    ]
+    return any(word in lower for word in action_words)
+
+
+def _parse_trade_action(lower: str) -> str:
+    if any(word in lower for word in ["매수", "추매", "추가매수", "진입", "살까", "사도", "사자", "담을까", "들어갈까"]) or re.search(r"\b(buy|add|entry)\b", lower):
+        return "buy"
+    if any(word in lower for word in ["매도", "팔까", "팔자", "손절", "익절", "축소", "줄일까", "정리할까", "정리하자"]) or re.search(r"\b(sell|reduce|exit|stop loss|take profit)\b", lower):
+        return "sell"
+    if any(word in lower for word in ["보유", "홀딩", "기다릴까"]) or re.search(r"\bhold\b", lower):
+        return "hold"
+    return ""
+
+
+def _parse_trade_symbol(raw: str, positions: List[Dict[str, Any]]) -> str:
+    upper = raw.upper()
+    for p in positions:
+        symbol = _symbol(p)
+        if symbol and re.search(rf"(?<![A-Z0-9]){re.escape(symbol)}(?![A-Z0-9])", upper):
+            return symbol
+    aliases = {
+        "아이렌": "IREN",
+        "써클": "CRCL",
+        "서클": "CRCL",
+        "이더리움": "ETH-USD",
+        "나스닥": "QLD",
+    }
+    available = {_symbol(p) for p in positions}
+    for alias, symbol in aliases.items():
+        if alias in raw and symbol in available:
+            return symbol
+    if len(positions) == 1:
+        return _symbol(positions[0])
+    return ""
+
+
+def _parse_quantity(raw: str) -> float | None:
+    match = re.search(r"([\d,]+(?:\.\d+)?)\s*(?:주|개|shares?|ea)\b", raw, re.IGNORECASE)
+    if not match:
+        return None
+    return _num(match.group(1), 0.0)
+
+
+def _parse_price(raw: str) -> float | None:
+    patterns = [
+        r"\$\s*([\d,]+(?:\.\d+)?)",
+        r"([\d,]+(?:\.\d+)?)\s*(?:달러|불|usd)\b",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, raw, re.IGNORECASE)
+        if match:
+            return _num(match.group(1), 0.0)
+    return None
+
+
+def render_trade_gate_reply(gate: Dict[str, Any]) -> str:
+    symbol = gate.get("symbol") or "대상 미지정"
+    action = gate.get("action") or "trade"
+    status = gate.get("status") or "review"
+    title = {
+        "block": "서버 투자 게이트가 이 행동을 차단했습니다.",
+        "review": "서버 투자 게이트가 먼저 검토를 요구합니다.",
+        "allow": "서버 투자 게이트 기준으로 즉시 차단은 없습니다.",
+    }.get(status, "서버 투자 게이트 검토 결과입니다.")
+    lines = [
+        title,
+        "",
+        f"- 대상: {symbol}",
+        f"- 행동: {action}",
+        f"- 판정: {status}",
+    ]
+    blocked = gate.get("blockedActions") or []
+    if blocked:
+        lines.extend(["", "금지/주의 행동:"])
+        lines.extend(f"- {item}" for item in blocked[:5])
+    reasons = gate.get("reasons") or []
+    if reasons:
+        lines.extend(["", "이유:"])
+        lines.extend(f"- {item}" for item in reasons[:5])
+    required = gate.get("requiredEvidence") or []
+    if required:
+        lines.extend(["", "먼저 확인할 것:"])
+        lines.extend(f"- {item}" for item in required[:5])
+    if status == "block":
+        lines.extend(["", "이 상태에서는 AI 답변보다 원장 기준 행동 통제가 우선입니다. 공식 자료와 시나리오를 확인한 뒤 다시 판단하세요."])
+    elif status == "review":
+        lines.extend(["", "주문으로 넘기기 전에 왜 예외인지, 어느 조건이면 틀렸다고 볼지 먼저 적어야 합니다."])
+    else:
+        lines.extend(["", "그래도 수량, 가격, 무효화 조건을 적기 전에는 실제 주문으로 넘기지 않습니다."])
+    return "\n".join(lines)
 
 
 def _trade_gate_result(engine: Dict[str, Any], symbol: str, action: str, status: str, reasons: List[str], required: List[str], blocked_actions: List[str], scenario: Dict[str, Any] | None) -> Dict[str, Any]:

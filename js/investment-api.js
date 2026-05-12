@@ -135,6 +135,24 @@ async function apiEvaluateInvestmentTradeGate(payload) {
   return data;
 }
 
+async function apiEvaluateInvestmentChatGate(payload) {
+  const res = await fetch('/api/investment/chat-gate', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify(payload || {}),
+  });
+  const text = await res.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch (e) {
+    throw new Error(`investment chat gate returned non-json: ${res.status}`);
+  }
+  if (!res.ok || !data.ok) throw new Error(data?.error || `investment chat gate failed: ${res.status}`);
+  return data;
+}
+
 async function apiCreateInvestmentTransaction(transaction) {
   const res = await fetch('/api/investment/transactions', {
     method: 'POST',

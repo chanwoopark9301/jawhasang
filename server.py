@@ -21,7 +21,7 @@ from functools import wraps
 from investment_backend import normalize_position, upsert_position
 from investment_broker import build_order_intent
 from investment_calendar import sync_investment_calendar
-from investment_desk_engine import build_investment_desk_engine, evaluate_trade_intent_gate
+from investment_desk_engine import build_investment_desk_engine, evaluate_chat_trade_gate, evaluate_trade_intent_gate
 from kis_broker import sync_kis_account
 from flask import (
     Flask, request, jsonify, send_from_directory,
@@ -1309,6 +1309,42 @@ def investment_trade_gate_route():
         return jsonify({
             'ok': False,
             'error': 'investment trade gate failed',
+            'requestId': request_id,
+            'errorDetail': _safe_error_detail(e),
+        }), 500
+
+@app.route('/api/investment/chat-gate', methods=['POST'])
+@require_auth
+def investment_chat_gate_route():
+    request_id = f"ichatgate-{int(time.time() * 1000)}"
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({'ok': False, 'error': 'chat gate payload must be an object', 'requestId': request_id}), 400
+    try:
+        data = _normalize_data(read_data())
+        inv = data['investment']
+        ledger = _read_investment_snapshot_from_tables(inv)
+        if ledger and ledger.get('positions'):
+            inv = _normalize_data({
+                'investment': {
+                    **inv,
+                    'account': { **(inv.get('account') or {}), **(ledger.get('account') or {}) },
+                    'positions': ledger['positions'],
+                    'ledgerSource': ledger.get('ledgerSource'),
+                    'ledgerSyncedAt': datetime.now().isoformat(),
+                }
+            })['investment']
+        result = evaluate_chat_trade_gate(inv, payload.get('text'), payload.get('date'))
+        intent = result.get('intent') or {}
+        gate = result.get('gate') or {}
+        log.info('POST /api/investment/chat-gate [%s] detected=%s %s %s -> %s',
+                 request_id, result.get('intentDetected'), intent.get('symbol'), intent.get('action'), gate.get('status'))
+        return jsonify({'ok': True, **result, 'requestId': request_id})
+    except Exception as e:
+        log.error('POST /api/investment/chat-gate [%s] failed: %s', request_id, e, exc_info=True)
+        return jsonify({
+            'ok': False,
+            'error': 'investment chat gate failed',
             'requestId': request_id,
             'errorDetail': _safe_error_detail(e),
         }), 500

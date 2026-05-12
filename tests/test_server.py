@@ -396,6 +396,63 @@ class TestDataAPI:
         assert gate['scenario']['bearCase']['action'] == 'reduce_or_exit_review'
         assert any('bearish evidence' in item.lower() for item in gate['requiredEvidence'])
 
+    def test_investment_chat_gate_blocks_buy_intent_before_ai(self, client, monkeypatch):
+        import server
+
+        monkeypatch.setattr(server, '_read_investment_snapshot_from_tables', lambda inv: None)
+        client.post('/api/data',
+                    data=json.dumps({'investment': {
+                        'positions': [
+                            {'id': 'ip-crcl', 'symbol': 'CRCL', 'name': 'Circle', 'shares': 113, 'avgPrice': 128.91, 'currentPrice': 113.67, 'changePercent': 5.5},
+                            {'id': 'ip-cash', 'symbol': 'CASH', 'assetType': 'cash', 'shares': 42135, 'cashAmount': 42135},
+                        ],
+                        'rules': {'maxPositionWeight': 25, 'chaseLimit': 3},
+                        'events': [
+                            {'id': 'crcl-rumor', 'date': '2026-05-11', 'type': 'signal', 'symbol': 'CRCL', 'title': 'X rumor says stablecoin bill may pass', 'source': 'x.com'},
+                        ],
+                    }}),
+                    content_type='application/json')
+
+        r = client.post('/api/investment/chat-gate',
+                        data=json.dumps({'date': '2026-05-11', 'text': 'CRCL 루머가 좋은데 지금 매수할까?'}),
+                        content_type='application/json')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['ok'] is True
+        assert data['intentDetected'] is True
+        assert data['intent']['symbol'] == 'CRCL'
+        assert data['intent']['action'] == 'buy'
+        assert data['gate']['status'] == 'block'
+        assert 'act on rumor' in data['gate']['blockedActions']
+        assert '서버 투자 게이트' in data['reply']
+        assert '차단' in data['reply']
+
+    def test_investment_chat_gate_ignores_non_trade_briefing(self, client, monkeypatch):
+        import server
+
+        monkeypatch.setattr(server, '_read_investment_snapshot_from_tables', lambda inv: None)
+        client.post('/api/data',
+                    data=json.dumps({'investment': {
+                        'positions': [
+                            {'id': 'ip-iren', 'symbol': 'IREN', 'name': 'Iris Energy', 'shares': 510, 'avgPrice': 66.38, 'currentPrice': 61.20},
+                        ],
+                        'rules': {'maxPositionWeight': 25, 'chaseLimit': 3},
+                    }}),
+                    content_type='application/json')
+
+        r = client.post('/api/investment/chat-gate',
+                        data=json.dumps({'date': '2026-05-11', 'text': '오늘 내 계좌 기준으로 중요한 시황을 브리핑해줘'}),
+                        content_type='application/json')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['ok'] is True
+        assert data['intentDetected'] is False
+        assert data['intent'] is None
+        assert data['gate'] is None
+        assert data['reply'] == ''
+
     def test_investment_broker_sync_requires_kis_credentials(self, client, monkeypatch):
         monkeypatch.delenv('KIS_APP_KEY', raising=False)
         monkeypatch.delenv('KIS_APP_SECRET', raising=False)

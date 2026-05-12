@@ -122,6 +122,12 @@ async function continueContextChat(text) {
     }
   }
 
+  if (isInvestment && await maybeHandleInvestmentChatTradeGate(text)) {
+    hideTypingIndicator();
+    state._ctxChatLoading = false;
+    return;
+  }
+
   if (isInvestment) {
     await syncInvestmentLedgerForChatPrompt();
   }
@@ -236,6 +242,47 @@ async function continueContextChat(text) {
     }
   } finally {
     state._ctxChatLoading = false;
+  }
+}
+
+async function maybeHandleInvestmentChatTradeGate(text) {
+  if (state.view !== 'investment' || typeof apiEvaluateInvestmentChatGate !== 'function') return false;
+  try {
+    const data = await apiEvaluateInvestmentChatGate({
+      text,
+      date: new Date().toISOString().split('T')[0],
+    });
+    if (!data?.intentDetected || !data.reply) return false;
+    const inv = state.investment = normalizeInvestmentState(state.investment);
+    const intent = data.intent || {};
+    const gate = data.gate || {};
+    inv.decisions = Array.isArray(inv.decisions) ? inv.decisions : [];
+    inv.decisions.push({
+      id: `gate-${Date.now()}`,
+      date: new Date().toISOString().split('T')[0],
+      createdAt: new Date().toISOString(),
+      type: 'chat-trade-gate',
+      source: 'chat',
+      symbol: intent.symbol || gate.symbol || '',
+      action: intent.action || gate.action || '',
+      verdict: gate.status || 'review',
+      status: 'gate',
+      title: `서버 투자 게이트: ${intent.symbol || gate.symbol || '대상 미지정'}`,
+      summary: data.reply,
+      reasons: gate.reasons || [],
+      requiredEvidence: gate.requiredEvidence || [],
+      blockedActions: gate.blockedActions || [],
+      rawIntent: intent,
+      serverGate: gate,
+      portfolioApplied: false,
+    });
+    appendMessage('ai', data.reply);
+    refreshInvestmentSurfaces();
+    persistInvestmentChangesInBackground('chat trade gate');
+    return true;
+  } catch (error) {
+    logger.warn('investment chat trade gate failed; continuing to AI', error);
+    return false;
   }
 }
 
