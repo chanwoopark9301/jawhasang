@@ -795,6 +795,13 @@
 - CPI D-1은 `high`, 보유 종목 실적 D-3은 `medium` 이상, 비보유 종목 일반 뉴스는 제외 또는 `low`로 처리하는 서버 테스트를 추가했다.
 ## 2026-05-13
 
+### Review Event Idempotency
+
+- Added regression coverage to ensure repeated desk refreshes do not duplicate the same market-regime review timeline event.
+- The review event remains keyed by `market-regime-review-YYYY-MM-DD`.
+
+## 2026-05-13
+
 ### Review Loop Persistence
 
 - Desk snapshots now persist `marketRegimeReview` alongside market-regime fields.

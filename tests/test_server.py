@@ -385,6 +385,50 @@ class TestDataAPI:
         assert 'QLD' in review_events[0]['title']
         assert review_events[0]['date'] == '2026-05-13'
 
+    def test_investment_desk_review_event_is_idempotent_per_date(self, client, monkeypatch):
+        import server
+
+        monkeypatch.setattr(server, '_read_investment_snapshot_from_tables', lambda inv: None)
+        seed = {'investment': {
+            'positions': [
+                {'id': 'ip-qld', 'symbol': 'QLD', 'shares': 312, 'avgPrice': 88.88, 'currentPrice': 91.72},
+                {'id': 'ip-cash', 'symbol': 'CASH', 'assetType': 'cash', 'shares': 42135, 'cashAmount': 42135},
+            ],
+            'events': [],
+            'deskSnapshots': [{
+                'date': '2026-05-12',
+                'eventDefenseLevel': 'high',
+                'cashGap': {'current': 33.3, 'status': 'too_low'},
+                'marketRegime': {
+                    'regime': {'regime': 'sideways', 'eventDefenseLevel': 'high', 'targetCashRange': [40, 55]},
+                    'allocation': {
+                        'cashGap': {'current': 33.3, 'status': 'too_low'},
+                        'actions': [{'type': 'cap_leverage', 'title': 'QLD add blocked'}],
+                    },
+                },
+            }],
+            'decisions': [{
+                'id': 'dec-qld-buy',
+                'date': '2026-05-12',
+                'symbol': 'QLD',
+                'action': 'buy',
+                'tradeShares': 10,
+                'tradePrice': 91,
+            }],
+        }}
+        client.post('/api/data', data=json.dumps(seed), content_type='application/json')
+
+        for _ in range(2):
+            r = client.post('/api/investment/desk/engine',
+                            data=json.dumps({'date': '2026-05-13'}),
+                            content_type='application/json')
+            assert r.status_code == 200
+
+        loaded = client.get('/api/data').get_json()['investment']
+        review_events = [e for e in loaded['events'] if e.get('id') == 'market-regime-review-2026-05-13']
+        assert len(review_events) == 1
+        assert review_events[0]['violationCount'] == 1
+
     def test_investment_desk_engine_is_dynamic_for_unknown_symbol(self):
         from investment_desk_engine import build_investment_desk_engine
 
