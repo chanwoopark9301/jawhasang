@@ -10,6 +10,14 @@
 - Added E2E coverage for queued chat input and parallel investment context resolution.
 - Remaining latency watch item: full `refreshInvestmentSurfaces()` still runs `render()` plus active modal re-open. If the portfolio modal keeps feeling heavy, the next step is to split it into a lightweight portfolio-card refresh and a deferred modal refresh.
 
+## 2026-05-13 Pending Portfolio Confirmation
+
+- Added a pending portfolio confirmation state between natural-language reconciliation and ledger writes.
+- Natural account-restructure messages now create a concrete `portfolioSnapshot` candidate and store it in `state._pendingInvestmentPortfolioSnapshot` instead of only asking a loose follow-up question.
+- Confirmation phrases such as "좋아 맞아" or "확정" apply the stored candidate through Portfolio Ledger Engine, then refresh and persist the investment surfaces.
+- Added KRW-denominated crypto parsing for cases like "ETH 5개, 1개당 611만원, 현재 평가액 1730만원"; the engine converts it with the current USD/KRW rate and writes shares, average price, and current price.
+- Fixed snapshot dedupe so a later partial clause cannot overwrite a previously extracted non-zero quantity, average price, current price, or market value with zero.
+
 ## 2026-05-13 Ledger Parser Hardening
 
 - Refined the reasoning engine with residual-position ambiguity detection, trade-decision protocol, rule templates, and foresight agenda.

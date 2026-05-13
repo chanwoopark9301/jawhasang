@@ -133,6 +133,31 @@ async function continueContextChat(text) {
     && typeof isInvestmentPortfolioEstimateIntent === 'function'
     && isInvestmentPortfolioEstimateIntent(text);
 
+  if (isInvestment) {
+    const pendingPortfolioUpdate = applyPendingInvestmentPortfolioSnapshotConfirmation(text);
+    if (pendingPortfolioUpdate.changed) {
+      const today = new Date().toISOString().split('T')[0];
+      state.investment.events.push({
+        id: 'ie' + Date.now(),
+        date: today,
+        type: 'portfolio',
+        symbol: pendingPortfolioUpdate.symbols.join(', '),
+        title: '포트폴리오 확인 반영',
+        body: pendingPortfolioUpdate.summary,
+        severity: 'info',
+        linkedDecisionId: null,
+        linkedRecordId: null,
+      });
+      hideTypingIndicator();
+      appendMessage('ai', `확인한 내용으로 원장을 갱신했어요.\n\n${pendingPortfolioUpdate.summary}`);
+      refreshInvestmentSurfaces();
+      showToast('포트폴리오 원장에 반영했어요.');
+      persistInvestmentChangesInBackground('confirmed portfolio snapshot');
+      finishContextChatTurn();
+      return;
+    }
+  }
+
   if ((portfolioSnapshotRequest || portfolioEstimateRequest) && typeof applyInvestmentPortfolioSnapshotFromChat === 'function') {
     const estimatedPortfolioUpdate = await maybeApplyInvestmentEstimatedPortfolioFromChat(text);
     if (estimatedPortfolioUpdate.changed) {
@@ -158,7 +183,7 @@ async function continueContextChat(text) {
     }
     if (!isStrictInvestmentPortfolioSnapshotText(text)) {
       hideTypingIndicator();
-      appendMessage('ai', buildInvestmentPortfolioReconciliationQuestion(text));
+      appendMessage('ai', buildInvestmentPortfolioReconciliationQuestion(buildInvestmentPortfolioSnapshotSourceText(text)));
       finishContextChatTurn();
       return;
     }
@@ -667,34 +692,193 @@ function isStrictInvestmentPortfolioSnapshotText(text) {
 function buildInvestmentPortfolioReconciliationQuestion(text) {
   const raw = String(text || '');
   const inv = normalizeInvestmentState(state.investment);
+  const pending = buildInvestmentPendingPortfolioSnapshotCommand(raw);
+  if (pending) state._pendingInvestmentPortfolioSnapshot = pending;
   const nonCash = (inv.positions || []).filter(p => !isCashInvestmentPosition(p));
-  const current = nonCash.map(p => `${p.symbol}: ${formatShares(p.shares)}주/개, 평단 ${formatMoney(p.avgPrice)}`).join('\n') || '등록된 보유 종목 없음';
+  const current = nonCash.map(p => `${p.symbol}: ${formatShares(p.shares)} units, avg ${formatMoney(p.avgPrice)}`).join('\n') || 'No registered holdings';
   const mentioned = extractInvestmentMentionedSymbols(raw);
-  const keep = mentioned.filter(symbol => /그대로|변경\s*없|유지|남아|보유\s*중/i.test(extractInvestmentSymbolClauseText(raw, symbol)));
-  const zeroIntent = (inv.positions || [])
-    .filter(p => {
-      const symbol = String(p.symbol || '').toUpperCase();
-      if (isCashInvestmentPosition(p)) return /(?:현금|예수금|cash)[^\n.。]{0,40}(?:없|0|전부|이제\s*없)/i.test(raw);
-      return investmentTextMentionsPosition(raw, p) && /(?:없|팔|정리|전부\s*(?:인텔|INTC)|이제\s*없)/i.test(extractInvestmentSymbolClauseText(raw, symbol));
-    })
-    .map(p => p.symbol || p.name)
-    .filter(Boolean);
-  const target = mentioned.find(symbol => !keep.includes(symbol) && !zeroIntent.includes(symbol)) || mentioned.find(symbol => symbol === 'INTC');
+  const keep = extractInvestmentKeepSymbols(raw);
+  const zeroIntent = [
+    ...extractInvestmentZeroSymbols(raw),
+    ...(inv.positions || [])
+      .filter(p => {
+        const symbol = String(p.symbol || '').toUpperCase();
+        if (isCashInvestmentPosition(p)) return /(?:\uD604\uAE08|\uC608\uC218\uAE08|cash)[^\n.?]{0,40}(?:\uC5C6|0|\uC804\uBD80|\uC774\uC81C\s*\uC5C6)/i.test(raw);
+        return investmentTextMentionsPosition(raw, p) && /(?:\uC5C6|\uD314|\uC815\uB9AC|\uC804\uBD80\s*(?:\uC778\uD154|INTC)|\uC774\uC81C\s*\uC5C6)/i.test(extractInvestmentSymbolClauseText(raw, symbol));
+      })
+      .map(p => p.symbol || p.name)
+      .filter(Boolean),
+  ];
+  const zeroUnique = [...new Set(zeroIntent)];
+  const target = mentioned.find(symbol => !keep.includes(symbol) && !zeroUnique.includes(symbol)) || mentioned.find(symbol => symbol === 'INTC');
   const intentLines = [];
-  if (keep.length) intentLines.push(`- 그대로 둘 항목: ${keep.join(', ')}`);
-  if (zeroIntent.length) intentLines.push(`- 정리/0 처리로 보이는 항목: ${zeroIntent.join(', ')}`);
-  if (target) intentLines.push(`- 새로 중심이 되는 항목: ${target}`);
+  if (keep.length) intentLines.push(`- keep unchanged: ${keep.join(', ')}`);
+  if (zeroUnique.length) intentLines.push(`- remove/zero: ${zeroUnique.join(', ')}`);
+  if (target) intentLines.push(`- main/new holding: ${target}`);
   const missing = [];
-  if (target) {
+  if (target && !pending?.command?.positions?.some(row => row.symbol === target)) {
     const clause = extractInvestmentSymbolClauseText(raw, target);
-    if (!/(?:[0-9][0-9,.]*)\s*(?:주|개|shares?|qty)/i.test(clause)) missing.push(`${target} 보유 수량`);
-    if (!/(?:평단|평균\s*단가|avg|average)[^\n0-9]{0,24}[0-9]/i.test(clause)) missing.push(`${target} 평균단가 또는 체결가`);
+    if (!/(?:[0-9][0-9,.]*)\s*(?:\uC8FC|\uAC1C|shares?|qty)/i.test(clause)) missing.push(`${target} quantity`);
+    if (!/(?:\uD3C9\uB2E8|\uD3C9\uADE0\s*\uB2E8\uAC00|avg|average|\uB9E4\uC218\uAC00|\uC0B4\s*\uB54C)[^\n0-9]{0,40}[0-9]/i.test(clause)) missing.push(`${target} average/fill price`);
   }
-  if (mentioned.includes('CRCL') && !/(?:[0-9][0-9,.]*)\s*(?:주|shares?|qty)/i.test(extractInvestmentSymbolClauseText(raw, 'CRCL'))) {
-    missing.push('CRCL 수량이 기존 원장 그대로인지');
+  if (mentioned.includes('CRCL') && !keep.includes('CRCL') && !/(?:[0-9][0-9,.]*)\s*(?:\uC8FC|shares?|qty)/i.test(extractInvestmentSymbolClauseText(raw, 'CRCL'))) {
+    missing.push('whether CRCL quantity is unchanged');
   }
-  const missingText = missing.length ? missing.map(item => `- ${item}`).join('\n') : '- 실제 매수/매도 체결일과 체결가';
-  return `바로 원장에 쓰지 않고 먼저 대조할게요.\n\n현재 원장에는 이렇게 들어 있어요:\n${current}\n\n네 말은 이렇게 이해했어요:\n${intentLines.join('\n') || '- 기존 원장을 기준으로 일부 종목을 정리하고 새 보유 상태로 재구성하려는 의도'}\n\n원장 갱신 전에 아래 값만 확인해 주세요:\n${missingText}\n\n예: \"INTC 754주, 평단 129.67달러로 확정. ETH 5개와 CRCL 113주는 그대로. IREN/QLD/현금은 0으로 정리.\"`;
+  const missingText = missing.length ? missing.map(item => `- ${item}`).join('\n') : '- confirm the candidate below';
+  const pendingText = pending?.summary ? `\n\nCandidate to apply after confirmation:\n${pending.summary}` : '';
+  return `I will reconcile before writing to the ledger.\n\nCurrent ledger:\n${current}\n\nI understand your intent as:\n${intentLines.join('\n') || '- rebuild some holdings from the current ledger into a new account snapshot'}${pendingText}\n\nPlease confirm only this before I write it:\n${missingText}\n\nIf correct, reply "ok", "confirm", or the Korean equivalent.`;
+}
+
+function isInvestmentPortfolioConfirmationText(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return false;
+  return /^(?:\uC88B\uC544|\uB9DE\uC544|\uC751|\uB124|\u3147\u3147|\uD655\uC778|\uD655\uC815|\uBC18\uC601|\uC218\uC815|\uADF8\uB300\uB85C|ok|yes|correct|confirm)\b|(?:\uC88B\uC544\s*\uB9DE\uC544|\uB9DE\uC544\s*\uADF8\uB300\uB85C|\uD655\uC815\uD574|\uBC18\uC601\uD574|\uC218\uC815\uD574)/i.test(raw);
+}
+
+function applyPendingInvestmentPortfolioSnapshotConfirmation(text) {
+  if (!isInvestmentPortfolioConfirmationText(text)) return { changed: false, symbols: [], summary: '' };
+  const pending = state._pendingInvestmentPortfolioSnapshot;
+  if (!pending?.command) return { changed: false, symbols: [], summary: '' };
+  state.investment = normalizeInvestmentState(state.investment);
+  const ledgerResult = applyInvestmentLedgerCommand(state.investment, pending.command);
+  if (!ledgerResult.ok) {
+    logger.warn('pending portfolio confirmation rejected', { reason: ledgerResult.reason, pending });
+    return { changed: false, symbols: [], summary: '' };
+  }
+  state.investment = ledgerResult.investment;
+  state.investment.alerts = buildInvestmentRiskAlerts(state.investment.positions, state.investment.rules);
+  state._pendingInvestmentPortfolioSnapshot = null;
+  return {
+    changed: true,
+    symbols: ledgerResult.symbols || pending.symbols || [],
+    summary: pending.summary || `Ledger changes:\n${(ledgerResult.changes || []).map(item => `- ${item}`).join('\n')}`,
+  };
+}
+
+function buildInvestmentPendingPortfolioSnapshotCommand(text) {
+  const raw = String(text || '');
+  if (!raw.trim()) return null;
+  const inv = normalizeInvestmentState(state.investment);
+  const explicitRate = extractInvestmentUsdKrwRateFromText(raw);
+  const usdKrwRate = explicitRate > 0 ? explicitRate : investmentUsdKrwRate();
+  const rows = dedupeInvestmentPortfolioSnapshots([
+    ...extractInvestmentPortfolioSnapshotRows(raw),
+    ...extractInvestmentKrwPortfolioSnapshots(raw, usdKrwRate),
+  ]).filter(row => row.symbol && row.symbol !== 'CASH');
+  const keepSymbols = extractInvestmentKeepSymbols(raw);
+  const zeroSymbols = extractInvestmentZeroSymbols(raw);
+  const onlyRemainingSymbols = extractInvestmentOnlyRemainingSymbols(raw);
+  const onlySymbols = new Set([...onlyRemainingSymbols, ...keepSymbols, ...rows.map(row => row.symbol)]);
+  zeroSymbols.forEach(symbol => onlySymbols.delete(symbol));
+  const cashUsd = inferInvestmentCashSnapshotUsdFromText(raw);
+  const command = {
+    type: 'portfolioSnapshot',
+    source: 'user_confirmed',
+    positions: rows,
+    cashUsd,
+    usdKrwRate: explicitRate > 0 ? explicitRate : null,
+    onlySymbols: onlySymbols.size ? [...onlySymbols] : null,
+    rawText: raw,
+  };
+  if (!rows.length && cashUsd == null && !onlySymbols.size) return null;
+  const summary = summarizePendingInvestmentPortfolioSnapshot(command, inv);
+  return {
+    command,
+    symbols: [...new Set([...rows.map(row => row.symbol), ...onlySymbols, cashUsd != null ? 'CASH' : null].filter(Boolean))],
+    summary,
+  };
+}
+
+function extractInvestmentKeepSymbols(text) {
+  const raw = String(text || '');
+  return extractInvestmentMentionedSymbols(raw).filter(symbol => {
+    const clause = extractInvestmentSymbolClauseText(raw, symbol);
+    return /(?:\uADF8\uB300\uB85C|\uC720\uC9C0|\uB0A8\uACA8|\uB0A8\uAE30|\uBCF4\uC720|unchanged|keep|remain)/i.test(clause);
+  });
+}
+
+function extractInvestmentZeroSymbols(text) {
+  const raw = String(text || '');
+  return extractInvestmentMentionedSymbols(raw).filter(symbol => {
+    const clause = extractInvestmentSymbolClauseText(raw, symbol);
+    return /(?:\uC81C\uAC70|\uC0AD\uC81C|\uC815\uB9AC|\uD314|\uB9E4\uB3C4|\uC5C6|0\s*(?:\uC8FC|\uAC1C)?|remove|sell|zero)/i.test(clause);
+  });
+}
+
+function extractInvestmentKrwPortfolioSnapshots(text, usdKrwRate = 0) {
+  const rate = parseInvestmentNumber(usdKrwRate) || investmentUsdKrwRate();
+  if (rate <= 0) return [];
+  const rows = [];
+  splitInvestmentSnapshotSentences(text).forEach(sentence => {
+    extractInvestmentSymbolClauses(sentence).forEach(clause => {
+      const symbol = clause.symbol;
+      const source = clause.text;
+      if (!symbol || symbol === 'CASH') return;
+      const shares = extractSnapshotNumber(source, [
+        /([0-9][0-9,.]*)\s*(?:\uAC1C|\uC8FC|shares?|units?)/i,
+        /(?:\uC218\uB7C9|\uBCF4\uC720)[^0-9]{0,24}([0-9][0-9,.]*)/i,
+      ]);
+      const avgKrw = extractInvestmentKrwAmountNear(source, [
+        /(?:\uB9E4\uC218\uAC00|\uD3C9\uB2E8|\uD3C9\uADE0|\uC0B4\s*\uB54C|(?:1\s*)?(?:\uC774\uB354\uB9AC\uC6C0|ETH|\uAC1C)\s*\uB2F9)[^\n0-9]{0,40}([0-9][0-9,.]*(?:\.[0-9]+)?\s*(?:\uC5B5|\uCC9C|\uBC31|\uB9CC|\uB9CC\uC6D0|\uC6D0|KRW))/i,
+      ]);
+      const marketValueKrw = extractInvestmentKrwAmountNear(source, [
+        /(?:\uD604\uC7AC\s*\uD3C9\uAC00\uC561|\uD3C9\uAC00\uC561|\uD604\uC7AC\s*\uAC00\uCE58|\uD604\uC7AC)[^\n0-9]{0,40}([0-9][0-9,.]*(?:\.[0-9]+)?\s*(?:\uC5B5|\uCC9C|\uBC31|\uB9CC|\uB9CC\uC6D0|\uC6D0|KRW))/i,
+      ]);
+      const avgPrice = avgKrw > 0 ? Math.round((avgKrw / rate) * 10000) / 10000 : 0;
+      const marketValueUsd = marketValueKrw > 0 ? Math.round((marketValueKrw / rate) * 100) / 100 : 0;
+      const currentPrice = marketValueUsd > 0 && shares > 0 ? Math.round((marketValueUsd / shares) * 10000) / 10000 : 0;
+      if (shares > 0 || avgPrice > 0 || currentPrice > 0 || marketValueUsd > 0) {
+        rows.push({
+          symbol,
+          name: inferInvestmentSnapshotName(symbol, source),
+          shares,
+          avgPrice,
+          currentPrice,
+          marketValueUsd,
+          assetType: isInvestmentCryptoSymbol(symbol) ? 'crypto' : 'stock',
+        });
+      }
+    });
+  });
+  return rows;
+}
+
+function extractInvestmentKrwAmountNear(text, patterns) {
+  const raw = String(text || '');
+  for (const pattern of patterns) {
+    const m = raw.match(pattern);
+    if (m) {
+      const amount = parseKoreanKrwAmount(m[1] || m[0]);
+      if (amount > 0) return amount;
+    }
+  }
+  return 0;
+}
+
+function summarizePendingInvestmentPortfolioSnapshot(pending, inv) {
+  const lines = [];
+  (pending.positions || []).forEach(row => {
+    const bits = [
+      `${row.symbol}`,
+      row.shares > 0 ? `${formatShares(row.shares)} units` : '',
+      row.avgPrice > 0 ? `avg ${formatMoney(row.avgPrice)}` : '',
+      row.currentPrice > 0 ? `current ${formatMoney(row.currentPrice)}` : '',
+      row.marketValueUsd > 0 ? `value ${formatMoney(row.marketValueUsd)}` : '',
+    ].filter(Boolean);
+    lines.push(`- ${bits.join(' | ')}`);
+  });
+  const only = Array.isArray(pending.onlySymbols) ? pending.onlySymbols : [];
+  if (only.length) {
+    const removed = (inv.positions || [])
+      .filter(p => !isCashInvestmentPosition(p))
+      .map(p => String(p.symbol || '').toUpperCase())
+      .filter(symbol => symbol && !only.includes(symbol));
+    lines.push(`- keep symbols: ${only.join(', ')}`);
+    if (removed.length) lines.push(`- remove symbols: ${removed.join(', ')}`);
+  }
+  if (pending.cashUsd != null) lines.push(`- cash: ${formatMoney(pending.cashUsd)}`);
+  if (pending.usdKrwRate != null) lines.push(`- USD/KRW: ${pending.usdKrwRate}`);
+  return lines.join('\n') || '- no candidate changes';
 }
 
 function extractInvestmentMentionedSymbols(text) {
@@ -1272,7 +1456,14 @@ function dedupeInvestmentPortfolioSnapshots(rows) {
   (rows || []).forEach(row => {
     const key = String(row.symbol || '').toUpperCase();
     if (!key) return;
-    map.set(key, { ...(map.get(key) || {}), ...row });
+    const prev = map.get(key) || {};
+    const next = { ...prev, ...row };
+    ['shares', 'avgPrice', 'currentPrice', 'marketValueUsd'].forEach(field => {
+      const incoming = parseInvestmentNumber(row[field]);
+      const existing = parseInvestmentNumber(prev[field]);
+      if (incoming <= 0 && existing > 0) next[field] = existing;
+    });
+    map.set(key, next);
   });
   return [...map.values()];
 }

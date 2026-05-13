@@ -3899,9 +3899,74 @@ CRCL shares=754, avgPrice=129.67, currentPrice=123.65`);
             'hasIren': True,
             'hasQld': True,
         }
-        assert '원장 갱신 전에' in result['question']
-        assert 'INTC 보유 수량' in result['question']
-        assert 'CRCL 수량' in result['question']
+        assert 'Please confirm only this' in result['question']
+        assert 'INTC quantity' in result['question']
+        assert 'whether CRCL quantity is unchanged' in result['question']
+
+    def test_pending_portfolio_confirmation_applies_reconciled_snapshot(self, page, live_server_url):
+        from tests.conftest import E2E_PASSWORD
+        page.goto(f'{live_server_url}/login')
+        page.fill('input[name=password]', E2E_PASSWORD)
+        page.click('button[type=submit]')
+        page.wait_for_selector('#app-splash', state='hidden', timeout=15_000)
+        self._open_investment(page)
+        result = page.evaluate(r"""() => {
+            state.investment = normalizeInvestmentState({
+                positions: [{
+                    id: 'ip-crcl-pending', symbol: 'CRCL', name: 'Circle', shares: 5, avgPrice: 129.67, currentPrice: 123.65,
+                }, {
+                    id: 'ip-eth-wrong-pending', symbol: 'ETH-USD', name: 'Ethereum', assetType: 'crypto', shares: 754, avgPrice: 129.67, currentPrice: 2334.95,
+                }, {
+                    id: 'ip-intc-pending', symbol: 'INTC', name: 'Intel', shares: 754, avgPrice: 129.67, currentPrice: 0,
+                }, {
+                    id: 'ip-iren-pending', symbol: 'IREN', name: 'Iris Energy', shares: 510, avgPrice: 66.38, currentPrice: 61.2,
+                }, {
+                    id: 'ip-qld-pending', symbol: 'QLD', name: 'QLD', shares: 312, avgPrice: 88.88, currentPrice: 91.72,
+                }, {
+                    id: 'ip-cash-pending', assetType: 'cash', symbol: 'CASH', name: 'Cash', cashAmount: 42135, shares: 42135, avgPrice: 1, currentPrice: 1,
+                }],
+                events: [],
+                decisions: [],
+                rules: {},
+                usdKrwRate: 1470,
+            });
+            const source = [
+                'INTC 754 shares avg 129.67. CRCL quantity unchanged.',
+                '\uC774\uB354\uB9AC\uC6C0 \uBCF4\uC720\uC218\uB7C9 5\uAC1C\uC774\uACE0, \uB9E4\uC218\uAC00\uB294 1 \uC774\uB354\uB9AC\uC6C0\uB2F9 611\uB9CC\uC6D0, \uD604\uC7AC \uD3C9\uAC00\uC561\uC740 1730\uB9CC\uC6D0\uC815\uB3C4\uC57C.',
+                'IREN and QLD are gone.',
+            ].join('\n');
+            const question = buildInvestmentPortfolioReconciliationQuestion(source);
+            const pending = state._pendingInvestmentPortfolioSnapshot;
+            const applied = applyPendingInvestmentPortfolioSnapshotConfirmation('\uC88B\uC544 \uB9DE\uC544');
+            const bySymbol = Object.fromEntries(state.investment.positions.map(p => [p.symbol, p]));
+            return {
+                question,
+                pendingSymbols: pending.symbols.sort(),
+                applied: applied.changed,
+                symbols: state.investment.positions.map(p => p.symbol).sort(),
+                crclShares: bySymbol.CRCL?.shares,
+                intcShares: bySymbol.INTC?.shares,
+                intcAvg: bySymbol.INTC?.avgPrice,
+                ethShares: bySymbol['ETH-USD']?.shares,
+                ethAvg: Math.round(bySymbol['ETH-USD']?.avgPrice * 100) / 100,
+                ethCurrent: Math.round(bySymbol['ETH-USD']?.currentPrice * 100) / 100,
+                hasIren: Boolean(bySymbol.IREN),
+                hasQld: Boolean(bySymbol.QLD),
+                pendingCleared: state._pendingInvestmentPortfolioSnapshot == null,
+            };
+        }""")
+
+        assert result['applied'] is True
+        assert result['pendingCleared'] is True
+        assert result['symbols'] == ['CASH', 'CRCL', 'ETH-USD', 'INTC']
+        assert result['crclShares'] == 5
+        assert result['intcShares'] == 754
+        assert result['intcAvg'] == 129.67
+        assert result['ethShares'] == 5
+        assert result['ethAvg'] == 4156.46
+        assert result['ethCurrent'] == 2353.74
+        assert result['hasIren'] is False
+        assert result['hasQld'] is False
 
     def test_estimated_purchase_from_krw_loss_quote_and_fx_updates_ledger(self, page, live_server_url):
         from tests.conftest import E2E_PASSWORD
