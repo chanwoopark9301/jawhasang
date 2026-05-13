@@ -3671,6 +3671,85 @@ $11,717.55
             'hasQld': False,
         }
 
+    def test_chat_portfolio_complaint_does_not_reapply_rendered_snapshot(self, page, live_server_url):
+        from tests.conftest import E2E_PASSWORD
+        page.goto(f'{live_server_url}/login')
+        page.fill('input[name=password]', E2E_PASSWORD)
+        page.click('button[type=submit]')
+        page.wait_for_selector('#app-splash', state='hidden', timeout=15_000)
+        self._open_investment(page)
+        page.evaluate("""() => {
+            state.currentChatMessages = [];
+            state.investment.chat = [];
+            state.investment.decisions = [];
+            state.investment.events = [];
+            state.investment.positions = [{
+                id: 'ip-intc-source',
+                symbol: 'INTC',
+                name: 'Intel',
+                shares: 754,
+                avgPrice: 129.67,
+                currentPrice: 120,
+            }, {
+                id: 'ip-crcl-source',
+                symbol: 'CRCL',
+                name: 'Circle',
+                shares: 113,
+                avgPrice: 128.91,
+                currentPrice: 123.65,
+            }, {
+                id: 'ip-eth-source',
+                symbol: 'ETH-USD',
+                name: 'Ethereum',
+                assetType: 'crypto',
+                shares: 5,
+                avgPrice: 4531.54,
+                currentPrice: 2334.95,
+            }];
+            render();
+        }""")
+
+        page.evaluate("""() => {
+            applyInvestmentPortfolioSnapshotFromChat(`그리고 써클이랑 이더는 변경사항 없는데 왜 가격이 바뀌었어?
+ETH-USD
+이더리움 · 코인
+90.0%
+$1,760,552.3
+수량 754 · 평단 $129.67 · 현재 $2,334.95 · 매입금 $97,771.18
+CRCL
+서클 인터넷 그룹
+4.8%
+$93,232.1
+수량 754 · 평단 $129.67 · 현재 $123.65 · 매입금 $97,771.18
+포트폴리오를 바로 갱신했어요.
+대화에서 포트폴리오 값을 추출해 자동 반영했습니다.
+ETH-USD shares=754, avgPrice=129.67, currentPrice=2334.95
+CRCL shares=754, avgPrice=129.67, currentPrice=123.65`);
+        }""")
+
+        result = page.evaluate("""() => {
+            const bySymbol = Object.fromEntries(state.investment.positions.map(p => [p.symbol, p]));
+            return {
+                symbols: state.investment.positions.filter(p => !isCashInvestmentPosition(p)).map(p => p.symbol).sort(),
+                crclShares: bySymbol.CRCL?.shares,
+                crclAvg: bySymbol.CRCL?.avgPrice,
+                ethShares: bySymbol['ETH-USD']?.shares,
+                ethAvg: bySymbol['ETH-USD']?.avgPrice,
+                intcShares: bySymbol.INTC?.shares,
+                portfolioEvents: state.investment.events.filter(e => e.type === 'portfolio').length,
+            };
+        }""")
+
+        assert result == {
+            'symbols': ['CRCL', 'ETH-USD', 'INTC'],
+            'crclShares': 113,
+            'crclAvg': 128.91,
+            'ethShares': 5,
+            'ethAvg': 4531.54,
+            'intcShares': 754,
+            'portfolioEvents': 0,
+        }
+
     def test_portfolio_open_does_not_reconstruct_cash_from_historical_sells(self, logged_in_page):
         self._open_investment(logged_in_page)
         logged_in_page.evaluate("""() => {

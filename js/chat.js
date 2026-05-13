@@ -448,6 +448,7 @@ function buildInvestmentPortfolioSnapshotSourceText(text) {
   if (!refersToPrevious) return raw;
   const recent = (state.currentChatMessages || [])
     .slice(-8)
+    .filter(m => m.role === 'user')
     .map(m => String(m.text || ''))
     .filter(Boolean)
     .join('\n\n');
@@ -718,8 +719,14 @@ function applyInvestmentPortfolioSnapshotFromChat(text) {
   const intent = isInvestmentPortfolioSnapshotIntent(raw);
   const negatesTradeRecord = /(?:\uC544\uB2C8\uB77C|\uB9D0\uACE0|not\s+(?:a\s+)?trade|not\s+record)/i.test(raw);
   const explicitTradeIntent = !negatesTradeRecord && /(?:\uB9E4\uB9E4\s*\uAE30\uB85D|\uAC70\uB798\s*\uAE30\uB85D|\uB9E4\uC218\s*\uAE30\uB85D|\uB9E4\uB3C4\s*\uAE30\uB85D|trade\s*log|record\s*trade)/i.test(raw);
-  if (!intent || explicitTradeIntent) {
-    logger.debug('투자 포트폴리오 스냅샷 갱신 생략', { intent, explicitTradeIntent, raw: raw.slice(0, 240) });
+  const unsafeRenderedFeedback = isInvestmentRenderedPortfolioFeedback(raw);
+  if (!intent || explicitTradeIntent || unsafeRenderedFeedback) {
+    logger.debug('투자 포트폴리오 스냅샷 갱신 생략', {
+      intent,
+      explicitTradeIntent,
+      unsafeRenderedFeedback,
+      raw: raw.slice(0, 240),
+    });
     return { changed: false, symbols: [], summary: '' };
   }
 
@@ -795,6 +802,14 @@ function applyInvestmentPortfolioSnapshotFromChat(text) {
     symbols: [...new Set(symbols)],
     summary: `대화에서 포트폴리오 값을 추출해 자동 반영했습니다.\n\n${changed.map(item => `- ${item}`).join('\n')}`,
   };
+}
+
+function isInvestmentRenderedPortfolioFeedback(text) {
+  const raw = String(text || '');
+  const complaint = /(?:왜|아니|이건|틀렸|틀린|잘못|오류|이상|변경사항\s*없|가격이\s*바뀌|not\s+right|wrong|incorrect)/i.test(raw);
+  const rendered = /(?:포트폴리오를\s*바로\s*갱신|대화에서\s*포트폴리오\s*값을\s*추출|자동\s*반영했습니다|평가손익|매입금|비중|갱신\s*\d{2}\.|shares\s*=|avgPrice\s*=|currentPrice\s*=)/i.test(raw);
+  const copiedCards = (raw.match(/(?:평단|수량|현재|매입금|손익|비중|shares\s*=|avgPrice\s*=|currentPrice\s*=)/g) || []).length >= 4;
+  return complaint && (rendered || copiedCards);
 }
 
 function extractInvestmentOnlyRemainingSymbols(text) {

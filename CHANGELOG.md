@@ -8,6 +8,13 @@
 
 ## 2026-05-13
 
+### Portfolio Ledger Write Path Guard
+
+- Blocked copied portfolio cards and AI "auto-applied" summaries from being re-parsed as trusted ledger updates when the user is reporting an error or asking why values changed.
+- Changed previous-message lookup for portfolio snapshots so only user messages can be used as source material; AI replies are no longer fed back into ledger parsing.
+- Added an E2E regression test for the CRCL/ETH corruption case where rendered portfolio text tried to overwrite unchanged holdings with wrong INTC-like quantity and average price.
+- Bumped the static asset version to `20260513-05` and service worker cache to `jip-v144`.
+
 ### Portfolio Ledger Chat Parser Guard
 
 - Fixed a portfolio chat parsing bug where a sentence like "Intel 754 shares, and the rest is Circle and Ethereum" could incorrectly copy Intel quantity/average price into CRCL and ETH-USD.
