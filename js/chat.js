@@ -1586,6 +1586,7 @@ function inferInvestmentSnapshotName(symbol, source = '') {
   const known = (state.investment?.positions || []).find(p => String(p.symbol || '').toUpperCase() === String(symbol || '').toUpperCase());
   if (known?.name) return known.name;
   const names = {
+    INTC: 'Intel',
     IREN: '아이렌',
     CRCL: '써클',
     'ETH-USD': '이더리움',

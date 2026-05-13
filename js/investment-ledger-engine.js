@@ -77,7 +77,7 @@ function applyInvestmentLedgerPortfolioSnapshot(inv, command, result) {
       id: previous.id || `ip-${symbol.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`,
       assetType: previous.assetType || snapshot.assetType || (isInvestmentCryptoSymbol(symbol) ? 'crypto' : 'stock'),
       symbol,
-      name: previous.name || snapshot.name || symbol,
+      name: investmentLedgerPositionName(symbol, snapshot.name, previous.name),
       shares: effectiveShares,
       avgPrice: avgPrice > 0 ? avgPrice : parseInvestmentNumber(previous.avgPrice),
       currentPrice: currentPrice > 0 ? currentPrice : parseInvestmentNumber(previous.currentPrice),
@@ -130,6 +130,27 @@ function applyInvestmentLedgerPortfolioSnapshot(inv, command, result) {
     ok: result.changes.length > 0,
     symbols: [...handled],
   };
+}
+
+function investmentLedgerPositionName(symbol, snapshotName, previousName) {
+  const clean = value => String(value || '').replace(/[*`]/g, '').trim();
+  const known = {
+    INTC: 'Intel',
+    IREN: 'Iris Energy',
+    CRCL: 'Circle Internet Group',
+    'ETH-USD': 'Ethereum',
+    'BTC-USD': 'Bitcoin',
+    QLD: 'QLD',
+    QQQM: 'QQQM',
+  };
+  const sym = String(symbol || '').toUpperCase();
+  const snapshot = clean(snapshotName);
+  const previous = clean(previousName);
+  const looksLikeSentence = value =>
+    value.length > 36 || /[:：]|(?:매수|매도|평단|현금|없어|갱신|포트폴리오|shares|avg|cash|portfolio)/i.test(value);
+  if (snapshot && !looksLikeSentence(snapshot) && snapshot.toUpperCase() !== sym) return snapshot;
+  if (previous && !looksLikeSentence(previous) && previous.toUpperCase() !== sym) return previous;
+  return known[sym] || sym;
 }
 
 function applyInvestmentLedgerQuoteUpdate(inv, command, result) {

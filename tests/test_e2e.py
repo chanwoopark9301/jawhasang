@@ -4098,6 +4098,44 @@ ETH-USD: 5\uAC1C, \uD3C9\uB2E8 $611
         assert result['hasIren'] is False
         assert result['hasQld'] is False
 
+    def test_confirmed_snapshot_replaces_polluted_position_name(self, page, live_server_url):
+        from tests.conftest import E2E_PASSWORD
+        page.goto(f'{live_server_url}/login')
+        page.fill('input[name=password]', E2E_PASSWORD)
+        page.click('button[type=submit]')
+        page.wait_for_selector('#app-splash', state='hidden', timeout=15_000)
+        self._open_investment(page)
+        result = page.evaluate(r"""() => {
+            const inv = normalizeInvestmentState({
+                positions: [{
+                    id: 'ip-intc-polluted',
+                    symbol: 'INTC',
+                    name: 'INTEL: 매수 754주, 평단 129.67 USD으로 매수했고, 아이렌이랑 qld 현금은 이제 없어',
+                    shares: 10,
+                    avgPrice: 100,
+                    currentPrice: 120,
+                }],
+                events: [],
+                decisions: [],
+                rules: {},
+            });
+            const updated = applyInvestmentLedgerCommand(inv, {
+                type: 'portfolioSnapshot',
+                source: 'user_confirmed',
+                positions: [{ symbol: 'INTC', name: 'Intel', shares: 754, avgPrice: 129.67 }],
+                onlySymbols: ['INTC'],
+            });
+            return {
+                ok: updated.ok,
+                name: updated.investment.positions.find(p => p.symbol === 'INTC')?.name,
+                shares: updated.investment.positions.find(p => p.symbol === 'INTC')?.shares,
+            };
+        }""")
+
+        assert result['ok'] is True
+        assert result['name'] == 'Intel'
+        assert result['shares'] == 754
+
     def test_estimated_purchase_from_krw_loss_quote_and_fx_updates_ledger(self, page, live_server_url):
         from tests.conftest import E2E_PASSWORD
         page.goto(f'{live_server_url}/login')

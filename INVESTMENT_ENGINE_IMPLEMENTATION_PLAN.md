@@ -39,6 +39,12 @@
 - Changed normalized Supabase position mirroring to rebuild the account's position rows for full snapshots, preventing stale holdings from surviving after a portfolio reset.
 - Added E2E coverage for the exact INTC/CRCL/ETH-USD/CASH final composition and server coverage for full position-row rebuilds.
 
+## 2026-05-13 Ledger Name Hygiene
+
+- Fixed portfolio snapshot application so polluted natural-language position names are not preserved forever when the user confirms a clean symbol row.
+- Added canonical names for common holdings such as INTC/CRCL/ETH-USD and E2E coverage for replacing an INTC name that had accidentally stored a full chat sentence.
+- Clarified the remaining ETH issue: `$611` is parsed as USD by design; KRW cost basis must be written as `611만원` or with a KRW amount so the parser can convert it.
+
 ## 2026-05-13 Ledger Parser Hardening
 
 - Refined the reasoning engine with residual-position ambiguity detection, trade-decision protocol, rule templates, and foresight agenda.
