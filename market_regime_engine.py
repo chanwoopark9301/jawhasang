@@ -148,9 +148,85 @@ def _market_metrics(investment: Dict[str, Any], today_value: Any = None) -> Dict
     return build_market_regime_metrics(investment, today_value)["metrics"]
 
 
+def _held_symbols(investment: Dict[str, Any]) -> set[str]:
+    held: set[str] = set()
+    for position in investment.get("positions") or []:
+        if not isinstance(position, dict) or _is_cash(position):
+            continue
+        symbol = _symbol(position)
+        if symbol and _position_value(position) > 0:
+            held.add(symbol)
+    return held
+
+
+def _event_category(event: Dict[str, Any], text: str) -> str:
+    raw_type = str(event.get("type") or "").lower()
+    if raw_type in {"macro", "cpi", "fomc", "rates"} or any(
+        token in text for token in ["cpi", "fomc", "fed", "powell", "rate", "rates", "jobs", "employment", "inflation"]
+    ):
+        return "macro"
+    if raw_type == "earnings" or any(token in text for token in ["earnings", "earning", "results", "quarter", "eps"]):
+        return "earnings"
+    if raw_type == "policy" or any(
+        token in text for token in ["policy", "bill", "act", "law", "sec", "congress", "clarity", "genius", "regulation"]
+    ):
+        return "policy"
+    if raw_type == "geopolitical" or any(
+        token in text for token in ["war", "hormuz", "iran", "china", "tariff", "oil", "geopolitical"]
+    ):
+        return "geopolitical"
+    if raw_type in {"news", "signal"}:
+        return "news"
+    return "other"
+
+
+def _event_has_account_exposure(symbol: str, category: str, held: set[str]) -> bool:
+    if symbol in held:
+        return True
+    if category in {"macro", "geopolitical"}:
+        return bool(held)
+    if category == "policy":
+        crypto_symbols = {"CRCL", "ETH", "ETH-USD", "BTC", "BTC-USD", "IREN", "MARA", "RIOT"}
+        return symbol in {"", "MACRO", "MARKET", "POLICY"} or bool(held & crypto_symbols)
+    return symbol in {"MACRO", "MARKET"} and bool(held)
+
+
+def _event_importance(category: str, days: int, held_exposure: bool) -> str:
+    if category == "macro":
+        return "high" if days <= 1 else "medium"
+    if category == "earnings":
+        if not held_exposure:
+            return "low"
+        return "high" if days <= 1 else "medium"
+    if category in {"policy", "geopolitical"}:
+        if not held_exposure:
+            return "low"
+        return "high" if days <= 1 else "medium"
+    if category == "news" and held_exposure and days <= 2:
+        return "medium"
+    return "low"
+
+
+def _event_defense_level(events: List[Dict[str, Any]]) -> str:
+    ranks = {"high": 3, "medium": 2, "low": 1}
+    if not events:
+        return "none"
+    top = max(ranks.get(str(event.get("importance") or "low"), 0) for event in events)
+    if top >= 3:
+        return "high"
+    if top == 2:
+        return "medium"
+    return "low"
+
+
 def _near_big_events(investment: Dict[str, Any], today: date) -> List[Dict[str, Any]]:
-    important_types = {"macro", "fomc", "cpi", "earnings", "policy", "geopolitical", "rates"}
-    important_words = ["cpi", "fomc", "fed", "powell", "earnings", "실적", "금리", "법안", "전쟁", "호르무즈", "미중"]
+    important_types = {"macro", "fomc", "cpi", "earnings", "policy", "geopolitical", "rates", "news", "signal"}
+    important_words = [
+        "cpi", "fomc", "fed", "powell", "earnings", "rate", "inflation", "jobs",
+        "policy", "bill", "act", "law", "sec", "congress", "clarity", "genius",
+        "war", "hormuz", "iran", "china", "tariff", "oil",
+    ]
+    held = _held_symbols(investment)
     events = []
     for event in investment.get("events") or []:
         if not isinstance(event, dict):
@@ -165,18 +241,41 @@ def _near_big_events(investment: Dict[str, Any], today: date) -> List[Dict[str, 
             continue
         text = " ".join([
             str(event.get("type") or ""),
+            str(event.get("symbol") or ""),
             str(event.get("title") or ""),
             str(event.get("body") or ""),
+            str(event.get("summary") or ""),
         ]).lower()
-        if str(event.get("type") or "").lower() in important_types or any(word in text for word in important_words):
-            events.append({
-                "id": event.get("id"),
-                "date": raw_date,
-                "daysAway": days,
-                "type": event.get("type") or "event",
-                "symbol": event.get("symbol") or "MACRO",
-                "title": event.get("title") or event.get("type") or "Big event",
-            })
+        symbol = _symbol(event) or "MACRO"
+        category = _event_category(event, text)
+        held_exposure = _event_has_account_exposure(symbol, category, held)
+        importance = _event_importance(category, days, held_exposure)
+        is_important = (
+            str(event.get("type") or "").lower() in important_types
+            or any(word in text for word in important_words)
+            or held_exposure
+        )
+        if not is_important:
+            continue
+        if importance == "low" and category in {"news", "other"} and not held_exposure:
+            continue
+        events.append({
+            "id": event.get("id"),
+            "date": raw_date,
+            "daysAway": days,
+            "type": event.get("type") or "event",
+            "category": category,
+            "importance": importance,
+            "heldExposure": held_exposure,
+            "symbol": symbol,
+            "title": event.get("title") or event.get("type") or "Big event",
+        })
+    rank = {"high": 0, "medium": 1, "low": 2}
+    events.sort(key=lambda item: (
+        rank.get(str(item.get("importance") or "low"), 3),
+        item.get("daysAway", 99),
+        str(item.get("symbol") or ""),
+    ))
     return events[:12]
 
 
@@ -187,6 +286,7 @@ def classify_market_regime(investment: Dict[str, Any], today_value: Any = None) 
     metrics = metrics_result["metrics"]
     quality = metrics_result["quality"]
     events = _near_big_events(inv, today)
+    event_defense_level = _event_defense_level(events)
     risk_score = (
         metrics["indexTrend"] * 0.35
         + metrics["breadth"] * 0.25
@@ -198,7 +298,8 @@ def classify_market_regime(investment: Dict[str, Any], today_value: Any = None) 
     if quality["dataQuality"] in {"insufficient", "stale"}:
         risk_score = _clamp(risk_score, -0.15, 0.15)
     if events:
-        risk_score -= min(0.25, 0.08 * len(events))
+        penalties = {"high": 0.12, "medium": 0.08, "low": 0.03}
+        risk_score -= min(0.25, sum(penalties.get(str(event.get("importance") or "low"), 0.03) for event in events))
     if risk_score >= 0.35:
         regime = "uptrend"
         label = "상승장"
@@ -219,6 +320,7 @@ def classify_market_regime(investment: Dict[str, Any], today_value: Any = None) 
         "riskScore": round(risk_score, 3),
         "targetCashRange": target_cash,
         "eventDefense": bool(events),
+        "eventDefenseLevel": event_defense_level,
         "bigEvents": events,
         "metrics": metrics,
         "metricsQuality": quality,

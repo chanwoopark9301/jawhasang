@@ -430,6 +430,49 @@ class TestDataAPI:
         assert engine['regime']['regime'] == 'sideways'
         assert abs(engine['regime']['riskScore']) <= 0.15
 
+    def test_big_event_calendar_sets_high_defense_for_cpi_d1(self):
+        from market_regime_engine import build_market_allocation_engine
+
+        engine = build_market_allocation_engine({
+            'positions': [
+                {'symbol': 'CASH', 'assetType': 'cash', 'shares': 30000, 'cashAmount': 30000},
+                {'symbol': 'QLD', 'shares': 300, 'currentPrice': 90},
+            ],
+            'market': {'regimeMetrics': {'indexTrend': 0.4, 'breadth': 0.2, 'volatility': 0.2, 'updatedAt': '2026-05-12T09:00:00+09:00'}},
+            'events': [
+                {'id': 'cpi', 'date': '2026-05-13', 'type': 'macro', 'symbol': 'MACRO', 'title': 'CPI 발표'},
+            ],
+        }, '2026-05-12')
+
+        assert engine['regime']['eventDefense'] is True
+        assert engine['regime']['eventDefenseLevel'] == 'high'
+        event = engine['regime']['bigEvents'][0]
+        assert event['importance'] == 'high'
+        assert event['category'] == 'macro'
+        assert event['heldExposure'] is True
+
+    def test_big_event_calendar_prioritizes_held_earnings_over_unheld_news(self):
+        from market_regime_engine import build_market_allocation_engine
+
+        engine = build_market_allocation_engine({
+            'positions': [
+                {'symbol': 'CRCL', 'shares': 113, 'currentPrice': 123.65},
+                {'symbol': 'CASH', 'assetType': 'cash', 'shares': 10000, 'cashAmount': 10000},
+            ],
+            'market': {'regimeMetrics': {'indexTrend': 0.2, 'breadth': 0.1, 'volatility': 0.2, 'updatedAt': '2026-05-12T09:00:00+09:00'}},
+            'events': [
+                {'id': 'crcl-er', 'date': '2026-05-15', 'type': 'earnings', 'symbol': 'CRCL', 'title': 'CRCL earnings'},
+                {'id': 'nvda-news', 'date': '2026-05-13', 'type': 'news', 'symbol': 'NVDA', 'title': 'NVDA analyst note'},
+            ],
+        }, '2026-05-12')
+
+        assert engine['regime']['eventDefense'] is True
+        assert engine['regime']['eventDefenseLevel'] in {'medium', 'high'}
+        events = {event['id']: event for event in engine['regime']['bigEvents']}
+        assert events['crcl-er']['importance'] in {'medium', 'high'}
+        assert events['crcl-er']['heldExposure'] is True
+        assert 'nvda-news' not in events or events['nvda-news']['importance'] == 'low'
+
     def test_investment_desk_engine_includes_market_allocation_engine(self):
         from investment_desk_engine import build_investment_desk_engine
 

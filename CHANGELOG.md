@@ -758,3 +758,10 @@
 - The server news endpoint now sanitizes and skips malformed query fragments instead of failing the whole request with HTTP 400.
 - Added backend and E2E coverage for long markdown/event-derived news queries.
 - Updated static asset cache to `20260511-13` and service worker cache to `jip-v115`.
+## 2026-05-13
+
+### 시장 이벤트 방어 레벨
+
+- 시장 판단 엔진이 `investment.events`를 보유 종목과 연결해 CPI/FOMC/실적/정책/지정학 이벤트를 `bigEvents`로 분류하도록 했다.
+- 각 이벤트에 `category`, `importance`, `heldExposure`를 붙이고, 전체 방어 상태를 `eventDefenseLevel`로 반환하게 했다.
+- CPI D-1은 `high`, 보유 종목 실적 D-3은 `medium` 이상, 비보유 종목 일반 뉴스는 제외 또는 `low`로 처리하는 서버 테스트를 추가했다.

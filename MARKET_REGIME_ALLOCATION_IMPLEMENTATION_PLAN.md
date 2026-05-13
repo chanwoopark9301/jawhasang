@@ -263,3 +263,12 @@ CPI, FOMC, 실적, 정책 법안, 지정학 이벤트가 가까워지면 자동�
 3. Phase 4: 오늘의 데스크 UI에 `marketRegime` 카드 표시
 4. Phase 5: 투자 대화 프롬프트에 `marketRegime` 삽입
 5. Phase 6: 아침 배치가 marketRegime 스냅샷 저장
+## 2026-05-13 Update - Phase 2 Big Event Risk Calendar 1차 구현 완료
+
+- `investment.events`의 일정/뉴스를 계좌 보유 종목과 연결해 `bigEvents`로 선별한다.
+- 이벤트는 `category`(`macro`, `earnings`, `policy`, `geopolitical`, `news`, `other`), `importance`(`low`, `medium`, `high`), `heldExposure`를 가진다.
+- CPI/FOMC/Fed/금리/고용/물가 같은 거시 이벤트는 보유 종목이 있으면 계좌 전체 노출로 본다.
+- 보유 종목 실적 D-3은 최소 `medium`, CPI D-1은 `high` 방어로 분류한다.
+- 비보유 종목의 일반 뉴스는 방어 이벤트에서 제외하거나 `low`로만 취급한다.
+- `classify_market_regime()`은 `eventDefenseLevel`(`none`, `low`, `medium`, `high`)을 반환한다.
+- 기존 현금 방어 정책과 호환되도록 이벤트 방어 시 목표 현금 범위는 `30~45%` 하한을 유지한다.
