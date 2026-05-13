@@ -300,11 +300,7 @@ function scheduleStartupDailyInvestmentDeskPreparation() {
     reason: 'startup-after-prepare-time',
     background: true,
   });
-  if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
-    window.requestIdleCallback(run, { timeout: 9000 });
-  } else {
-    setTimeout(run, 9000);
-  }
+  setTimeout(run, 20000);
 }
 
 async function prepareDailyInvestmentDesk(options = {}) {

@@ -189,15 +189,15 @@ class TestIndexHTML:
     def test_static_assets_have_cache_busting_version(self):
         """PWA/Safari가 오래된 JS/CSS를 계속 쓰지 않도록 정적 자산에 버전을 붙인다."""
         html = read_html()
-        assert 'style.css?v=20260508-06' in html, "CSS 캐시 버스터 없음"
-        assert 'js/data.js?v=20260508-06' in html, "data.js 캐시 버스터 없음"
-        assert 'js/chat.js?v=20260508-06' in html, "chat.js 캐시 버스터 없음"
-        assert 'js/reminders.js?v=20260508-06' in html, "reminders.js 캐시 버스터 없음"
-        assert 'js/investment-format.js?v=20260508-06' in html, "investment-format.js 캐시 버스터 없음"
-        assert 'js/investment-portfolio.js?v=20260508-06' in html, "investment-portfolio.js 캐시 버스터 없음"
-        assert 'js/investment-desk.js?v=20260508-06' in html, "investment-desk.js 캐시 버스터 없음"
-        assert 'js/investment-actions.js?v=20260508-06' in html, "investment-actions.js 캐시 버스터 없음"
-        assert 'js/investment-api.js?v=20260508-06' in html, "investment-api.js 캐시 버스터 없음"
+        assert 'style.css?v=20260513-01' in html, "CSS 캐시 버스터 없음"
+        assert 'js/data.js?v=20260513-01' in html, "data.js 캐시 버스터 없음"
+        assert 'js/chat.js?v=20260513-01' in html, "chat.js 캐시 버스터 없음"
+        assert 'js/reminders.js?v=20260513-01' in html, "reminders.js 캐시 버스터 없음"
+        assert 'js/investment-format.js?v=20260513-01' in html, "investment-format.js 캐시 버스터 없음"
+        assert 'js/investment-portfolio.js?v=20260513-01' in html, "investment-portfolio.js 캐시 버스터 없음"
+        assert 'js/investment-desk.js?v=20260513-01' in html, "investment-desk.js 캐시 버스터 없음"
+        assert 'js/investment-actions.js?v=20260513-01' in html, "investment-actions.js 캐시 버스터 없음"
+        assert 'js/investment-api.js?v=20260513-01' in html, "investment-api.js 캐시 버스터 없음"
 
     def test_sw_registration_in_html(self):
         """index.html 에 SW 등록 코드가 있어야 함."""

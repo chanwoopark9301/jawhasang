@@ -263,6 +263,16 @@ CPI, FOMC, 실적, 정책 법안, 지정학 이벤트가 가까워지면 자동�
 3. Phase 4: 오늘의 데스크 UI에 `marketRegime` 카드 표시
 4. Phase 5: 투자 대화 프롬프트에 `marketRegime` 삽입
 5. Phase 6: 아침 배치가 marketRegime 스냅샷 저장
+## 2026-05-13 Update - Phase 4 Desk UI Integration 1차 구현 완료
+
+- 오늘의 데스크 팝업에 `Market Regime` 카드를 추가했다.
+- 서버 데스크 엔진의 `marketRegime.regime`, `targetCashRange`, `eventDefenseLevel`, `cashGap`, `bigEvents`, `allocation.actions`, `doNotDo`를 UI에 렌더링한다.
+- 데스크 브리핑 텍스트에도 market regime 요약을 포함해 AI 프롬프트가 계좌 숫자 반복보다 시장 구간과 행동 통제 규칙을 먼저 읽게 했다.
+- `applyInvestmentServerDeskEngine()`이 서버의 market allocation 액션을 금지 행동 목록에도 합쳐서 데스크 상단 판단과 행동 통제가 같은 엔진 결과를 공유한다.
+- 첫 화면 로딩 직후 자동 데스크 준비가 UI 초기화를 방해하지 않도록 startup background prepare를 더 늦춰 실행한다.
+- 정적 캐시 버전을 `20260513-01`, 서비스워커 캐시를 `jip-v140`으로 갱신했다.
+- E2E 테스트는 `#investment-desk-market-regime` 카드, 목표 현금 밴드, 이벤트 방어 레벨, allocation action 표시를 검증하도록 추가했다.
+
 ## 2026-05-13 Update - Phase 3 Portfolio Allocation Policy 1차 구현 완료
 
 - 서버 엔진에 기본 `allocationPolicy`를 추가했다.

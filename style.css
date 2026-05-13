@@ -3681,6 +3681,41 @@ body { height: var(--app-height, 100dvh); }
   min-height: 104px;
 }
 
+.investment-desk-regime {
+  border-color: rgba(15, 23, 42, .14);
+  background: linear-gradient(180deg, rgba(15, 23, 42, .035), rgba(37, 99, 235, .035));
+}
+
+.investment-desk-regime-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.investment-desk-regime-summary div {
+  min-width: 0;
+  padding: 10px;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+}
+
+.investment-desk-regime-summary span,
+.investment-desk-regime-summary small {
+  display: block;
+  color: var(--color-text-tertiary);
+  font-size: 10px;
+}
+
+.investment-desk-regime-summary strong {
+  display: block;
+  margin: 3px 0;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  word-break: break-word;
+}
+
 .investment-desk-list {
   display: grid;
   gap: 7px;
@@ -5157,6 +5192,10 @@ body { height: var(--app-height, 100dvh); }
 
   .investment-desk-strip-metrics {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .investment-desk-regime-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .investment-portfolio-overview {

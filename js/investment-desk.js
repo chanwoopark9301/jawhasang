@@ -237,6 +237,9 @@ function applyInvestmentServerDeskEngine(baseDesk, investment) {
   const evidence = Array.isArray(view.evidence) ? view.evidence : [];
   const doNotDo = Array.isArray(view.doNotDo) ? view.doNotDo : [];
   const scenarios = Array.isArray(engine.scenarios) ? engine.scenarios : [];
+  const marketRegime = engine.marketRegime || null;
+  const allocationActions = Array.isArray(marketRegime?.allocation?.actions) ? marketRegime.allocation.actions : [];
+  const allocationDoNotDo = Array.isArray(marketRegime?.allocation?.doNotDo) ? marketRegime.allocation.doNotDo : [];
 
   const riskSignals = controls.map(control => ({
     id: `server-control-${control.symbol}-${control.state}`,
@@ -255,6 +258,12 @@ function applyInvestmentServerDeskEngine(baseDesk, investment) {
       action,
       label: `${control.symbol || 'Portfolio'} ${action} blocked`,
       reason: (control.reasons || [])[0] || 'Python behavior-control engine blocked this action.',
+    }))).concat(allocationActions.map(action => ({
+      id: `server-allocation-${action.type || action.title || 'action'}`,
+      symbol: '',
+      action: action.type || 'allocation_control',
+      label: action.title || action.type || 'Allocation control',
+      reason: action.reason || allocationDoNotDo[0] || 'Market allocation engine is active.',
     })));
 
   const marketBriefing = {
@@ -291,6 +300,7 @@ function applyInvestmentServerDeskEngine(baseDesk, investment) {
   return {
     ...baseDesk,
     serverEngine: engine,
+    marketRegime,
     marketBriefing,
     riskSignals: riskSignals.length ? riskSignals : baseDesk.riskSignals,
     forbiddenActions: forbiddenActions.length ? forbiddenActions : baseDesk.forbiddenActions,
@@ -327,7 +337,14 @@ function renderDailyDeskBrief(desk) {
   const events = (desk.todayEvents || []).slice(0, 5)
     .map(e => `- ${e.date} [${e.type}] ${e.symbol || ''} ${e.title || ''}`)
     .join('\n') || '- none';
+  const regime = desk.marketRegime?.regime;
+  const allocation = desk.marketRegime?.allocation;
+  const marketRegimeBrief = regime ? `Market regime:
+- regime=${regime.regime || '-'} eventDefenseLevel=${regime.eventDefenseLevel || 'none'} targetCash=${(regime.targetCashRange || []).join('-')}%
+- cashGap=${allocation?.cashGap?.status || '-'} current=${Number(allocation?.cashGap?.current || 0).toFixed(1)}%
+- allocation actions=${(allocation?.actions || []).map(item => item.title || item.type).join(' | ') || 'none'}` : 'Market regime: unavailable';
   return `Daily Investment Desk (${desk.date})
+${marketRegimeBrief}
 Market briefing:
 - headline=${briefing.headline || ''}
 - macro=${(briefing.macroItems || []).map(item => `${item.title}: ${item.body}`).join(' | ') || 'none'}

@@ -184,6 +184,7 @@ function renderModalInvestmentDesk() {
       </section>
 
       ${renderInvestmentDeskPreparationSteps(prep)}
+      ${renderInvestmentDeskMarketRegime(desk.marketRegime)}
 
       <section class="investment-portfolio-alerts">
         <div class="investment-portfolio-list-head">
@@ -214,6 +215,40 @@ function renderModalInvestmentDesk() {
         <ul class="investment-desk-list">${briefing.dataRequests.map(item => `<li>${esc(item)}</li>`).join('')}</ul>
       </section>` : ''}
     </div>`;
+}
+
+function renderInvestmentDeskMarketRegime(marketRegime) {
+  if (!marketRegime || !marketRegime.regime) return '';
+  const regime = marketRegime.regime || {};
+  const allocation = marketRegime.allocation || {};
+  const cashGap = allocation.cashGap || {};
+  const targetRange = regime.targetCashRange || allocation.targetCashRange || [];
+  const events = Array.isArray(regime.bigEvents) ? regime.bigEvents.slice(0, 4) : [];
+  const actions = Array.isArray(allocation.actions) ? allocation.actions.slice(0, 5) : [];
+  const doNotDo = Array.isArray(allocation.doNotDo) ? allocation.doNotDo.slice(0, 5) : [];
+  return `<section class="investment-portfolio-alerts investment-desk-regime" id="investment-desk-market-regime">
+    <div class="investment-portfolio-list-head">
+      <strong>Market Regime</strong>
+      <span>시장 구간·현금 밴드·이벤트 방어를 먼저 봅니다</span>
+    </div>
+    <div class="investment-desk-regime-summary">
+      <div><span>regime</span><strong>${esc(regime.regime || regime.label || '-')}</strong><small>${esc(regime.label || '')}</small></div>
+      <div><span>targetCash</span><strong>${esc(targetRange.length >= 2 ? `${targetRange[0]}-${targetRange[1]}%` : '-')}</strong><small>current ${Number(cashGap.current || 0).toFixed(1)}%</small></div>
+      <div><span>cashGap</span><strong>${esc(cashGap.status || '-')}</strong><small>${esc(`${cashGap.min ?? '-'}-${cashGap.max ?? '-'}%`)}</small></div>
+      <div><span>eventDefenseLevel</span><strong>${esc(regime.eventDefenseLevel || 'none')}</strong><small>${regime.eventDefense ? 'event defense on' : 'normal'}</small></div>
+    </div>
+    ${events.length ? `<div class="investment-briefing-grid">
+      ${events.map(event => `<article class="investment-briefing-card ${event.importance === 'high' ? 'block' : 'watch'}">
+        <span>${esc(event.category || event.type || 'event')} · D-${Number(event.daysAway || 0)}</span>
+        <strong>${esc(event.symbol || 'MACRO')} · ${esc(event.title || 'Big event')}</strong>
+        <p>${esc(event.importance || 'medium')} · ${event.heldExposure ? 'held exposure' : 'watch only'}</p>
+      </article>`).join('')}
+    </div>` : ''}
+    ${actions.length ? `<ul class="investment-desk-list">${actions.map(action => `
+      <li><strong>${esc(action.title || action.type || '-')}</strong><span>${esc(action.reason || '')}</span></li>
+    `).join('')}</ul>` : ''}
+    ${doNotDo.length ? `<ul class="investment-desk-list">${doNotDo.map(item => `<li><strong>Do not</strong><span>${esc(item)}</span></li>`).join('')}</ul>` : ''}
+  </section>`;
 }
 
 function investmentDeskPrepStatusLabel(status) {

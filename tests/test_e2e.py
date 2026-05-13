@@ -1197,6 +1197,79 @@ class TestInvestmentPartner:
         assert any('ETH' in item for item in briefing['briefingQuestions'])
         assert any('IREN' in item for item in briefing['briefingQuestions'])
 
+    def test_daily_investment_desk_renders_market_regime_engine_card(self, page, live_server_url):
+        from tests.conftest import E2E_PASSWORD
+        page.goto(f'{live_server_url}/login')
+        page.fill('input[name=password]', E2E_PASSWORD)
+        page.click('button[type=submit]')
+        page.wait_for_selector('#app-splash', state='hidden', timeout=15_000)
+        self._open_investment(page)
+        page.evaluate("""() => {
+            const today = new Date().toISOString().slice(0, 10);
+            state.investment.positions = [{
+                id: 'ip-regime-cash',
+                symbol: 'CASH',
+                assetType: 'cash',
+                shares: 42135,
+                cashAmount: 42135,
+            }, {
+                id: 'ip-regime-qld',
+                symbol: 'QLD',
+                shares: 312,
+                avgPrice: 88.88,
+                currentPrice: 91.72,
+            }];
+            state.investment.desk = {
+                ...(state.investment.desk || {}),
+                engine: {
+                    date: today,
+                    marketView: { topLine: 'Event defense: hold cash band first' },
+                    behaviorControls: [],
+                    marketRegime: {
+                        regime: {
+                            regime: 'sideways',
+                            label: 'Sideways',
+                            targetCashRange: [40, 55],
+                            eventDefense: true,
+                            eventDefenseLevel: 'high',
+                            bigEvents: [{
+                                id: 'cpi',
+                                date: today,
+                                daysAway: 0,
+                                category: 'macro',
+                                importance: 'high',
+                                symbol: 'MACRO',
+                                title: 'CPI release',
+                            }],
+                        },
+                        allocation: {
+                            cashGap: { current: 33.3, min: 40, max: 55, status: 'too_low' },
+                            targetCashRange: [40, 55],
+                            actions: [{
+                                type: 'cap_leverage',
+                                priority: 'high',
+                                title: 'QLD add blocked',
+                                reason: 'Event defense is active.',
+                            }],
+                            doNotDo: ['Do not add leverage before CPI confirmation.'],
+                            riskLimits: { maxLeverageWeight: 15, maxVolatileWeight: 25 },
+                        },
+                    },
+                },
+            };
+            render();
+        }""")
+
+        page.locator('#investment-menu-desk').click()
+        page.wait_for_selector('#investment-desk-market-regime', timeout=8_000)
+        card_text = page.locator('#investment-desk-market-regime').inner_text()
+        assert 'Market Regime' in card_text
+        assert 'sideways' in card_text
+        assert '40-55%' in card_text
+        assert 'eventDefenseLevel' in card_text
+        assert 'high' in card_text
+        assert 'QLD add blocked' in card_text
+
     def test_daily_investment_desk_notification_payload_and_controls(self, logged_in_page):
         self._open_investment(logged_in_page)
         logged_in_page.evaluate("""() => {

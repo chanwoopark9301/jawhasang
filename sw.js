@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v139'; // Add chat trade gate
+const CACHE_NAME = 'jip-v140'; // Add market regime desk UI
 
 const STATIC_ASSETS = [
   '/style.css',

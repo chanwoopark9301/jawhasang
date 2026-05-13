@@ -760,6 +760,14 @@
 - Updated static asset cache to `20260511-13` and service worker cache to `jip-v115`.
 ## 2026-05-13
 
+### 오늘의 데스크 시장 구간 UI
+
+- 오늘의 데스크 팝업에 `Market Regime` 카드를 추가해 시장 구간, 목표 현금 밴드, 현재 현금 갭, 이벤트 방어 레벨을 먼저 보여주도록 했다.
+- 서버 시장 판단 엔진의 `bigEvents`, `allocation.actions`, `doNotDo`를 데스크 UI와 브리핑 텍스트에 연결했다.
+- 서버 allocation action을 금지 행동 목록에도 반영해 AI 브리핑과 데스크 UI가 같은 행동 통제 결과를 공유하게 했다.
+- 앱 첫 로딩 직후 데스크 백그라운드 준비가 network idle을 붙잡지 않도록 시작 지연을 늘려 첫 화면을 먼저 안정화했다.
+- 정적 자산 버전을 `20260513-01`, 서비스워커 캐시를 `jip-v140`으로 갱신했다.
+
 ### 포트폴리오 조절 정책 객체
 
 - 시장 판단 엔진에 기본 `allocationPolicy`를 추가해 현금 밴드와 위험 노출 한도를 한 곳에서 읽게 했다.
