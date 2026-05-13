@@ -2,6 +2,10 @@
 
 ## 2026-05-13 Ledger Parser Hardening
 
+- Implemented `investment-ledger-engine.js` as the browser-side write gate for portfolio snapshot, cash, and quote updates.
+- Ledger commands now carry `type` and `source`; source authority decides whether shares/average price/cash can change.
+- `market_data` commands are allowed to refresh `currentPrice`, `previousClose`, `changePercent`, and FX only; they cannot overwrite position size or cost basis.
+- `ai_reply` and rendered portfolio text are below snapshot authority, so they can support conversation but cannot directly mutate the ledger.
 - Chat-based portfolio updates must be interpreted as ledger snapshots, not as loose text patches that can copy one symbol's quantity into another symbol.
 - Symbol-specific extraction now narrows context to the sentence fragment that mentions the target symbol, preserving decimal prices such as `129.67`.
 - "Only remaining holdings" language should rebuild the visible non-cash holdings set, while preserving unchanged holdings such as CRCL and ETH-USD.

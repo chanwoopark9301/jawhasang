@@ -8,6 +8,15 @@
 
 ## 2026-05-13
 
+### Portfolio Ledger Engine Write Gate
+
+- Added `js/investment-ledger-engine.js` as the single permission gate for portfolio snapshot, cash, and quote mutations.
+- Portfolio snapshots now require `user_confirmed` authority or higher before shares/average price/cash can change.
+- Market quote updates now flow through the ledger engine and can update current price/fx data without changing shares or average price, even if malformed quote payloads include those fields.
+- Routed chat-based portfolio snapshot updates through the ledger engine instead of letting `chat.js` mutate `state.investment.positions` directly.
+- Added E2E coverage for quote-only updates and AI snapshot rejection.
+- Bumped the static asset version to `20260513-06` and service worker cache to `jip-v145`.
+
 ### Portfolio Ledger Write Path Guard
 
 - Blocked copied portfolio cards and AI "auto-applied" summaries from being re-parsed as trusted ledger updates when the user is reporting an error or asking why values changed.

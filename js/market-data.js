@@ -105,36 +105,21 @@ function applyInvestmentQuotes(quotes, options = {}) {
   const inv = state.investment = normalizeInvestmentState(state.investment);
   const map = {};
   (quotes || []).forEach(q => { if (q.symbol) map[String(q.symbol).toUpperCase()] = q; });
-  const fxQuote = map['USDKRW=X'];
-  if (fxQuote?.price > 0) {
-    inv.usdKrwRate = Number(fxQuote.price);
-    inv.usdKrwUpdatedAt = new Date().toISOString();
-    inv.usdKrwSource = 'yahoo-finance';
-  }
-
-  inv.positions.forEach(p => {
-    if (isCashInvestmentPosition(p)) return;
-    const q = map[String(p.symbol || '').toUpperCase()];
-    if (!q) return;
-    if (p.manualPrice && !options.forceCurrentPrice) {
-      p.lastMarketPrice = q.price != null ? Number(q.price) : p.lastMarketPrice;
-      p.lastMarketUpdatedAt = new Date().toISOString();
-      p.changePercent = q.changePercent != null ? Number(q.changePercent) : p.changePercent;
-      return;
-    }
-    if (q.price != null) p.currentPrice = Number(q.price);
-    if (q.previousClose != null) p.previousClose = Number(q.previousClose);
-    if (q.changePercent != null) p.changePercent = Number(q.changePercent);
-    p.marketUpdatedAt = new Date().toISOString();
-    p.marketSource = 'yahoo-finance';
+  const result = applyInvestmentLedgerCommand(inv, {
+    type: 'quoteUpdate',
+    source: 'market_data',
+    quotes,
+    forceCurrentPrice: !!options.forceCurrentPrice,
   });
-
-  inv.market = {
+  state.investment = result.investment;
+  const fxQuote = map['USDKRW=X'];
+  const target = state.investment;
+  target.market = {
     source: 'yahoo-finance',
     fetchedAt: new Date().toISOString(),
     indexes: INVESTMENT_INDEX_SYMBOLS
       .map(sym => map[sym])
       .filter(Boolean),
   };
-  inv.alerts = buildInvestmentRiskAlerts(inv.positions, inv.rules);
+  target.alerts = buildInvestmentRiskAlerts(target.positions, target.rules);
 }

@@ -3750,6 +3750,101 @@ CRCL shares=754, avgPrice=129.67, currentPrice=123.65`);
             'portfolioEvents': 0,
         }
 
+    def test_ledger_engine_separates_quote_updates_from_position_writes(self, page, live_server_url):
+        from tests.conftest import E2E_PASSWORD
+        page.goto(f'{live_server_url}/login')
+        page.fill('input[name=password]', E2E_PASSWORD)
+        page.click('button[type=submit]')
+        page.wait_for_selector('#app-splash', state='hidden', timeout=15_000)
+        self._open_investment(page)
+        result = page.evaluate("""() => {
+            const inv = normalizeInvestmentState({
+                positions: [{
+                    id: 'ip-crcl-ledger-engine',
+                    symbol: 'CRCL',
+                    name: 'Circle',
+                    shares: 113,
+                    avgPrice: 128.91,
+                    currentPrice: 113.67,
+                }]
+            });
+            const updated = applyInvestmentLedgerCommand(inv, {
+                type: 'quoteUpdate',
+                source: 'market_data',
+                forceCurrentPrice: true,
+                quotes: [{
+                    symbol: 'CRCL',
+                    price: 123.65,
+                    shares: 754,
+                    avgPrice: 129.67,
+                    changePercent: -6.16,
+                }],
+            });
+            const p = updated.investment.positions[0];
+            return {
+                ok: updated.ok,
+                shares: p.shares,
+                avgPrice: p.avgPrice,
+                currentPrice: p.currentPrice,
+                changePercent: p.changePercent,
+            };
+        }""")
+
+        assert result == {
+            'ok': True,
+            'shares': 113,
+            'avgPrice': 128.91,
+            'currentPrice': 123.65,
+            'changePercent': -6.16,
+        }
+
+    def test_ledger_engine_rejects_ai_snapshot_authority(self, page, live_server_url):
+        from tests.conftest import E2E_PASSWORD
+        page.goto(f'{live_server_url}/login')
+        page.fill('input[name=password]', E2E_PASSWORD)
+        page.click('button[type=submit]')
+        page.wait_for_selector('#app-splash', state='hidden', timeout=15_000)
+        self._open_investment(page)
+        result = page.evaluate("""() => {
+            const inv = normalizeInvestmentState({
+                positions: [{
+                    id: 'ip-eth-ledger-engine',
+                    symbol: 'ETH-USD',
+                    name: 'Ethereum',
+                    assetType: 'crypto',
+                    shares: 5,
+                    avgPrice: 4531.54,
+                    currentPrice: 2334.95,
+                }]
+            });
+            const rejected = applyInvestmentLedgerCommand(inv, {
+                type: 'portfolioSnapshot',
+                source: 'ai_reply',
+                positions: [{
+                    symbol: 'ETH-USD',
+                    shares: 754,
+                    avgPrice: 129.67,
+                    currentPrice: 2334.95,
+                }],
+            });
+            const p = rejected.investment.positions[0];
+            return {
+                ok: rejected.ok,
+                rejected: rejected.rejected,
+                reason: rejected.reason,
+                shares: p.shares,
+                avgPrice: p.avgPrice,
+            };
+        }""")
+
+        assert result == {
+            'ok': False,
+            'rejected': True,
+            'reason': 'insufficient_authority_for_snapshot',
+            'shares': 5,
+            'avgPrice': 4531.54,
+        }
+
     def test_portfolio_open_does_not_reconstruct_cash_from_historical_sells(self, logged_in_page):
         self._open_investment(logged_in_page)
         logged_in_page.evaluate("""() => {

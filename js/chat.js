@@ -734,54 +734,23 @@ function applyInvestmentPortfolioSnapshotFromChat(text) {
   const changed = [];
   const handledSymbols = new Set();
   const explicitRate = extractInvestmentUsdKrwRateFromText(raw);
-  if (explicitRate > 0) {
-    state.investment.usdKrwRate = explicitRate;
-    state.investment.usdKrwUpdatedAt = new Date().toISOString();
-    state.investment.usdKrwSource = '사용자 입력';
-    changed.push(`USD/KRW ${explicitRate} 반영`);
-  }
   const cashUsd = inferInvestmentCashUsdFromText(raw);
-  if (cashUsd > 0) {
-    setInvestmentCashAmount(cashUsd);
-    changed.push(`현금 ${formatMoney(cashUsd)} 반영`);
-  }
-
-  extractInvestmentPortfolioSnapshotRows(raw).forEach(snapshot => {
-    if (!snapshot.symbol || snapshot.symbol === 'CASH') return;
-    const position = upsertInvestmentPortfolioSnapshotPosition(snapshot);
-    handledSymbols.add(String(position.symbol || '').toUpperCase());
-    const fields = [
-      snapshot.shares > 0 ? `shares=${snapshot.shares}` : '',
-      snapshot.avgPrice > 0 ? `avgPrice=${snapshot.avgPrice}` : '',
-      snapshot.currentPrice > 0 ? `currentPrice=${snapshot.currentPrice}` : '',
-    ].filter(Boolean).join(', ');
-    changed.push(`${position.symbol || position.name} ${fields}`);
-  });
-
+  const snapshots = extractInvestmentPortfolioSnapshotRows(raw).filter(snapshot => snapshot.symbol && snapshot.symbol !== 'CASH');
   const onlyRemainingSymbols = extractInvestmentOnlyRemainingSymbols(raw);
-  if (onlyRemainingSymbols.size) {
-    handledSymbols.forEach(symbol => onlyRemainingSymbols.add(symbol));
-    const beforeCount = state.investment.positions.length;
-    state.investment.positions = (state.investment.positions || []).filter(position =>
-      isCashInvestmentPosition(position) || onlyRemainingSymbols.has(String(position.symbol || '').toUpperCase())
-    );
-    if (state.investment.positions.length !== beforeCount) {
-      changed.push(`positions rebuilt: ${[...onlyRemainingSymbols].sort().join(', ')}`);
-    }
-  }
-
-  (state.investment.positions || []).forEach(position => {
-    if (isCashInvestmentPosition(position)) return;
-    if (handledSymbols.has(String(position.symbol || '').toUpperCase())) return;
-    if (!investmentTextMentionsPosition(raw, position)) return;
-    const patch = inferInvestmentPositionSnapshot(raw, position);
-    if (!Object.keys(patch).length) return;
-    Object.assign(position, patch, {
-      manualPrice: patch.currentPrice != null ? true : position.manualPrice,
-      marketUpdatedAt: new Date().toISOString(),
-    });
-    changed.push(`${position.symbol || position.name} ${Object.entries(patch).map(([key, value]) => `${key}=${value}`).join(', ')}`);
+  const ledgerResult = applyInvestmentLedgerCommand(state.investment, {
+    type: 'portfolioSnapshot',
+    source: 'user_confirmed',
+    positions: snapshots,
+    cashUsd: cashUsd > 0 ? cashUsd : null,
+    usdKrwRate: explicitRate > 0 ? explicitRate : null,
+    onlySymbols: onlyRemainingSymbols.size ? [...onlyRemainingSymbols] : null,
+    rawText: raw,
   });
+  if (ledgerResult.ok) {
+    state.investment = ledgerResult.investment;
+    (ledgerResult.symbols || []).forEach(symbol => handledSymbols.add(String(symbol || '').toUpperCase()));
+    changed.push(...(ledgerResult.changes || []));
+  }
 
   if (!changed.length) {
     logger.warn('투자 포트폴리오 스냅샷 갱신 의도는 감지됐지만 추출된 값이 없음', { raw: raw.slice(0, 500) });
