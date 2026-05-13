@@ -185,6 +185,7 @@ function renderModalInvestmentDesk() {
 
       ${renderInvestmentDeskPreparationSteps(prep)}
       ${renderInvestmentDeskMarketRegime(desk.marketRegime)}
+      ${renderInvestmentDeskReviewLoop(desk.marketRegimeReview)}
 
       <section class="investment-portfolio-alerts">
         <div class="investment-portfolio-list-head">
@@ -248,6 +249,27 @@ function renderInvestmentDeskMarketRegime(marketRegime) {
       <li><strong>${esc(action.title || action.type || '-')}</strong><span>${esc(action.reason || '')}</span></li>
     `).join('')}</ul>` : ''}
     ${doNotDo.length ? `<ul class="investment-desk-list">${doNotDo.map(item => `<li><strong>Do not</strong><span>${esc(item)}</span></li>`).join('')}</ul>` : ''}
+  </section>`;
+}
+
+function renderInvestmentDeskReviewLoop(review) {
+  if (!review || !Number(review.snapshotCount || 0)) return '';
+  const violations = Array.isArray(review.violations) ? review.violations.slice(0, 5) : [];
+  const tone = Number(review.violationCount || 0) > 0 ? 'block' : 'allow';
+  return `<section class="investment-portfolio-alerts investment-desk-regime ${tone}" id="investment-desk-review-loop">
+    <div class="investment-portfolio-list-head">
+      <strong>Review Loop</strong>
+      <span>Desk warnings vs actual decisions over ${Number(review.windowDays || 7)} days</span>
+    </div>
+    <div class="investment-desk-regime-summary">
+      <div><span>score</span><strong>${Number(review.score || 0)}</strong><small>${esc(review.summary || '')}</small></div>
+      <div><span>snapshots</span><strong>${Number(review.snapshotCount || 0)}</strong><small>desk records</small></div>
+      <div><span>decisions</span><strong>${Number(review.decisionCount || 0)}</strong><small>ledger actions</small></div>
+      <div><span>violations</span><strong>${Number(review.violationCount || 0)}</strong><small>${tone === 'block' ? 'review required' : 'clean'}</small></div>
+    </div>
+    ${violations.length ? `<ul class="investment-desk-list">${violations.map(item => `
+      <li><strong>${esc(item.symbol || 'Portfolio')} ${esc(item.type || 'control')}</strong><span>${esc(item.date || '')} ${esc(item.action || '')} - ${esc(item.reason || '')}</span></li>
+    `).join('')}</ul>` : `<p class="investment-muted-text">No market-regime control violation found in this review window.</p>`}
   </section>`;
 }
 

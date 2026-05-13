@@ -238,6 +238,7 @@ function applyInvestmentServerDeskEngine(baseDesk, investment) {
   const doNotDo = Array.isArray(view.doNotDo) ? view.doNotDo : [];
   const scenarios = Array.isArray(engine.scenarios) ? engine.scenarios : [];
   const marketRegime = engine.marketRegime || null;
+  const marketRegimeReview = engine.marketRegimeReview || null;
   const allocationActions = Array.isArray(marketRegime?.allocation?.actions) ? marketRegime.allocation.actions : [];
   const allocationDoNotDo = Array.isArray(marketRegime?.allocation?.doNotDo) ? marketRegime.allocation.doNotDo : [];
 
@@ -301,6 +302,7 @@ function applyInvestmentServerDeskEngine(baseDesk, investment) {
     ...baseDesk,
     serverEngine: engine,
     marketRegime,
+    marketRegimeReview,
     marketBriefing,
     riskSignals: riskSignals.length ? riskSignals : baseDesk.riskSignals,
     forbiddenActions: forbiddenActions.length ? forbiddenActions : baseDesk.forbiddenActions,
@@ -343,8 +345,13 @@ function renderDailyDeskBrief(desk) {
 - regime=${regime.regime || '-'} eventDefenseLevel=${regime.eventDefenseLevel || 'none'} targetCash=${(regime.targetCashRange || []).join('-')}%
 - cashGap=${allocation?.cashGap?.status || '-'} current=${Number(allocation?.cashGap?.current || 0).toFixed(1)}%
 - allocation actions=${(allocation?.actions || []).map(item => item.title || item.type).join(' | ') || 'none'}` : 'Market regime: unavailable';
+  const review = desk.marketRegimeReview || {};
+  const reviewBrief = review.snapshotCount ? `Review loop:
+- score=${Number(review.score || 0)} violations=${Number(review.violationCount || 0)} decisions=${Number(review.decisionCount || 0)}
+- ${(review.violations || []).slice(0, 4).map(item => `${item.symbol || 'Portfolio'} ${item.type || 'control'} ${item.reason || ''}`).join(' | ') || 'clean'}` : 'Review loop: unavailable';
   return `Daily Investment Desk (${desk.date})
 ${marketRegimeBrief}
+${reviewBrief}
 Market briefing:
 - headline=${briefing.headline || ''}
 - macro=${(briefing.macroItems || []).map(item => `${item.title}: ${item.body}`).join(' | ') || 'none'}

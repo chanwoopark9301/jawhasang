@@ -308,6 +308,14 @@ CPI, FOMC, 실적, 정책 법안, 지정학 이벤트가 가까워지면 자동�
 - 비보유 종목의 일반 뉴스는 방어 이벤트에서 제외하거나 `low`로만 취급한다.
 - `classify_market_regime()`은 `eventDefenseLevel`(`none`, `low`, `medium`, `high`)을 반환한다.
 - 기존 현금 방어 정책과 호환되도록 이벤트 방어 시 목표 현금 범위는 `30~45%` 하한을 유지한다.
+## 2026-05-13 Update - Phase 8 Desk Review Loop UI complete
+
+- The daily desk modal now renders a `Review Loop` card from `desk.marketRegimeReview`.
+- The card shows review score, snapshot count, decision count, violation count, and recent violation reasons.
+- `renderDailyDeskBrief()` now includes review-loop context so AI briefing prompts can see whether recent actions contradicted prior desk warnings.
+- Static asset cache was bumped to `20260513-02` and service worker cache to `jip-v141`.
+- E2E coverage verifies the review loop card appears beside the market-regime card.
+
 ## 2026-05-13 Update - Phase 7 Review Loop 1st pass complete
 
 - Added `marketRegimeReview` to the Python desk engine.

@@ -795,6 +795,15 @@
 - CPI D-1은 `high`, 보유 종목 실적 D-3은 `medium` 이상, 비보유 종목 일반 뉴스는 제외 또는 `low`로 처리하는 서버 테스트를 추가했다.
 ## 2026-05-13
 
+### Desk Review Loop UI
+
+- Added a `Review Loop` card to the daily investment desk modal.
+- The card exposes market-regime review score, snapshot/decision counts, violation count, and recent violation details.
+- Investment AI briefing context now includes the review loop, so the chat prompt can reference behavior drift after prior desk warnings.
+- Bumped static asset versions to `20260513-02` and service worker cache to `jip-v141`.
+
+## 2026-05-13
+
 ### Market Regime Review Loop
 
 - Added `marketRegimeReview` to the Python investment desk engine.

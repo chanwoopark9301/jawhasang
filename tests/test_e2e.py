@@ -1255,6 +1255,22 @@ class TestInvestmentPartner:
                             riskLimits: { maxLeverageWeight: 15, maxVolatileWeight: 25 },
                         },
                     },
+                    marketRegimeReview: {
+                        windowDays: 7,
+                        snapshotCount: 1,
+                        decisionCount: 1,
+                        violationCount: 1,
+                        score: -25,
+                        summary: '1 market-regime control violation(s) found: QLD.',
+                        violations: [{
+                            date: today,
+                            symbol: 'QLD',
+                            action: 'buy',
+                            type: 'event_defense_buy',
+                            severity: 'high',
+                            reason: 'Buy/add happened while event defense was active and leverage adds were capped.',
+                        }],
+                    },
                 },
             };
             render();
@@ -1269,6 +1285,11 @@ class TestInvestmentPartner:
         assert 'eventDefenseLevel' in card_text
         assert 'high' in card_text
         assert 'QLD add blocked' in card_text
+        page.wait_for_selector('#investment-desk-review-loop', timeout=8_000)
+        review_text = page.locator('#investment-desk-review-loop').inner_text()
+        assert 'Review Loop' in review_text
+        assert 'QLD' in review_text
+        assert 'event_defense_buy' in review_text
 
     def test_daily_investment_desk_notification_payload_and_controls(self, logged_in_page):
         self._open_investment(logged_in_page)
