@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Tuple
+from market_regime_engine import build_market_allocation_engine
 
 
 def _num(value: Any, default: float = 0.0) -> float:
@@ -626,7 +627,7 @@ def _build_bear_case(symbol: str, thesis: Dict[str, Any], bearish: List[Dict[str
     }
 
 
-def build_market_view(investment: Dict[str, Any], theses: List[Dict[str, Any]], controls: List[Dict[str, Any]], today_value: Any = None, evidence_map: Dict[str, Dict[str, Any]] | None = None) -> Dict[str, Any]:
+def build_market_view(investment: Dict[str, Any], theses: List[Dict[str, Any]], controls: List[Dict[str, Any]], today_value: Any = None, evidence_map: Dict[str, Dict[str, Any]] | None = None, market_regime: Dict[str, Any] | None = None) -> Dict[str, Any]:
     today = _today(today_value)
     rows, totals = _portfolio_rows(investment)
     tradable_rows = [r for r in rows if r["assetType"] != "cash" and r["symbol"] != "CASH"]
@@ -673,6 +674,7 @@ def build_market_view(investment: Dict[str, Any], theses: List[Dict[str, Any]], 
         "doNotDo": _build_do_not_do(blocked),
         "falsificationFocus": _build_falsification_focus(theses, key_issues),
         "thesisEvidence": evidence_map or {},
+        "marketRegime": market_regime or {},
     }
 
 
@@ -726,12 +728,14 @@ def build_investment_desk_engine(investment: Dict[str, Any], today_value: Any = 
         thesis.update(evidence_map.get(thesis["symbol"], {}))
     controls = build_behavior_controls(inv, theses, today, evidence_map)
     scenarios = build_scenarios(inv, theses, controls, evidence_map)
-    market_view = build_market_view(inv, theses, controls, today, evidence_map)
+    market_regime = build_market_allocation_engine(inv, today)
+    market_view = build_market_view(inv, theses, controls, today, evidence_map, market_regime)
     research_queue = build_research_queue(inv, theses)
     return {
-        "version": "2026-05-11.py-engine-3",
+        "version": "2026-05-13.py-engine-4",
         "generatedAt": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "date": today.isoformat(),
+        "marketRegime": market_regime,
         "marketView": market_view,
         "theses": theses,
         "behaviorControls": controls,

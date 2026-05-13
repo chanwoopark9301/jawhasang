@@ -302,7 +302,7 @@ class TestDataAPI:
         data = r.get_json()
         assert data['ok'] is True
         engine = data['engine']
-        assert engine['version'].startswith('2026-05-11.py-engine-3')
+        assert engine['version'].startswith('2026-05-13.py-engine-4')
         thesis = {item['symbol']: item for item in engine['theses']}
         assert thesis['CRCL']['profile'] == 'stablecoin_issuer'
         assert 'stablecoin legislation' in thesis['CRCL']['drivers']
@@ -349,6 +349,60 @@ class TestDataAPI:
         assert engine['scenarios'][0]['symbol'] == 'UEC'
         assert engine['scenarios'][0]['baseCase']['action'] == 'write_plan_before_trade'
         assert any('UEC' in item['query'] for item in engine['researchQueue'])
+
+    def test_market_regime_engine_raises_cash_in_event_sideways_market(self):
+        from market_regime_engine import build_market_allocation_engine
+
+        engine = build_market_allocation_engine({
+            'positions': [
+                {'symbol': 'CASH', 'assetType': 'cash', 'shares': 12000, 'cashAmount': 12000},
+                {'symbol': 'QLD', 'assetType': 'stock', 'shares': 300, 'currentPrice': 90},
+                {'symbol': 'CRCL', 'assetType': 'stock', 'shares': 100, 'currentPrice': 120},
+            ],
+            'market': {
+                'regimeMetrics': {
+                    'indexTrend': 0.2,
+                    'breadth': 0.0,
+                    'volatility': 0.4,
+                    'ratesPressure': 0.3,
+                }
+            },
+            'events': [
+                {'id': 'cpi', 'date': '2026-05-13', 'type': 'macro', 'symbol': 'MACRO', 'title': 'CPI 발표'},
+            ],
+        }, '2026-05-12')
+
+        assert engine['regime']['regime'] == 'sideways'
+        assert engine['regime']['eventDefense'] is True
+        assert engine['regime']['targetCashRange'] == [30, 45]
+        assert engine['allocation']['cashGap']['status'] == 'too_low'
+        assert any(a['type'] == 'raise_cash' for a in engine['allocation']['actions'])
+        assert any(a['type'] == 'cap_leverage' for a in engine['allocation']['actions'])
+        assert any('빅 이벤트' in item for item in engine['allocation']['doNotDo'])
+
+    def test_investment_desk_engine_includes_market_allocation_engine(self):
+        from investment_desk_engine import build_investment_desk_engine
+
+        engine = build_investment_desk_engine({
+            'positions': [
+                {'symbol': 'CASH', 'assetType': 'cash', 'shares': 50000, 'cashAmount': 50000},
+                {'symbol': 'CRCL', 'assetType': 'stock', 'shares': 100, 'currentPrice': 120},
+            ],
+            'market': {
+                'regimeMetrics': {
+                    'indexTrend': 0.8,
+                    'breadth': 0.5,
+                    'volatility': 0.1,
+                    'ratesPressure': 0.0,
+                }
+            },
+            'events': [],
+            'rules': {},
+        }, '2026-05-12')
+
+        assert engine['marketRegime']['regime']['regime'] == 'uptrend'
+        assert engine['marketRegime']['allocation']['cashGap']['status'] == 'too_high'
+        assert 'marketRegime' in engine['marketView']
 
     def test_investment_order_intent_endpoint_creates_draft(self, client):
         payload = {

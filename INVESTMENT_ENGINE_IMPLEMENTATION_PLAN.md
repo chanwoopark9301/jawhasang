@@ -24,10 +24,11 @@
 - thesis 증거 분류: bullish/bearish/unconfirmed/neutral
 - thesis 상태 계산: supported / under_pressure / needs_confirmation / unproven
 - 데스크 스냅샷 저장: `investment.desk.engine`, `investment.theses`, `investment.deskSnapshots`
+- 시장 국면/포트폴리오 조절 엔진: `market_regime_engine.py`
+- 국면별 목표 현금 비중, 레버리지 노출 제한, 빅 이벤트 방어 모드 계산
 
 ### 아직 부족한 부분
 
-- 시나리오별 행동 기준
 - thesis 변경 이력
 - 공식 자료 우선 수집 품질
 - 대화형 매매 의도 차단과 예외 기록
@@ -71,7 +72,7 @@
 
 ### Phase 3. Scenario Engine
 
-상태: 진행 예정
+상태: 1차 구현 완료
 
 역할:
 
@@ -92,6 +93,31 @@ CRCL
 - Base case: 실적은 무난하지만 정책은 비공식 흐름뿐 → 보유/관망
 - Bear case: USDC 감소 + 법안 지연 + 금리 하락으로 수익성 훼손 → 축소 검토
 ```
+
+### Phase 3.5. Market Regime & Allocation Engine
+
+상태: 1차 구현 완료
+
+역할:
+
+- LLM이 아니라 서버 엔진이 시장 국면을 `상승장 / 횡보장 / 하락장`으로 분류한다.
+- 국면별 목표 현금 비중을 계산한다.
+- CPI, FOMC, 실적, 정책, 지정학 같은 5일 내 빅 이벤트가 있으면 이벤트 방어 모드로 현금 목표를 상향한다.
+- 현재 계좌의 현금, 위험자산, 레버리지, 고변동 종목 노출을 비교해 조절 행동을 만든다.
+
+결과:
+
+- `marketRegime.regime`
+- `marketRegime.allocation`
+- `targetCashRange`
+- `cashGap`
+- `allocation.actions`
+- `allocation.doNotDo`
+
+원칙:
+
+- LLM은 최신 정보 탐색과 문장화를 담당한다.
+- 시장 국면과 포트폴리오 비중 판단은 DB/엔진의 수치와 규칙이 담당한다.
 
 ### Phase 4. Conversation Gate
 
