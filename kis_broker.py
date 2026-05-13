@@ -195,29 +195,27 @@ def _trade_from_domestic(row):
 
 def _merge_positions(existing, synced):
     by_key = {}
+
+    def position_key(item):
+        symbol = str(item.get('symbol') or '').strip().upper()
+        asset_type = str(item.get('assetType') or '').strip().lower()
+        if symbol and symbol != 'CASH' and asset_type != 'cash':
+            return f'symbol:{symbol}'
+        if symbol == 'CASH' or asset_type == 'cash':
+            currency = str(item.get('currency') or 'USD').strip().upper()
+            return f'cash:{currency}'
+        return f"id:{item.get('id') or symbol}"
+
     for item in existing or []:
-        symbol = str(item.get('symbol') or '').upper()
-        key = str(item.get('id') or symbol)
-        by_key[key] = dict(item)
-        if symbol:
-            by_key.setdefault(symbol, by_key[key])
-    for item in synced:
-        symbol = str(item.get('symbol') or '').upper()
-        key = str(item.get('id') or symbol)
-        prior = by_key.get(symbol) or by_key.get(key) or {}
-        merged = {**prior, **item}
-        by_key[key] = merged
-        if symbol:
-            by_key[symbol] = merged
-    unique = []
-    seen = set()
-    for item in by_key.values():
-        item_id = str(item.get('id') or item.get('symbol') or '')
-        if item_id in seen:
+        if isinstance(item, dict):
+            by_key[position_key(item)] = dict(item)
+    for item in synced or []:
+        if not isinstance(item, dict):
             continue
-        seen.add(item_id)
-        unique.append(item)
-    return unique
+        key = position_key(item)
+        prior = by_key.get(key) or {}
+        by_key[key] = {**prior, **item}
+    return list(by_key.values())
 
 
 def _merge_decisions(existing, synced):

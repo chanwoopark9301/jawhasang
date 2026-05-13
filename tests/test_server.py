@@ -966,6 +966,25 @@ class TestDataAPI:
         assert merged[0]['market'] == 'NYSE'
         assert merged[0]['currentPrice'] == 123.65
 
+    def test_kis_merge_positions_updates_existing_manual_symbol_instead_of_duplicating(self):
+        import kis_broker
+
+        existing = [
+            {'id': 'ip-crcl-manual', 'symbol': 'CRCL', 'name': '써클', 'shares': 113, 'avgPrice': 128.91, 'currentPrice': 113.67},
+            {'id': 'ip-cash', 'symbol': 'CASH', 'assetType': 'cash', 'shares': 42135, 'cashAmount': 42135},
+        ]
+        synced = [
+            {'id': 'kis-us-CRCL', 'symbol': 'CRCL', 'name': 'Circle Internet Group', 'market': 'NYSE', 'shares': 113, 'avgPrice': 128.91, 'currentPrice': 123.65, 'brokerSource': 'kis'},
+        ]
+
+        merged = kis_broker._merge_positions(existing, synced)
+        crcl_rows = [p for p in merged if p.get('symbol') == 'CRCL']
+
+        assert len(crcl_rows) == 1
+        assert crcl_rows[0]['id'] == 'kis-us-CRCL'
+        assert crcl_rows[0]['currentPrice'] == 123.65
+        assert crcl_rows[0]['brokerSource'] == 'kis'
+
     def test_bithumb_adapter_refuses_trading_mode_even_if_configured(self, monkeypatch):
         import bithumb_broker
 

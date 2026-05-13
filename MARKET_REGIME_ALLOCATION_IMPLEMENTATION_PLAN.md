@@ -308,6 +308,13 @@ CPI, FOMC, 실적, 정책 법안, 지정학 이벤트가 가까워지면 자동�
 - 비보유 종목의 일반 뉴스는 방어 이벤트에서 제외하거나 `low`로만 취급한다.
 - `classify_market_regime()`은 `eventDefenseLevel`(`none`, `low`, `medium`, `high`)을 반환한다.
 - 기존 현금 방어 정책과 호환되도록 이벤트 방어 시 목표 현금 범위는 `30~45%` 하한을 유지한다.
+## 2026-05-13 Update - KIS Position Merge Dedupe
+
+- Fixed `_merge_positions()` in `kis_broker.py` so KIS-synced positions update existing manual rows by ticker symbol.
+- This prevents duplicated rows like manual `CRCL` plus broker `CRCL` after sync.
+- Cash positions are still keyed separately by currency so USD/KRW cash can remain distinct.
+- Added TDD coverage for manual CRCL being replaced/updated by KIS CRCL instead of duplicated.
+
 ## 2026-05-13 Update - Phase 12 Corrective Action Gate Enforcement complete
 
 - `evaluate_trade_intent_gate()` now reads review-loop corrective actions from the current engine and the stored prior desk engine.

@@ -795,6 +795,14 @@
 - CPI D-1은 `high`, 보유 종목 실적 D-3은 `medium` 이상, 비보유 종목 일반 뉴스는 제외 또는 `low`로 처리하는 서버 테스트를 추가했다.
 ## 2026-05-13
 
+### KIS Position Merge Dedupe
+
+- Fixed KIS position merge so broker-synced stock positions update the existing manual symbol row instead of appending a duplicate row.
+- Non-cash positions are now merged by canonical ticker key, while cash remains separated by currency.
+- Added regression coverage for manual CRCL plus KIS CRCL merging into one CRCL row.
+
+## 2026-05-13
+
 ### Corrective Action Gate Enforcement
 
 - Trade gate now consumes review-loop corrective actions from the current or previous desk engine.
