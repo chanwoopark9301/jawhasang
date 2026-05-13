@@ -15,6 +15,41 @@ function handleChatKey(e) {
   }
 }
 
+function getContextChatQueue() {
+  if (!Array.isArray(state._ctxChatQueue)) state._ctxChatQueue = [];
+  return state._ctxChatQueue;
+}
+
+function enqueueContextChat(text) {
+  const clean = String(text || '').trim();
+  if (!clean) return 0;
+  const queue = getContextChatQueue();
+  queue.push(clean);
+  logger.info('Context chat queued while AI response is active', {
+    queueLength: queue.length,
+    length: clean.length,
+  });
+  if (typeof showToast === 'function') {
+    showToast(`Queued. I will send it after this reply. Waiting: ${queue.length}`);
+  }
+  return queue.length;
+}
+
+function drainContextChatQueue() {
+  const queue = getContextChatQueue();
+  if (state._ctxChatLoading || !queue.length) return false;
+  const next = queue.shift();
+  if (!next) return false;
+  setTimeout(() => continueContextChat(next), 0);
+  return true;
+}
+
+function finishContextChatTurn() {
+  hideTypingIndicator();
+  state._ctxChatLoading = false;
+  drainContextChatQueue();
+}
+
 // ---------------------------------------------------------------------------
 // 전송 라우팅
 // ---------------------------------------------------------------------------
@@ -24,21 +59,20 @@ function sendCurrentChat() {
   const text  = input?.value.trim();
   if (!text) return;
   if (state._ctxChatLoading) {
-    logger.info('AI 응답 중이라 새 채팅 전송을 보류', { length: text.length });
-    if (typeof showToast === 'function') showToast('아직 답변 중이에요. 잠시 후 다시 보내주세요.');
+    enqueueContextChat(text);
+    input.value = '';
     input.focus();
     return;
   }
   input.value = '';
 
-  // 일기 변환 모드: AI 없이 혼자 쓰기
+  // Diary conversion mode: record the user's text without an AI reply.
   if (state.chatMode === 'diary-convert') {
     appendMessage('user', text);
     return;
   }
 
-  // 받아쓰기 모드: 사용자가 쭉 말할 수 있도록 AI가 매 턴 끼어들지 않는다.
-  // 투자 파트너는 대화가 메인 기능이므로 기본적으로 AI가 응답한다.
+  // Dictation mode: outside investment, let the user keep talking without interruption.
   if ((state.replyMode || 'dictation') === 'dictation' && state.view !== 'investment') {
     appendMessage('user', text);
     return;
@@ -78,7 +112,11 @@ function updateReplyModeUI() {
 }
 
 async function continueContextChat(text) {
-  if (!text || state._ctxChatLoading) return;
+  if (!text) return;
+  if (state._ctxChatLoading) {
+    enqueueContextChat(text);
+    return;
+  }
   state._ctxChatLoading = true;
 
   appendMessage('user', text);
@@ -115,13 +153,13 @@ async function continueContextChat(text) {
       refreshInvestmentSurfaces();
       showToast('추정 원장으로 반영했어요. 체결 내역이 확인되면 보정하세요.');
       persistInvestmentChangesInBackground('estimated portfolio snapshot');
-      state._ctxChatLoading = false;
+      finishContextChatTurn();
       return;
     }
     if (!isStrictInvestmentPortfolioSnapshotText(text)) {
       hideTypingIndicator();
       appendMessage('ai', buildInvestmentPortfolioReconciliationQuestion(text));
-      state._ctxChatLoading = false;
+      finishContextChatTurn();
       return;
     }
     let directPortfolioUpdate = { changed: false, symbols: [], summary: '' };
@@ -148,14 +186,14 @@ async function continueContextChat(text) {
       refreshInvestmentSurfaces();
       showToast('포트폴리오에 바로 반영했어요. 서버 저장은 뒤에서 진행합니다.');
       persistInvestmentChangesInBackground('direct portfolio snapshot');
-      state._ctxChatLoading = false;
+      finishContextChatTurn();
       return;
     }
   }
 
   if (isInvestment && await maybeHandleInvestmentChatTradeGate(text)) {
     hideTypingIndicator();
-    state._ctxChatLoading = false;
+    finishContextChatTurn();
     return;
   }
 
@@ -168,26 +206,11 @@ async function continueContextChat(text) {
   let investmentFxContext = '';
   let investmentReasoningContext = '';
   if (isInvestment && !portfolioSnapshotRequest) {
-    try {
-      investmentReasoningContext = await fetchInvestmentReasoningContext(text);
-    } catch (e) {
-      logger.warn('투자 추론 컨텍스트 생성 실패', e);
-    }
-    try {
-      investmentNewsContext = await fetchInvestmentNewsContext(text);
-    } catch (e) {
-      logger.warn('투자 뉴스 컨텍스트 생성 실패', e);
-    }
-    try {
-      investmentMarketContext = await fetchInvestmentMarketContext(text);
-    } catch (e) {
-      logger.warn('투자 시세 컨텍스트 생성 실패', e);
-    }
-    try {
-      investmentFxContext = await fetchInvestmentFxContext(text);
-    } catch (e) {
-      logger.warn('투자 환율 컨텍스트 생성 실패', e);
-    }
+    const contexts = await resolveInvestmentChatContexts(text);
+    investmentReasoningContext = contexts.reasoning;
+    investmentNewsContext = contexts.news;
+    investmentMarketContext = contexts.market;
+    investmentFxContext = contexts.fx;
   }
 
   const chatPlan = planContextChatRequest({ isInvestment, text });
@@ -209,7 +232,7 @@ async function continueContextChat(text) {
     systemChars: sysPrompt.length,
     messageCount: messages.length,
     messageChars: messages.reduce((sum, msg) => sum + String(msg.content || '').length, 0),
-    extraContextChars: [investmentNewsContext, investmentMarketContext, investmentFxContext].join('').length,
+    extraContextChars: [investmentReasoningContext, investmentNewsContext, investmentMarketContext, investmentFxContext].join('').length,
     model: chatPlan.model,
     maxTokens: chatPlan.maxTokens,
     tier: chatPlan.tier,
@@ -278,9 +301,50 @@ async function continueContextChat(text) {
       appendMessage('ai', `죄송해요, 오류가 발생했어요. 다시 시도해주세요.\n\n오류 추적 ID: ${clientRequestId}`);
     }
   } finally {
-    state._ctxChatLoading = false;
+    finishContextChatTurn();
   }
 }
+
+async function resolveInvestmentChatContexts(text) {
+  const context = {
+    reasoning: '',
+    news: '',
+    market: '',
+    fx: '',
+  };
+  const startedAt = performance.now();
+  const jobs = [
+    ['reasoning', fetchInvestmentReasoningContext],
+    ['news', fetchInvestmentNewsContext],
+    ['market', fetchInvestmentMarketContext],
+    ['fx', fetchInvestmentFxContext],
+  ].filter(([, fn]) => typeof fn === 'function');
+
+  const results = await Promise.allSettled(jobs.map(([key, fn]) =>
+    Promise.resolve()
+      .then(() => fn(text))
+      .then(value => ({ key, value: value || '' }))
+  ));
+
+  results.forEach((result, idx) => {
+    const key = jobs[idx]?.[0] || 'unknown';
+    if (result.status === 'fulfilled') {
+      context[result.value.key] = result.value.value;
+    } else {
+      logger.warn(`investment ${key} context failed`, result.reason);
+    }
+  });
+
+  logger.info('Investment chat context resolved', {
+    durationMs: Math.round(performance.now() - startedAt),
+    reasoningChars: context.reasoning.length,
+    newsChars: context.news.length,
+    marketChars: context.market.length,
+    fxChars: context.fx.length,
+  });
+  return context;
+}
+
 
 async function maybeHandleInvestmentChatTradeGate(text) {
   if (state.view !== 'investment' || typeof apiEvaluateInvestmentChatGate !== 'function') return false;

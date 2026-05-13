@@ -1,5 +1,15 @@
 # Investment Engine Implementation Plan
 
+## 2026-05-13 Chat Queue and Portfolio Update Latency
+
+- Replaced the blocking "AI is still replying" chat behavior with a small FIFO queue.
+- When the user sends another message while an AI response is active, the input is cleared, the message is queued, and the next turn starts automatically after the current turn finishes.
+- All early-return investment chat paths now finish through the same turn-finalizer so queued messages are drained after portfolio snapshots, trade gates, reconciliation questions, and AI failures.
+- Scanned the slow portfolio-update path. The biggest avoidable wait was not the background save; it was investment chat context preparation before AI calls.
+- Investment reasoning, news, market quote, and FX contexts now resolve in parallel after the ledger sync instead of waiting sequentially.
+- Added E2E coverage for queued chat input and parallel investment context resolution.
+- Remaining latency watch item: full `refreshInvestmentSurfaces()` still runs `render()` plus active modal re-open. If the portfolio modal keeps feeling heavy, the next step is to split it into a lightweight portfolio-card refresh and a deferred modal refresh.
+
 ## 2026-05-13 Ledger Parser Hardening
 
 - Refined the reasoning engine with residual-position ambiguity detection, trade-decision protocol, rule templates, and foresight agenda.

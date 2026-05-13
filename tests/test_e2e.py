@@ -659,20 +659,68 @@ class TestChatRoleAndReplyMode:
         assert logged_in_page.locator('.chat-bubble-ai').count() == 0
         assert logged_in_page.locator('#chat-typing-indicator').count() == 0
 
-    def test_chat_enter_during_loading_keeps_input_text(self, logged_in_page):
-        logged_in_page.wait_for_selector('#nav-invest', timeout=8_000)
-        logged_in_page.click('#nav-invest')
-        logged_in_page.wait_for_selector('#investment-view', timeout=8_000)
-        logged_in_page.evaluate("""() => {
+    def test_chat_enter_during_loading_queues_input_text(self, page, live_server_url):
+        from tests.conftest import E2E_PASSWORD
+        page.goto(f'{live_server_url}/login')
+        page.fill('input[name=password]', E2E_PASSWORD)
+        page.click('button[type=submit]')
+        page.wait_for_selector('#app', timeout=10_000)
+        page.wait_for_selector('#nav-invest', timeout=8_000)
+        page.click('#nav-invest')
+        page.wait_for_selector('#investment-view', timeout=8_000)
+        page.evaluate("""() => {
             state._ctxChatLoading = true;
+            state._ctxChatQueue = [];
             state.currentChatMessages = [];
         }""")
-        input_el = logged_in_page.locator('#chat-input-bottom')
-        input_el.fill('응답 중에 보낸 말')
+        input_el = page.locator('#chat-input-bottom')
+        input_el.fill('queued question while ai is replying')
         input_el.press('Enter')
 
-        assert input_el.input_value() == '응답 중에 보낸 말'
-        assert logged_in_page.evaluate("() => state.currentChatMessages.length") == 0
+        result = page.evaluate("""() => ({
+            inputValue: document.getElementById('chat-input-bottom').value,
+            queue: state._ctxChatQueue || [],
+            messageCount: state.currentChatMessages.length,
+        })""")
+
+        assert result['inputValue'] == ''
+        assert result['queue'] == ['queued question while ai is replying']
+        assert result['messageCount'] == 0
+
+    def test_investment_chat_contexts_resolve_in_parallel(self, page, live_server_url):
+        from tests.conftest import E2E_PASSWORD
+        page.goto(f'{live_server_url}/login')
+        page.fill('input[name=password]', E2E_PASSWORD)
+        page.click('button[type=submit]')
+        page.wait_for_selector('#app', timeout=10_000)
+        page.wait_for_selector('#nav-invest', timeout=8_000)
+        page.click('#nav-invest')
+        page.wait_for_selector('#investment-view', timeout=8_000)
+        result = page.evaluate("""async () => {
+            const delay = (ms, value) => new Promise(resolve => setTimeout(() => resolve(value), ms));
+            window.fetchInvestmentReasoningContext = () => delay(150, 'reasoning');
+            window.fetchInvestmentNewsContext = () => delay(150, 'news');
+            window.fetchInvestmentMarketContext = () => delay(150, 'market');
+            window.fetchInvestmentFxContext = () => delay(150, 'fx');
+            fetchInvestmentReasoningContext = window.fetchInvestmentReasoningContext;
+            fetchInvestmentNewsContext = window.fetchInvestmentNewsContext;
+            fetchInvestmentMarketContext = window.fetchInvestmentMarketContext;
+            fetchInvestmentFxContext = window.fetchInvestmentFxContext;
+            const started = performance.now();
+            const context = await resolveInvestmentChatContexts('briefing');
+            return {
+                elapsed: performance.now() - started,
+                context,
+            };
+        }""")
+
+        assert result['context'] == {
+            'reasoning': 'reasoning',
+            'news': 'news',
+            'market': 'market',
+            'fx': 'fx',
+        }
+        assert result['elapsed'] < 350
 
     def test_chat_enter_during_ime_composition_does_not_send(self, logged_in_page):
         logged_in_page.wait_for_selector('#nav-invest', timeout=8_000)

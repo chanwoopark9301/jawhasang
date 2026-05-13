@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v150'; // Add review corrective actions
+const CACHE_NAME = 'jip-v151'; // Add review corrective actions
 
 const STATIC_ASSETS = [
   '/style.css',
