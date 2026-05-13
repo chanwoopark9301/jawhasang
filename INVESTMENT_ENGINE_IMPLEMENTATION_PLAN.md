@@ -2,6 +2,9 @@
 
 ## 2026-05-13 Ledger Parser Hardening
 
+- Natural-language portfolio chat now follows a ledger-first conversation flow: read current holdings, infer user intent, then ask for missing authoritative trade/account values before writing.
+- Loose phrases such as "ETH is unchanged and the rest is Intel" are not ledger commands. They create a reconciliation question instead of changing shares/cash immediately.
+- Strict snapshot-like input remains the allowed direct-write path, while AI replies and ambiguous summaries stay below ledger authority.
 - Prompt rules now explicitly follow the engine contract: Portfolio Ledger Engine is the account source of truth, Market Data Engine is quote/FX only, and Desk/Regime/Scenario/Trade Gate engines provide the behavior frame.
 - LLM output is treated as explanation and structured intent, not as ledger authority. It must not convert its own estimates or rendered UI text back into holdings.
 - Chat refactoring removed legacy direct portfolio mutation helpers that were no longer called after the ledger engine routing.

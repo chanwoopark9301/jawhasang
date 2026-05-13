@@ -60,20 +60,25 @@ function applyInvestmentLedgerPortfolioSnapshot(inv, command, result) {
     if (!symbol || symbol === 'CASH') return;
     const shares = parseInvestmentNumber(snapshot.shares);
     const avgPrice = parseInvestmentNumber(snapshot.avgPrice);
-    const currentPrice = parseInvestmentNumber(snapshot.currentPrice);
-    if (shares <= 0 && avgPrice <= 0 && currentPrice <= 0) return;
+    const marketValueUsd = parseInvestmentNumber(snapshot.marketValueUsd);
+    let currentPrice = parseInvestmentNumber(snapshot.currentPrice);
+    if (shares <= 0 && avgPrice <= 0 && currentPrice <= 0 && marketValueUsd <= 0) return;
 
     const idx = (inv.positions || []).findIndex(p =>
       !isCashInvestmentPosition(p) && String(p.symbol || '').toUpperCase() === symbol
     );
     const previous = idx >= 0 ? inv.positions[idx] : {};
+    const effectiveShares = shares > 0 ? shares : parseInvestmentNumber(previous.shares);
+    if (currentPrice <= 0 && marketValueUsd > 0 && effectiveShares > 0) {
+      currentPrice = Math.round((marketValueUsd / effectiveShares) * 10000) / 10000;
+    }
     const next = {
       ...previous,
       id: previous.id || `ip-${symbol.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`,
       assetType: previous.assetType || snapshot.assetType || (isInvestmentCryptoSymbol(symbol) ? 'crypto' : 'stock'),
       symbol,
       name: previous.name || snapshot.name || symbol,
-      shares: shares > 0 ? shares : parseInvestmentNumber(previous.shares),
+      shares: effectiveShares,
       avgPrice: avgPrice > 0 ? avgPrice : parseInvestmentNumber(previous.avgPrice),
       currentPrice: currentPrice > 0 ? currentPrice : parseInvestmentNumber(previous.currentPrice),
       manualPrice: currentPrice > 0 ? true : previous.manualPrice,
@@ -91,7 +96,7 @@ function applyInvestmentLedgerPortfolioSnapshot(inv, command, result) {
     ].filter(Boolean).join(', ')}`);
   });
 
-  if (command.cashUsd != null && parseInvestmentNumber(command.cashUsd) > 0) {
+  if (command.cashUsd != null && parseInvestmentNumber(command.cashUsd) >= 0) {
     investmentLedgerSetCashPosition(inv, parseInvestmentNumber(command.cashUsd), command.source || 'user_confirmed');
     result.changes.push(`CASH ${formatMoney(parseInvestmentNumber(command.cashUsd))}`);
     handled.add('CASH');

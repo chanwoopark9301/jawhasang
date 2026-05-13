@@ -8,6 +8,14 @@
 
 ## 2026-05-13
 
+### Ledger-First Portfolio Conversation
+
+- Changed natural-language portfolio updates so loose chat text no longer writes directly to the ledger.
+- Added a ledger-first reconciliation question path: the app reads current holdings first, interprets which positions appear unchanged/removed/new, then asks for missing authoritative fields such as INTC quantity and average price.
+- Restricted automatic portfolio writes to strict snapshot/table-like user input; AI-generated summaries and ambiguous natural language are now treated as intent, not confirmed account facts.
+- Added regression coverage for the CRCL/ETH/INTC case where `ETH 5개` could previously be misread as CRCL shares.
+- Bumped the static asset version to `20260513-08` and service worker cache to `jip-v147`.
+
 ### Investment Prompt Engine Alignment
 
 - Updated the investment chat system prompt so LLM responses follow the engine contract: the Portfolio Ledger Engine owns holdings/cash, Market Data Engine owns prices/FX, and Daily Desk/Regime/Scenario/Trade Gate engines own behavior controls.

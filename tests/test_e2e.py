@@ -3597,7 +3597,7 @@ $11,717.55
         assert 'ETH-USD' in modal_text
         assert '포트폴리오 갱신 반영' not in modal_text
 
-    def test_chat_portfolio_snapshot_updates_intc_without_overwriting_remaining_holdings(self, page, live_server_url):
+    def test_chat_portfolio_artifact_does_not_apply_ai_inferred_snapshot(self, page, live_server_url):
         from tests.conftest import E2E_PASSWORD
         page.goto(f'{live_server_url}/login')
         page.fill('input[name=password]', E2E_PASSWORD)
@@ -3665,15 +3665,15 @@ $11,717.55
         }""")
 
         assert result == {
-            'symbols': ['CRCL', 'ETH-USD', 'INTC'],
-            'intcShares': 754,
-            'intcAvg': 129.67,
+            'symbols': ['CRCL', 'ETH-USD', 'IREN', 'QLD'],
+            'intcShares': None,
+            'intcAvg': None,
             'crclShares': 113,
             'crclAvg': 128.91,
             'ethShares': 5,
             'ethAvg': 4531.54,
-            'hasIren': False,
-            'hasQld': False,
+            'hasIren': True,
+            'hasQld': True,
         }
 
     def test_chat_portfolio_complaint_does_not_reapply_rendered_snapshot(self, page, live_server_url):
@@ -3754,6 +3754,106 @@ CRCL shares=754, avgPrice=129.67, currentPrice=123.65`);
             'intcShares': 754,
             'portfolioEvents': 0,
         }
+
+    def test_natural_portfolio_update_asks_before_ledger_write(self, page, live_server_url):
+        from tests.conftest import E2E_PASSWORD
+        page.goto(f'{live_server_url}/login')
+        page.fill('input[name=password]', E2E_PASSWORD)
+        page.click('button[type=submit]')
+        page.wait_for_selector('#app-splash', state='hidden', timeout=15_000)
+        self._open_investment(page)
+        result = page.evaluate("""() => {
+            state.investment = normalizeInvestmentState({
+                positions: [{
+                    id: 'ip-crcl-safe-natural',
+                    symbol: 'CRCL',
+                    name: 'Circle',
+                    shares: 113,
+                    avgPrice: 128.91,
+                    currentPrice: 123.65,
+                }, {
+                    id: 'ip-eth-safe-natural',
+                    symbol: 'ETH-USD',
+                    name: 'Ethereum',
+                    assetType: 'crypto',
+                    shares: 5,
+                    avgPrice: 4531.54,
+                    currentPrice: 2334.95,
+                }, {
+                    id: 'ip-intc-safe-natural',
+                    symbol: 'INTC',
+                    name: 'Intel',
+                    shares: 754,
+                    avgPrice: 129.67,
+                    currentPrice: 120,
+                }, {
+                    id: 'ip-iren-stale-natural',
+                    symbol: 'IREN',
+                    name: 'Iris Energy',
+                    shares: 510,
+                    avgPrice: 66.38,
+                    currentPrice: 61.2,
+                }, {
+                    id: 'ip-qld-stale-natural',
+                    symbol: 'QLD',
+                    name: 'QLD',
+                    shares: 312,
+                    avgPrice: 88.88,
+                    currentPrice: 91.72,
+                }, {
+                    id: 'ip-cash-stale-natural',
+                    assetType: 'cash',
+                    symbol: 'CASH',
+                    name: 'Cash',
+                    cashAmount: 42135,
+                    shares: 42135,
+                    avgPrice: 1,
+                    currentPrice: 1,
+                }],
+                events: [],
+                decisions: [],
+                rules: {},
+                usdKrwRate: 1470,
+            });
+            const ask = '포트폴리오 갱신해. 써클은 원화로 2100만원정도이고 이더리움은 5개 보유중에 현재 1700만원정도야. 약 40프로 넘게 손해보면서. 아이렌이랑 qld 현금은 이제 없어. 나머지는 전부 인텔이야.';
+            const strict = isStrictInvestmentPortfolioSnapshotText(ask);
+            const question = buildInvestmentPortfolioReconciliationQuestion(ask);
+            const bySymbol = Object.fromEntries(state.investment.positions.map(p => [p.symbol, p]));
+            return {
+                strict,
+                question,
+                symbols: state.investment.positions.map(p => p.symbol).sort(),
+                crclShares: bySymbol.CRCL?.shares,
+                crclAvg: bySymbol.CRCL?.avgPrice,
+                crclCurrent: bySymbol.CRCL?.currentPrice,
+                ethShares: bySymbol['ETH-USD']?.shares,
+                ethAvg: bySymbol['ETH-USD']?.avgPrice,
+                ethCurrent: bySymbol['ETH-USD']?.currentPrice,
+                intcShares: bySymbol.INTC?.shares,
+                cash: bySymbol.CASH?.cashAmount || 0,
+                hasIren: Boolean(bySymbol.IREN),
+                hasQld: Boolean(bySymbol.QLD),
+            };
+        }""")
+
+        assert result == {
+            'strict': False,
+            'question': result['question'],
+            'symbols': ['CASH', 'CRCL', 'ETH-USD', 'INTC', 'IREN', 'QLD'],
+            'crclShares': 113,
+            'crclAvg': 128.91,
+            'crclCurrent': 123.65,
+            'ethShares': 5,
+            'ethAvg': 4531.54,
+            'ethCurrent': 2334.95,
+            'intcShares': 754,
+            'cash': 42135,
+            'hasIren': True,
+            'hasQld': True,
+        }
+        assert '원장 갱신 전에' in result['question']
+        assert 'INTC 보유 수량' in result['question']
+        assert 'CRCL 수량' in result['question']
 
     def test_ledger_engine_separates_quote_updates_from_position_writes(self, page, live_server_url):
         from tests.conftest import E2E_PASSWORD

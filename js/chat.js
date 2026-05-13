@@ -93,6 +93,12 @@ async function continueContextChat(text) {
     && isInvestmentPortfolioSnapshotIntent(text);
 
   if (portfolioSnapshotRequest && typeof applyInvestmentPortfolioSnapshotFromChat === 'function') {
+    if (!isStrictInvestmentPortfolioSnapshotText(text)) {
+      hideTypingIndicator();
+      appendMessage('ai', buildInvestmentPortfolioReconciliationQuestion(text));
+      state._ctxChatLoading = false;
+      return;
+    }
     let directPortfolioUpdate = { changed: false, symbols: [], summary: '' };
     try {
       directPortfolioUpdate = applyInvestmentPortfolioSnapshotFromChat(buildInvestmentPortfolioSnapshotSourceText(text));
@@ -455,6 +461,77 @@ function buildInvestmentPortfolioSnapshotSourceText(text) {
   return [recent, raw].filter(Boolean).join('\n\n');
 }
 
+function isStrictInvestmentPortfolioSnapshotText(text) {
+  const raw = String(text || '');
+  if (/^\s*\|.*(?:종목|symbol|ticker).*(?:수량|shares|qty).*(?:평단|avg|average)/im.test(raw)) return true;
+  const structuredRows = (raw.match(/(?:^|\n)\s*(?:IREN|CRCL|ETH-USD|BTC-USD|INTC|QLD|QQQM)\b[^\n]{0,120}(?:수량|shares|qty)[^\n]{0,80}(?:평단|avg|average)/ig) || []).length;
+  if (structuredRows >= 1 && /(?:확정|스냅샷|snapshot|표|아래|대로|수정|반영|갱신)/i.test(raw)) return true;
+  const completeClauses = splitInvestmentSnapshotSentences(raw)
+    .flatMap(sentence => extractInvestmentSymbolClauses(sentence))
+    .filter(clause =>
+      /(?:[0-9][0-9,.]*)\s*(?:주|개|shares?|qty)|(?:shares?|quantity|qty|수량)[^0-9]{0,24}([0-9][0-9,.]*)/i.test(clause.text) &&
+      /(?:평단|평균\s*단가|avg|average)[^\n0-9]{0,24}\$?\s*([0-9][0-9,.]*)/i.test(clause.text)
+    ).length;
+  if (completeClauses >= 1 && /(?:확정|스냅샷|snapshot|수정|반영|갱신)/i.test(raw)) return true;
+  return false;
+}
+
+function buildInvestmentPortfolioReconciliationQuestion(text) {
+  const raw = String(text || '');
+  const inv = normalizeInvestmentState(state.investment);
+  const nonCash = (inv.positions || []).filter(p => !isCashInvestmentPosition(p));
+  const current = nonCash.map(p => `${p.symbol}: ${formatShares(p.shares)}주/개, 평단 ${formatMoney(p.avgPrice)}`).join('\n') || '등록된 보유 종목 없음';
+  const mentioned = extractInvestmentMentionedSymbols(raw);
+  const keep = mentioned.filter(symbol => /그대로|변경\s*없|유지|남아|보유\s*중/i.test(extractInvestmentSymbolClauseText(raw, symbol)));
+  const zeroIntent = (inv.positions || [])
+    .filter(p => {
+      const symbol = String(p.symbol || '').toUpperCase();
+      if (isCashInvestmentPosition(p)) return /(?:현금|예수금|cash)[^\n.。]{0,40}(?:없|0|전부|이제\s*없)/i.test(raw);
+      return investmentTextMentionsPosition(raw, p) && /(?:없|팔|정리|전부\s*(?:인텔|INTC)|이제\s*없)/i.test(extractInvestmentSymbolClauseText(raw, symbol));
+    })
+    .map(p => p.symbol || p.name)
+    .filter(Boolean);
+  const target = mentioned.find(symbol => !keep.includes(symbol) && !zeroIntent.includes(symbol)) || mentioned.find(symbol => symbol === 'INTC');
+  const intentLines = [];
+  if (keep.length) intentLines.push(`- 그대로 둘 항목: ${keep.join(', ')}`);
+  if (zeroIntent.length) intentLines.push(`- 정리/0 처리로 보이는 항목: ${zeroIntent.join(', ')}`);
+  if (target) intentLines.push(`- 새로 중심이 되는 항목: ${target}`);
+  const missing = [];
+  if (target) {
+    const clause = extractInvestmentSymbolClauseText(raw, target);
+    if (!/(?:[0-9][0-9,.]*)\s*(?:주|개|shares?|qty)/i.test(clause)) missing.push(`${target} 보유 수량`);
+    if (!/(?:평단|평균\s*단가|avg|average)[^\n0-9]{0,24}[0-9]/i.test(clause)) missing.push(`${target} 평균단가 또는 체결가`);
+  }
+  if (mentioned.includes('CRCL') && !/(?:[0-9][0-9,.]*)\s*(?:주|shares?|qty)/i.test(extractInvestmentSymbolClauseText(raw, 'CRCL'))) {
+    missing.push('CRCL 수량이 기존 원장 그대로인지');
+  }
+  const missingText = missing.length ? missing.map(item => `- ${item}`).join('\n') : '- 실제 매수/매도 체결일과 체결가';
+  return `바로 원장에 쓰지 않고 먼저 대조할게요.\n\n현재 원장에는 이렇게 들어 있어요:\n${current}\n\n네 말은 이렇게 이해했어요:\n${intentLines.join('\n') || '- 기존 원장을 기준으로 일부 종목을 정리하고 새 보유 상태로 재구성하려는 의도'}\n\n원장 갱신 전에 아래 값만 확인해 주세요:\n${missingText}\n\n예: \"INTC 754주, 평단 129.67달러로 확정. ETH 5개와 CRCL 113주는 그대로. IREN/QLD/현금은 0으로 정리.\"`;
+}
+
+function extractInvestmentMentionedSymbols(text) {
+  const raw = String(text || '');
+  const symbols = [];
+  [
+    ['INTC', /\b(?:intel|intc)\b|인텔/i],
+    ['IREN', /\bIREN\b|아이렌|iris energy/i],
+    ['CRCL', /\bCRCL\b|써클|서클|circle/i],
+    ['ETH-USD', /\bETH(?:-USD)?\b|이더리움|ethereum|ether/i],
+    ['BTC-USD', /\bBTC(?:-USD)?\b|비트코인|bitcoin/i],
+    ['QLD', /\bQLD\b/i],
+    ['QQQM', /\bQQQM\b/i],
+  ].forEach(([symbol, pattern]) => {
+    if (pattern.test(raw)) symbols.push(symbol);
+  });
+  return symbols;
+}
+
+function extractInvestmentSymbolClauseText(text, symbol) {
+  const clauses = splitInvestmentSnapshotSentences(text).flatMap(sentence => extractInvestmentSymbolClauses(sentence));
+  const found = clauses.find(clause => String(clause.symbol || '').toUpperCase() === String(symbol || '').toUpperCase());
+  return found?.text || String(text || '');
+}
+
 async function saveInvestmentChatArtifacts(userText, aiText) {
   if (state.view !== 'investment') return;
   const ask = (userText || '').trim();
@@ -502,7 +579,13 @@ async function saveInvestmentChatArtifacts(userText, aiText) {
     return;
   }
 
-  const portfolioUpdate = applyInvestmentPortfolioSnapshotFromChat(buildInvestmentPortfolioSnapshotSourceText(combined));
+  if (isInvestmentPortfolioSnapshotIntent(ask) && !isStrictInvestmentPortfolioSnapshotText(ask)) {
+    return;
+  }
+
+  const portfolioUpdate = isStrictInvestmentPortfolioSnapshotText(combined)
+    ? applyInvestmentPortfolioSnapshotFromChat(buildInvestmentPortfolioSnapshotSourceText(combined))
+    : { changed: false };
   if (portfolioUpdate.changed) {
     state.investment.events.push({
       id: 'ie' + Date.now(),
@@ -734,14 +817,14 @@ function applyInvestmentPortfolioSnapshotFromChat(text) {
   const changed = [];
   const handledSymbols = new Set();
   const explicitRate = extractInvestmentUsdKrwRateFromText(raw);
-  const cashUsd = inferInvestmentCashUsdFromText(raw);
+  const cashUsd = inferInvestmentCashSnapshotUsdFromText(raw);
   const snapshots = extractInvestmentPortfolioSnapshotRows(raw).filter(snapshot => snapshot.symbol && snapshot.symbol !== 'CASH');
   const onlyRemainingSymbols = extractInvestmentOnlyRemainingSymbols(raw);
   const ledgerResult = applyInvestmentLedgerCommand(state.investment, {
     type: 'portfolioSnapshot',
     source: 'user_confirmed',
     positions: snapshots,
-    cashUsd: cashUsd > 0 ? cashUsd : null,
+    cashUsd,
     usdKrwRate: explicitRate > 0 ? explicitRate : null,
     onlySymbols: onlyRemainingSymbols.size ? [...onlyRemainingSymbols] : null,
     rawText: raw,
@@ -764,7 +847,7 @@ function applyInvestmentPortfolioSnapshotFromChat(text) {
     .filter(p => !isCashInvestmentPosition(p) && (handledSymbols.has(String(p.symbol || '').toUpperCase()) || investmentTextMentionsPosition(raw, p)))
     .map(p => p.symbol || p.name)
     .filter(Boolean);
-  if (cashUsd > 0) symbols.push('CASH');
+  if (cashUsd != null) symbols.push('CASH');
   logger.info('투자 포트폴리오 스냅샷 자동 갱신', { changed, symbols });
   return {
     changed: true,
@@ -874,30 +957,66 @@ function extractInvestmentInlinePositionSnapshots(text) {
   const rows = [];
   const sentences = splitInvestmentSnapshotSentences(text);
   sentences.forEach(sentence => {
-    const symbol = normalizeInvestmentSnapshotSymbol(sentence);
-    if (!symbol || symbol === 'CASH') return;
-    const shares = extractSnapshotNumber(sentence, [
+    extractInvestmentSymbolClauses(sentence).forEach(clause => {
+      const symbol = clause.symbol;
+      const source = clause.text;
+      if (!symbol || symbol === 'CASH') return;
+      const shares = extractSnapshotNumber(source, [
       /([0-9][0-9,.]*)\s*(?:shares?|units?|주|개)/i,
       /(?:shares?|quantity|qty|수량)[^0-9]{0,24}([0-9][0-9,.]*)/i,
-    ]);
-    const avgPrice = extractSnapshotNumber(sentence, [
+      ]);
+      const avgPrice = extractSnapshotNumber(source, [
       /(?:average\s*price|avg|average|평단|평균\s*단가)[^0-9]{0,24}\$?\s*([0-9][0-9,.]*)/i,
-    ]);
-    const currentPrice = extractSnapshotNumber(sentence, [
+      ]);
+      const currentPrice = extractSnapshotNumber(source, [
       /(?:current\s*price|current|현재가|현재\s*가격)[^0-9]{0,24}\$?\s*([0-9][0-9,.]*)/i,
-    ]);
-    if (shares > 0 || avgPrice > 0 || currentPrice > 0) {
-      rows.push({
-        symbol,
-        name: inferInvestmentSnapshotName(symbol, sentence),
-        shares,
-        avgPrice,
-        currentPrice,
-        assetType: isInvestmentCryptoSymbol(symbol) ? 'crypto' : 'stock',
-      });
-    }
+      ]);
+      const marketValueUsd = extractInvestmentMarketValueUsdFromText(source);
+      if (shares > 0 || avgPrice > 0 || currentPrice > 0 || marketValueUsd > 0) {
+        rows.push({
+          symbol,
+          name: inferInvestmentSnapshotName(symbol, source),
+          shares,
+          avgPrice,
+          currentPrice,
+          marketValueUsd,
+          assetType: isInvestmentCryptoSymbol(symbol) ? 'crypto' : 'stock',
+        });
+      }
+    });
   });
   return rows;
+}
+
+function extractInvestmentSymbolClauses(sentence) {
+  const raw = String(sentence || '');
+  const symbols = [
+    { symbol: 'INTC', pattern: /\b(?:intel|intc)\b|인텔/ig },
+    { symbol: 'IREN', pattern: /\bIREN\b|아이렌|iris energy/ig },
+    { symbol: 'CRCL', pattern: /\bCRCL\b|써클|서클|circle/ig },
+    { symbol: 'ETH-USD', pattern: /\bETH(?:-USD)?\b|이더리움|ethereum|ether/ig },
+    { symbol: 'BTC-USD', pattern: /\bBTC(?:-USD)?\b|비트코인|bitcoin/ig },
+    { symbol: 'QLD', pattern: /\bQLD\b/ig },
+    { symbol: 'QQQM', pattern: /\bQQQM\b/ig },
+  ];
+  const hits = [];
+  symbols.forEach(item => {
+    for (const match of raw.matchAll(item.pattern)) {
+      hits.push({ symbol: item.symbol, index: match.index || 0 });
+    }
+  });
+  hits.sort((a, b) => a.index - b.index);
+  if (!hits.length) {
+    const symbol = normalizeInvestmentSnapshotSymbol(raw);
+    return symbol ? [{ symbol, text: raw }] : [];
+  }
+  return hits.map((hit, index) => {
+    const next = hits[index + 1]?.index ?? raw.length;
+    return {
+      symbol: hit.symbol,
+      text: raw.slice(hit.index, next).trim(),
+    };
+  });
 }
 
 function extractInvestmentPortfolioSnapshotBlocks(lines) {
@@ -1078,6 +1197,23 @@ function inferInvestmentCashUsdFromText(text) {
   if (krw > 0) return Math.round((krw / (rateFromText || investmentUsdKrwRate())) * 100) / 100;
   const n = parseInvestmentNumber((fragment.match(/([0-9][0-9,]*(?:\.[0-9]{1,4})?)/) || [])[1]);
   return n > 0 ? n : 0;
+}
+
+function inferInvestmentCashSnapshotUsdFromText(text) {
+  const raw = String(text || '');
+  if (/(?:\uD604\uAE08|\uC608\uC218\uAE08|cash)[^\n.。]{0,24}(?:\uC5C6|0\s*(?:\uC6D0|KRW|USD|\$)?|\uC804\uBD80\s*(?:\uC778\uD154|INTC)|\uC774\uC81C\s*\uC5C6)/i.test(raw)) return 0;
+  const cashUsd = inferInvestmentCashUsdFromText(raw);
+  return cashUsd > 0 ? cashUsd : null;
+}
+
+function extractInvestmentMarketValueUsdFromText(text) {
+  const raw = String(text || '');
+  const directUsd = raw.match(/(?:\uD3C9\uAC00\uC561|\uCD1D\uC561|\uAC00\uCE58|value|market\s*value|\uD604\uC7AC)[^\n]{0,20}(?:\$|USD\s*)([0-9][0-9,]*(?:\.[0-9]{1,4})?)/i) ||
+    raw.match(/(?:\$|USD\s*)([0-9][0-9,]*(?:\.[0-9]{1,4})?)[^\n]{0,20}(?:\uD3C9\uAC00\uC561|\uCD1D\uC561|\uAC00\uCE58|value|market\s*value)/i);
+  if (directUsd) return parseInvestmentNumber(directUsd[1]);
+  const krw = parseKoreanKrwAmount(raw);
+  if (krw <= 0) return 0;
+  return Math.round((krw / investmentUsdKrwRate()) * 100) / 100;
 }
 
 function extractInvestmentUsdKrwRateFromText(text) {
