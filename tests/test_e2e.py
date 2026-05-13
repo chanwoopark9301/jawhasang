@@ -1546,10 +1546,15 @@ class TestInvestmentPartner:
         assert not any('Clarity Act' in query for query in result)
         assert all(len(query) <= 150 and '<' not in query and 'http' not in query for query in result)
 
-    def test_investment_prompt_includes_daily_desk_guardrails(self, logged_in_page):
-        self._open_investment(logged_in_page)
+    def test_investment_prompt_includes_daily_desk_guardrails(self, page, live_server_url):
+        from tests.conftest import E2E_PASSWORD
+        page.goto(f'{live_server_url}/login')
+        page.fill('input[name=password]', E2E_PASSWORD)
+        page.click('button[type=submit]')
+        page.wait_for_selector('#app-splash', state='hidden', timeout=15_000)
+        self._open_investment(page)
 
-        prompt = logged_in_page.evaluate("""() => {
+        prompt = page.evaluate("""() => {
             state.investment.positions = [{
                 id: 'ip-iren-prompt',
                 symbol: 'IREN',
@@ -1575,10 +1580,37 @@ class TestInvestmentPartner:
                 cashApplied: true,
                 createdAt: new Date().toISOString(),
             }];
+            state.investment.desk = {
+                ...(state.investment.desk || {}),
+                engine: {
+                    date: new Date().toISOString().slice(0, 10),
+                    marketView: { topLine: 'Event defense: do not add leverage before CPI' },
+                    behaviorControls: [],
+                    marketRegime: {
+                        regime: {
+                            regime: 'sideways',
+                            label: 'Sideways',
+                            targetCashRange: [40, 55],
+                            eventDefense: true,
+                            eventDefenseLevel: 'high',
+                            bigEvents: [{ id: 'cpi', date: new Date().toISOString().slice(0, 10), daysAway: 0, category: 'macro', importance: 'high', symbol: 'MACRO', title: 'CPI' }],
+                        },
+                        allocation: {
+                            cashGap: { current: 33.3, min: 40, max: 55, status: 'too_low' },
+                            actions: [{ type: 'cap_leverage', title: 'QLD leverage add blocked', reason: 'Event defense is active.' }],
+                            doNotDo: ['Do not add leverage before CPI confirmation.'],
+                        },
+                    },
+                },
+            };
             return _buildChatSysPrompt(false, null, null);
         }""")
 
         assert 'Daily Investment Desk briefing rules' in prompt
+        assert 'Market regime:' in prompt
+        assert 'eventDefenseLevel=high' in prompt
+        assert 'targetCash=40-55%' in prompt
+        assert 'QLD leverage add blocked' in prompt
         assert 'market briefing layer' in prompt
         assert 'IREN' in prompt
         assert 'scenario/action plan' in prompt

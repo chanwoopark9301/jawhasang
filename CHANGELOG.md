@@ -760,6 +760,13 @@
 - Updated static asset cache to `20260511-13` and service worker cache to `jip-v115`.
 ## 2026-05-13
 
+### 투자 대화와 시장 조절 엔진 통합
+
+- 투자 대화 프롬프트가 오늘의 데스크 요약을 통해 `Market regime`, 이벤트 방어 레벨, 목표 현금 밴드, 현금 갭, allocation action을 읽도록 검증했다.
+- 서버 trade gate가 시장 조절 엔진의 `allocation.actions`를 함께 평가해 이벤트 방어 중 QLD 추가매수 같은 행동을 `cap_leverage`로 차단하도록 했다.
+- allocation action은 게이트의 `blockedActions`, `reasons`, `requiredEvidence`에 합쳐져 AI 답변보다 서버 행동 통제 결과가 우선되도록 했다.
+- 투자 프롬프트 E2E와 이벤트 방어 중 레버리지 매수 차단 서버 테스트를 추가했다.
+
 ### 오늘의 데스크 시장 구간 UI
 
 - 오늘의 데스크 팝업에 `Market Regime` 카드를 추가해 시장 구간, 목표 현금 밴드, 현재 현금 갭, 이벤트 방어 레벨을 먼저 보여주도록 했다.

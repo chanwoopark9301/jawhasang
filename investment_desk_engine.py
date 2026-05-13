@@ -778,6 +778,22 @@ def evaluate_trade_intent_gate(investment: Dict[str, Any], intent: Dict[str, Any
         required.extend(control.get("requiredBeforeAction") or [])
         blocked_actions.extend(control.get("blockedActions") or [])
 
+    market_regime = engine.get("marketRegime") or {}
+    allocation = market_regime.get("allocation") or {}
+    for allocation_action in allocation.get("actions") or []:
+        action_type = str(allocation_action.get("type") or "")
+        if not _allocation_action_applies_to_trade(action_type, symbol, action):
+            continue
+        blocked_actions.append(action_type)
+        reasons.append(
+            "Market allocation engine: "
+            + " ".join(str(part) for part in [allocation_action.get("title"), allocation_action.get("reason")] if part)
+        )
+        required.append("resolve market allocation constraint before order")
+    for item in allocation.get("doNotDo") or []:
+        if action in {"buy", "add"}:
+            reasons.append(f"Market allocation engine do-not-do: {item}")
+
     status = "allow"
     if action in {"buy", "add"}:
         hard_blocks = {
@@ -810,6 +826,20 @@ def evaluate_trade_intent_gate(investment: Dict[str, Any], intent: Dict[str, Any
     if not required:
         required.append("confirm size, price, thesis, and invalidation before order")
     return _trade_gate_result(engine, symbol, action, status, reasons, required, blocked_actions, scenario)
+
+
+def _allocation_action_applies_to_trade(action_type: str, symbol: str, action: str) -> bool:
+    if action not in {"buy", "add"}:
+        return False
+    leverage_symbols = {"QLD", "TQQQ", "SOXL", "UPRO", "TECL", "FNGU"}
+    volatile_symbols = {"IREN", "CRCL", "ETH", "ETH-USD", "BTC", "BTC-USD", "MARA", "RIOT"}
+    if action_type == "cap_leverage":
+        return symbol in leverage_symbols
+    if action_type == "trim_event_risk":
+        return symbol in volatile_symbols
+    if action_type == "raise_cash":
+        return True
+    return False
 
 
 def parse_trade_intent_from_text(investment: Dict[str, Any], text: Any) -> Dict[str, Any] | None:

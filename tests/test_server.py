@@ -684,6 +684,38 @@ class TestDataAPI:
         assert data['gate'] is None
         assert data['reply'] == ''
 
+    def test_investment_trade_gate_blocks_leverage_buy_during_event_defense(self, client, monkeypatch):
+        import server
+
+        monkeypatch.setattr(server, '_read_investment_snapshot_from_tables', lambda inv: None)
+        client.post('/api/data',
+                    data=json.dumps({'investment': {
+                        'positions': [
+                            {'id': 'ip-qld', 'symbol': 'QLD', 'name': 'QLD', 'shares': 312, 'avgPrice': 88.88, 'currentPrice': 91.72},
+                            {'id': 'ip-cash', 'symbol': 'CASH', 'assetType': 'cash', 'shares': 42135, 'cashAmount': 42135},
+                        ],
+                        'market': {'regimeMetrics': {'indexTrend': 0.2, 'breadth': 0.1, 'volatility': 0.4, 'updatedAt': '2026-05-13T09:00:00+09:00'}},
+                        'events': [
+                            {'id': 'cpi', 'date': '2026-05-14', 'type': 'macro', 'symbol': 'MACRO', 'title': 'CPI 발표'},
+                        ],
+                        'allocationPolicy': {
+                            'cashRanges': {'eventDefense': [40, 55]},
+                            'maxLeverageWeight': 15,
+                        },
+                    }}),
+                    content_type='application/json')
+
+        r = client.post('/api/investment/trade-gate',
+                        data=json.dumps({'date': '2026-05-13', 'symbol': 'QLD', 'action': 'buy', 'quantity': 10, 'reason': 'add leverage before CPI'}),
+                        content_type='application/json')
+
+        assert r.status_code == 200
+        gate = r.get_json()['gate']
+        assert gate['status'] == 'block'
+        assert gate['canCreateOrderIntent'] is False
+        assert 'cap_leverage' in gate['blockedActions']
+        assert any('Market allocation engine' in item for item in gate['reasons'])
+
     def test_investment_broker_sync_requires_kis_credentials(self, client, monkeypatch):
         monkeypatch.delenv('KIS_APP_KEY', raising=False)
         monkeypatch.delenv('KIS_APP_SECRET', raising=False)

@@ -263,6 +263,15 @@ CPI, FOMC, 실적, 정책 법안, 지정학 이벤트가 가까워지면 자동�
 3. Phase 4: 오늘의 데스크 UI에 `marketRegime` 카드 표시
 4. Phase 5: 투자 대화 프롬프트에 `marketRegime` 삽입
 5. Phase 6: 아침 배치가 marketRegime 스냅샷 저장
+## 2026-05-13 Update - Phase 5 Chat Integration 1차 구현 완료
+
+- 투자 대화 프롬프트가 `renderDailyDeskBrief()`를 통해 `Market regime`, `eventDefenseLevel`, `targetCash`, `cashGap`, allocation action을 포함하도록 검증했다.
+- 대화 브리핑은 포트폴리오 표 반복보다 시장 구간, 이벤트 방어, 금지 행동을 먼저 읽는다.
+- 서버 `evaluate_trade_intent_gate()`가 시장 조절 엔진의 `allocation.actions`를 함께 평가한다.
+- 이벤트 방어 중 QLD 같은 레버리지 상품 추가매수는 `cap_leverage`로 차단된다.
+- `raise_cash`, `trim_event_risk` 같은 allocation action도 매수/추가매수 게이트의 이유와 확인 조건으로 합류할 수 있게 했다.
+- E2E로 투자 프롬프트의 market regime 포함을, 서버 테스트로 QLD 이벤트 방어 매수 차단을 검증했다.
+
 ## 2026-05-13 Update - Phase 4 Desk UI Integration 1차 구현 완료
 
 - 오늘의 데스크 팝업에 `Market Regime` 카드를 추가했다.
