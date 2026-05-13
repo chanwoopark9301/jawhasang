@@ -308,6 +308,14 @@ CPI, FOMC, 실적, 정책 법안, 지정학 이벤트가 가까워지면 자동�
 - 비보유 종목의 일반 뉴스는 방어 이벤트에서 제외하거나 `low`로만 취급한다.
 - `classify_market_regime()`은 `eventDefenseLevel`(`none`, `low`, `medium`, `high`)을 반환한다.
 - 기존 현금 방어 정책과 호환되도록 이벤트 방어 시 목표 현금 범위는 `30~45%` 하한을 유지한다.
+## 2026-05-13 Update - Phase 9 Review Snapshot and Timeline Persistence complete
+
+- `/api/investment/desk/engine` now stores `marketRegimeReview` inside each `investment.deskSnapshots` record.
+- When the review loop detects a violation, the server writes a deduplicated `review` event into `investment.events`.
+- The review event is keyed by date (`market-regime-review-YYYY-MM-DD`) so repeated desk refreshes update the same timeline record instead of accumulating duplicates.
+- Review timeline events include target symbols, summary, body, score, violation count, source, and high importance.
+- Server TDD verifies both snapshot persistence and timeline event creation.
+
 ## 2026-05-13 Update - Phase 8 Desk Review Loop UI complete
 
 - The daily desk modal now renders a `Review Loop` card from `desk.marketRegimeReview`.

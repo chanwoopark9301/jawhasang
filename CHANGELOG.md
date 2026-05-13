@@ -795,6 +795,14 @@
 - CPI D-1은 `high`, 보유 종목 실적 D-3은 `medium` 이상, 비보유 종목 일반 뉴스는 제외 또는 `low`로 처리하는 서버 테스트를 추가했다.
 ## 2026-05-13
 
+### Review Loop Persistence
+
+- Desk snapshots now persist `marketRegimeReview` alongside market-regime fields.
+- When review-loop violations exist, `/api/investment/desk/engine` writes a deduplicated `review` event for the investment timeline.
+- Added server tests for review snapshot persistence and timeline event creation.
+
+## 2026-05-13
+
 ### Desk Review Loop UI
 
 - Added a `Review Loop` card to the daily investment desk modal.

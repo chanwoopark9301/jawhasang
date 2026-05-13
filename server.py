@@ -1122,12 +1122,14 @@ def investment_desk_engine_route():
         regime_summary = market_regime.get('regime') if isinstance(market_regime.get('regime'), dict) else {}
         allocation_summary = market_regime.get('allocation') if isinstance(market_regime.get('allocation'), dict) else {}
         cash_gap = allocation_summary.get('cashGap') if isinstance(allocation_summary.get('cashGap'), dict) else {}
+        market_regime_review = engine.get('marketRegimeReview') if isinstance(engine.get('marketRegimeReview'), dict) else {}
         snapshot = {
             'id': f"desk-{engine.get('date')}-{request_id}",
             'date': engine.get('date'),
             'generatedAt': engine.get('generatedAt'),
             'topLine': (engine.get('marketView') or {}).get('topLine'),
             'marketRegime': market_regime,
+            'marketRegimeReview': market_regime_review,
             'regime': regime_summary.get('regime'),
             'eventDefenseLevel': regime_summary.get('eventDefenseLevel'),
             'targetCashRange': regime_summary.get('targetCashRange'),
@@ -1137,6 +1139,7 @@ def investment_desk_engine_route():
         snapshots = [s for s in snapshots if str(s.get('date')) != str(engine.get('date'))]
         snapshots.append(snapshot)
         inv['deskSnapshots'] = snapshots[-20:]
+        _upsert_market_regime_review_event(inv, engine.get('date'), market_regime_review)
         data['investment'] = inv
         write_data(data)
         log.info('POST /api/investment/desk/engine [%s] generated positions=%d controls=%d',
@@ -1150,6 +1153,40 @@ def investment_desk_engine_route():
             'requestId': request_id,
             'errorDetail': _safe_error_detail(e),
         }), 500
+
+def _upsert_market_regime_review_event(inv, date_value, review):
+    if not isinstance(inv, dict) or not isinstance(review, dict):
+        return
+    violation_count = int(review.get('violationCount') or 0)
+    event_date = str(date_value or '')[:10]
+    if not event_date:
+        return
+    events = inv.get('events') if isinstance(inv.get('events'), list) else []
+    event_id = f"market-regime-review-{event_date}"
+    events = [e for e in events if not (isinstance(e, dict) and str(e.get('id')) == event_id)]
+    if violation_count > 0:
+        violations = [v for v in (review.get('violations') or []) if isinstance(v, dict)]
+        symbols = sorted({str(v.get('symbol') or '').upper() for v in violations if str(v.get('symbol') or '').strip()})
+        symbol_label = ', '.join(symbols[:4]) or 'Portfolio'
+        events.append({
+            'id': event_id,
+            'date': event_date,
+            'type': 'review',
+            'symbol': 'MACRO',
+            'targetSymbols': symbols,
+            'title': f"Review Loop: {symbol_label} control violation",
+            'summary': str(review.get('summary') or ''),
+            'body': '\n'.join(
+                f"- {v.get('date') or ''} {v.get('symbol') or 'Portfolio'} {v.get('type') or 'control'}: {v.get('reason') or ''}"
+                for v in violations[:6]
+            ),
+            'source': 'market-regime-review',
+            'importance': 'high' if violation_count else 'low',
+            'reviewScore': review.get('score'),
+            'violationCount': violation_count,
+            'createdAt': datetime.now().isoformat(),
+        })
+    inv['events'] = events
 
 @app.route('/api/investment/positions', methods=['POST'])
 @require_auth

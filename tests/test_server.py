@@ -335,6 +335,55 @@ class TestDataAPI:
         assert loaded['deskSnapshots'][0]['eventDefenseLevel'] == engine['marketRegime']['regime']['eventDefenseLevel']
         assert loaded['deskSnapshots'][0]['targetCashRange'] == engine['marketRegime']['regime']['targetCashRange']
         assert loaded['deskSnapshots'][0]['cashGap']['status'] == engine['marketRegime']['allocation']['cashGap']['status']
+        assert loaded['deskSnapshots'][0]['marketRegimeReview']['windowDays'] == 7
+
+    def test_investment_desk_engine_persists_review_loop_event(self, client, monkeypatch):
+        import server
+
+        monkeypatch.setattr(server, '_read_investment_snapshot_from_tables', lambda inv: None)
+        client.post('/api/data',
+                    data=json.dumps({'investment': {
+                        'positions': [
+                            {'id': 'ip-qld', 'symbol': 'QLD', 'shares': 312, 'avgPrice': 88.88, 'currentPrice': 91.72},
+                            {'id': 'ip-cash', 'symbol': 'CASH', 'assetType': 'cash', 'shares': 42135, 'cashAmount': 42135},
+                        ],
+                        'events': [],
+                        'deskSnapshots': [{
+                            'date': '2026-05-12',
+                            'eventDefenseLevel': 'high',
+                            'cashGap': {'current': 33.3, 'status': 'too_low'},
+                            'marketRegime': {
+                                'regime': {'regime': 'sideways', 'eventDefenseLevel': 'high', 'targetCashRange': [40, 55]},
+                                'allocation': {
+                                    'cashGap': {'current': 33.3, 'status': 'too_low'},
+                                    'actions': [{'type': 'cap_leverage', 'title': 'QLD add blocked'}],
+                                },
+                            },
+                        }],
+                        'decisions': [{
+                            'id': 'dec-qld-buy',
+                            'date': '2026-05-12',
+                            'symbol': 'QLD',
+                            'action': 'buy',
+                            'tradeShares': 10,
+                            'tradePrice': 91,
+                        }],
+                    }}),
+                    content_type='application/json')
+
+        r = client.post('/api/investment/desk/engine',
+                        data=json.dumps({'date': '2026-05-13'}),
+                        content_type='application/json')
+
+        assert r.status_code == 200
+        loaded = client.get('/api/data').get_json()['investment']
+        snapshot = loaded['deskSnapshots'][-1]
+        assert snapshot['marketRegimeReview']['violationCount'] == 1
+        review_events = [e for e in loaded['events'] if e.get('type') == 'review']
+        assert len(review_events) == 1
+        assert review_events[0]['source'] == 'market-regime-review'
+        assert 'QLD' in review_events[0]['title']
+        assert review_events[0]['date'] == '2026-05-13'
 
     def test_investment_desk_engine_is_dynamic_for_unknown_symbol(self):
         from investment_desk_engine import build_investment_desk_engine
