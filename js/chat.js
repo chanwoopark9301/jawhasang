@@ -1279,9 +1279,14 @@ function applyInvestmentPortfolioSnapshotFromChat(text) {
   const changed = [];
   const handledSymbols = new Set();
   const explicitRate = extractInvestmentUsdKrwRateFromText(raw);
-  const cashUsd = inferInvestmentCashSnapshotUsdFromText(raw);
-  const snapshots = extractInvestmentPortfolioSnapshotRows(raw).filter(snapshot => snapshot.symbol && snapshot.symbol !== 'CASH');
-  const onlyRemainingSymbols = extractInvestmentOnlyRemainingSymbols(raw);
+  const pending = buildInvestmentPendingPortfolioSnapshotCommand(raw, { contextText: raw });
+  if (!pending?.command) {
+    logger.warn('portfolio snapshot parse produced no ledger command', { raw: raw.slice(0, 500) });
+    return { changed: false, symbols: [], summary: '' };
+  }
+  const cashUsd = pending.command.cashUsd;
+  const snapshots = pending.command.positions || [];
+  const onlyRemainingSymbols = new Set(pending.command.onlySymbols || []);
   const ledgerResult = applyInvestmentLedgerCommand(state.investment, {
     type: 'portfolioSnapshot',
     source: 'user_confirmed',

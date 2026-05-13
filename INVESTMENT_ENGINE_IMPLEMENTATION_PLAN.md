@@ -32,6 +32,13 @@
 - Added support for cash expressions such as "existing $42,135 + IREN/QLD sale proceeds"; removed symbols are valued from the current ledger and added to cash.
 - Added E2E coverage for the exact failure mode where pending confirmation state is gone but the recent chat still contains INTC/CRCL/ETH/cash-sale-proceeds facts.
 
+## 2026-05-13 Direct Final Snapshot Rebuild
+
+- Fixed the direct "final portfolio configuration" chat path so it uses the same `portfolioSnapshot` builder as retry/recovery instead of the older partial parser.
+- A user-confirmed final snapshot now removes symbols outside the declared keep set and can roll removed IREN/QLD value into cash.
+- Changed normalized Supabase position mirroring to rebuild the account's position rows for full snapshots, preventing stale holdings from surviving after a portfolio reset.
+- Added E2E coverage for the exact INTC/CRCL/ETH-USD/CASH final composition and server coverage for full position-row rebuilds.
+
 ## 2026-05-13 Ledger Parser Hardening
 
 - Refined the reasoning engine with residual-position ambiguity detection, trade-decision protocol, rule templates, and foresight agenda.

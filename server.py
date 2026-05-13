@@ -593,19 +593,10 @@ def _mirror_investment_snapshot_to_tables(data):
         _ensure_investment_tables(conn)
         with conn.cursor() as cur:
             account_id = _upsert_investment_account(cur, inv)
-            snapshot_symbols = [
-                str(position.get('symbol') or '').upper()
-                for position in inv.get('positions') or []
-                if position.get('symbol')
-            ]
-            if snapshot_symbols:
-                cur.execute("""
-                    DELETE FROM investment_positions
-                    WHERE account_id = %s
-                      AND NOT (symbol = ANY(%s))
-                """, (account_id, snapshot_symbols))
-            else:
-                cur.execute("DELETE FROM investment_positions WHERE account_id = %s", (account_id,))
+            # A portfolio snapshot is the account ledger's current truth.
+            # Rebuild the account rows instead of partial upserts so stale
+            # broker/manual positions cannot survive a user-confirmed reset.
+            cur.execute("DELETE FROM investment_positions WHERE account_id = %s", (account_id,))
             for position in inv.get('positions') or []:
                 if position.get('symbol'):
                     _upsert_investment_position_row(cur, account_id, position)

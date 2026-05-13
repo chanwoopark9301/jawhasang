@@ -4036,6 +4036,68 @@ CRCL shares=754, avgPrice=129.67, currentPrice=123.65`);
         assert result['cash'] == 101963.64
         assert '원장에 반영' in result['reply']
 
+    def test_direct_final_portfolio_snapshot_rebuilds_positions_and_cash(self, page, live_server_url):
+        from tests.conftest import E2E_PASSWORD
+        page.goto(f'{live_server_url}/login')
+        page.fill('input[name=password]', E2E_PASSWORD)
+        page.click('button[type=submit]')
+        page.wait_for_selector('#app-splash', state='hidden', timeout=15_000)
+        self._open_investment(page)
+        result = page.evaluate(r"""async () => {
+            state.investment = normalizeInvestmentState({
+                positions: [{
+                    id: 'ip-crcl-final', symbol: 'CRCL', name: 'Circle', shares: 5, avgPrice: 129.67, currentPrice: 123.65,
+                }, {
+                    id: 'ip-eth-final', symbol: 'ETH-USD', name: 'Ethereum', assetType: 'crypto', shares: 754, avgPrice: 129.67, currentPrice: 2334.95,
+                }, {
+                    id: 'ip-iren-final', symbol: 'IREN', name: 'Iris Energy', shares: 510, avgPrice: 66.38, currentPrice: 61.2,
+                }, {
+                    id: 'ip-qld-final', symbol: 'QLD', name: 'QLD', shares: 312, avgPrice: 88.88, currentPrice: 91.72,
+                }, {
+                    id: 'ip-cash-final', assetType: 'cash', symbol: 'CASH', name: 'Cash', cashAmount: 42135, shares: 42135, avgPrice: 1, currentPrice: 1,
+                }],
+                events: [],
+                decisions: [],
+                rules: {},
+                usdKrwRate: 1470,
+            });
+            window.__savedLedger = null;
+            window.apiSaveInvestmentLedgerSnapshot = async (investment) => {
+                window.__savedLedger = investment;
+                return { ok: true, investment };
+            };
+            await continueContextChat(`\uD3EC\uD2B8\uD3F4\uB9AC\uC624 \uCD5C\uC885 \uAD6C\uC131:
+
+INTC: 754\uC8FC, \uD3C9\uB2E8 $129.67
+CRCL: 5\uC8FC, \uD3C9\uB2E8 $129.67
+ETH-USD: 5\uAC1C, \uD3C9\uB2E8 $611
+\uD604\uAE08: \uAE30\uC874 $42,135 + IREN/QLD \uB9E4\uAC01\uAE08
+\uC774\uAC83\uB300\uB85C \uB2E4\uC2DC \uD3EC\uD2B8\uD3F4\uB9AC\uC624 \uAC31\uC2E0\uD574`);
+            await new Promise(resolve => setTimeout(resolve, 0));
+            const bySymbol = Object.fromEntries(state.investment.positions.map(p => [p.symbol, p]));
+            return {
+                symbols: state.investment.positions.map(p => p.symbol).sort(),
+                savedSymbols: window.__savedLedger?.positions?.map(p => p.symbol).sort() || [],
+                intcShares: bySymbol.INTC?.shares,
+                crclShares: bySymbol.CRCL?.shares,
+                ethShares: bySymbol['ETH-USD']?.shares,
+                ethAvg: bySymbol['ETH-USD']?.avgPrice,
+                cash: Math.round((bySymbol.CASH?.cashAmount || 0) * 100) / 100,
+                hasIren: Boolean(bySymbol.IREN),
+                hasQld: Boolean(bySymbol.QLD),
+            };
+        }""")
+
+        assert result['symbols'] == ['CASH', 'CRCL', 'ETH-USD', 'INTC']
+        assert result['savedSymbols'] == ['CASH', 'CRCL', 'ETH-USD', 'INTC']
+        assert result['intcShares'] == 754
+        assert result['crclShares'] == 5
+        assert result['ethShares'] == 5
+        assert result['ethAvg'] == 611
+        assert result['cash'] == 101963.64
+        assert result['hasIren'] is False
+        assert result['hasQld'] is False
+
     def test_estimated_purchase_from_krw_loss_quote_and_fx_updates_ledger(self, page, live_server_url):
         from tests.conftest import E2E_PASSWORD
         page.goto(f'{live_server_url}/login')

@@ -369,7 +369,7 @@ class TestDataAPI:
         delete_calls = [call for call in calls if call[0].startswith('DELETE FROM investment_positions')]
         assert delete_calls, calls
         assert delete_calls[0][1][0] == 'primary'
-        assert delete_calls[0][1][1] == ['ETH-USD', 'INTC']
+        assert delete_calls[0][1] == ('primary',)
 
     def test_investment_desk_engine_endpoint_generates_theses_controls_and_snapshot(self, client, monkeypatch):
         import server
