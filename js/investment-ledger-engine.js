@@ -83,6 +83,8 @@ function applyInvestmentLedgerPortfolioSnapshot(inv, command, result) {
       currentPrice: currentPrice > 0 ? currentPrice : parseInvestmentNumber(previous.currentPrice),
       manualPrice: currentPrice > 0 ? true : previous.manualPrice,
       marketUpdatedAt: currentPrice > 0 ? now : previous.marketUpdatedAt,
+      estimated: snapshot.estimated != null ? Boolean(snapshot.estimated) : Boolean(previous.estimated),
+      estimateBasis: snapshot.estimateBasis || previous.estimateBasis || null,
       ledgerSource: command.source || 'user_confirmed',
       ledgerUpdatedAt: now,
     };

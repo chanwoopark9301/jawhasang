@@ -2,6 +2,8 @@
 
 ## 2026-05-13 Ledger Parser Hardening
 
+- Added an estimated purchase inference path for incomplete account updates. When the user gives invested KRW amount, current loss percentage, and a symbol, the app can fetch quote/FX, reverse the loss into average price, estimate shares, and save the position as `estimated`.
+- Estimated ledger writes must retain `estimateBasis` so they remain visibly lower authority than broker-confirmed fills.
 - Natural-language portfolio chat now follows a ledger-first conversation flow: read current holdings, infer user intent, then ask for missing authoritative trade/account values before writing.
 - Loose phrases such as "ETH is unchanged and the rest is Intel" are not ledger commands. They create a reconciliation question instead of changing shares/cash immediately.
 - Strict snapshot-like input remains the allowed direct-write path, while AI replies and ambiguous summaries stay below ledger authority.

@@ -8,6 +8,14 @@
 
 ## 2026-05-13
 
+### Estimated Purchase Ledger Inference
+
+- Added an estimated portfolio update path for cases where the user knows the KRW amount invested and current loss percentage but not the exact share count.
+- The app now fetches the current quote and USD/KRW rate, reverses the loss percentage into an estimated average price, converts KRW to USD, and estimates shares before writing a marked estimated ledger position.
+- Estimated positions store `estimated: true` and an `estimateBasis` object so broker-confirmed values can later replace the approximation.
+- Added E2E coverage for an INTC example: KRW 140,000,000 invested, current -6%, quote 121.84, USD/KRW 1470.
+- Bumped the static asset version to `20260513-09` and service worker cache to `jip-v148`.
+
 ### Ledger-First Portfolio Conversation
 
 - Changed natural-language portfolio updates so loose chat text no longer writes directly to the ledger.

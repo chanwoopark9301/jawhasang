@@ -91,8 +91,33 @@ async function continueContextChat(text) {
   const portfolioSnapshotRequest = isInvestment
     && typeof isInvestmentPortfolioSnapshotIntent === 'function'
     && isInvestmentPortfolioSnapshotIntent(text);
+  const portfolioEstimateRequest = isInvestment
+    && typeof isInvestmentPortfolioEstimateIntent === 'function'
+    && isInvestmentPortfolioEstimateIntent(text);
 
-  if (portfolioSnapshotRequest && typeof applyInvestmentPortfolioSnapshotFromChat === 'function') {
+  if ((portfolioSnapshotRequest || portfolioEstimateRequest) && typeof applyInvestmentPortfolioSnapshotFromChat === 'function') {
+    const estimatedPortfolioUpdate = await maybeApplyInvestmentEstimatedPortfolioFromChat(text);
+    if (estimatedPortfolioUpdate.changed) {
+      const today = new Date().toISOString().split('T')[0];
+      state.investment.events.push({
+        id: 'ie' + Date.now(),
+        date: today,
+        type: 'portfolio',
+        symbol: estimatedPortfolioUpdate.symbols.join(', '),
+        title: '포트폴리오 추정 갱신',
+        body: estimatedPortfolioUpdate.summary,
+        severity: 'watch',
+        linkedDecisionId: null,
+        linkedRecordId: null,
+      });
+      hideTypingIndicator();
+      appendMessage('ai', `원장 엔진이 추정값으로 포트폴리오를 갱신했어요.\n\n${estimatedPortfolioUpdate.summary}`);
+      refreshInvestmentSurfaces();
+      showToast('추정 원장으로 반영했어요. 체결 내역이 확인되면 보정하세요.');
+      persistInvestmentChangesInBackground('estimated portfolio snapshot');
+      state._ctxChatLoading = false;
+      return;
+    }
     if (!isStrictInvestmentPortfolioSnapshotText(text)) {
       hideTypingIndicator();
       appendMessage('ai', buildInvestmentPortfolioReconciliationQuestion(text));
@@ -459,6 +484,99 @@ function buildInvestmentPortfolioSnapshotSourceText(text) {
     .filter(Boolean)
     .join('\n\n');
   return [recent, raw].filter(Boolean).join('\n\n');
+}
+
+function isInvestmentPortfolioEstimateIntent(text) {
+  const raw = String(text || '');
+  const hasSymbol = extractInvestmentMentionedSymbols(raw).some(symbol => symbol !== 'CASH');
+  const hasKrwAmount = parseKoreanKrwAmount(raw) > 0;
+  const hasLossRate = extractInvestmentLossPercentFromText(raw) > 0;
+  const buyIntent = /(?:샀|매수|투입|넣었|진입|산|bought|buy|invested|entered)/i.test(raw);
+  const unknownShares = /(?:몇\s*주|수량|shares?|qty)[^\n.。]{0,24}(?:모르|몰라|unknown|not\s+sure)|(?:모르|몰라)[^\n.。]{0,24}(?:몇\s*주|수량|shares?|qty)/i.test(raw);
+  return hasSymbol && hasKrwAmount && hasLossRate && (buyIntent || unknownShares);
+}
+
+async function maybeApplyInvestmentEstimatedPortfolioFromChat(text) {
+  const raw = String(text || '');
+  if (!isInvestmentPortfolioEstimateIntent(raw)) return { changed: false, symbols: [], summary: '' };
+  const symbols = extractInvestmentMentionedSymbols(raw).filter(symbol => symbol !== 'CASH');
+  const symbol = symbols.length === 1 ? symbols[0] : symbols.find(s => s === inferInvestmentSymbol(raw));
+  if (!symbol) return { changed: false, symbols: [], summary: '' };
+  const krwAmount = parseKoreanKrwAmount(raw);
+  const lossPercent = extractInvestmentLossPercentFromText(raw);
+  if (krwAmount <= 0 || lossPercent <= 0 || lossPercent >= 95) return { changed: false, symbols: [], summary: '' };
+
+  let quote = null;
+  let fx = null;
+  try {
+    const data = await fetchMarketQuoteData([symbol, 'USDKRW=X']);
+    const quotes = data?.quotes || [];
+    quote = quotes.find(q => String(q.symbol || '').toUpperCase() === symbol);
+    fx = quotes.find(q => String(q.symbol || '').toUpperCase() === 'USDKRW=X');
+  } catch (error) {
+    logger.warn('투자 추정 원장 시세 조회 실패', { symbol, error });
+  }
+  const currentPrice = parseInvestmentNumber(quote?.price) || parseInvestmentNumber((state.investment?.positions || []).find(p => String(p.symbol || '').toUpperCase() === symbol)?.currentPrice);
+  const usdKrwRate = parseInvestmentNumber(fx?.price) || investmentUsdKrwRate();
+  if (currentPrice <= 0 || usdKrwRate <= 0) return { changed: false, symbols: [], summary: '' };
+
+  const avgPrice = Math.round((currentPrice / (1 - lossPercent / 100)) * 10000) / 10000;
+  const investedUsd = Math.round((krwAmount / usdKrwRate) * 100) / 100;
+  const shares = Math.round((investedUsd / avgPrice) * 10000) / 10000;
+  if (shares <= 0 || avgPrice <= 0) return { changed: false, symbols: [], summary: '' };
+
+  state.investment = normalizeInvestmentState(state.investment);
+  const ledgerResult = applyInvestmentLedgerCommand(state.investment, {
+    type: 'portfolioSnapshot',
+    source: 'user_confirmed',
+    positions: [{
+      symbol,
+      name: inferInvestmentSnapshotName(symbol, raw),
+      shares,
+      avgPrice,
+      currentPrice,
+      estimated: true,
+      estimateBasis: {
+        krwAmount,
+        investedUsd,
+        lossPercent,
+        currentPrice,
+        usdKrwRate,
+        formula: 'avgPrice = currentPrice / (1 - lossPercent), shares = (krwAmount / usdKrwRate) / avgPrice',
+      },
+      assetType: isInvestmentCryptoSymbol(symbol) ? 'crypto' : 'stock',
+    }],
+    usdKrwRate,
+    rawText: raw,
+  });
+  if (!ledgerResult.ok) return { changed: false, symbols: [], summary: '' };
+  state.investment = ledgerResult.investment;
+  state.investment.alerts = buildInvestmentRiskAlerts(state.investment.positions, state.investment.rules);
+  const summary = [
+    `${symbol} 추정 원장 반영`,
+    `- 투입금: 약 ₩${Math.round(krwAmount).toLocaleString('ko-KR')} = ${formatMoney(investedUsd)} (USD/KRW ${usdKrwRate})`,
+    `- 현재가: ${formatMoney(currentPrice)}`,
+    `- 현재 손익률: -${lossPercent}%`,
+    `- 역산 평단: ${formatMoney(avgPrice)}`,
+    `- 추정 수량: ${formatShares(shares)}`,
+    '',
+    '체결 내역을 확인하면 실제 수량/평단으로 보정하세요.',
+  ].join('\n');
+  return { changed: true, symbols: [symbol], summary };
+}
+
+function extractInvestmentLossPercentFromText(text) {
+  const raw = String(text || '');
+  const patterns = [
+    /([0-9][0-9,.]*)\s*(?:%|프로|퍼센트|percent)[^\n.。]{0,24}(?:마이너스|손실|손해|하락|minus|down|loss)/i,
+    /(?:마이너스|손실|손해|하락|minus|down|loss)[^\n.。]{0,24}([0-9][0-9,.]*)\s*(?:%|프로|퍼센트|percent)/i,
+    /-([0-9][0-9,.]*)\s*(?:%|프로|퍼센트|percent)/i,
+  ];
+  for (const pattern of patterns) {
+    const m = raw.match(pattern);
+    if (m) return parseInvestmentNumber(m[1]);
+  }
+  return 0;
 }
 
 function isStrictInvestmentPortfolioSnapshotText(text) {

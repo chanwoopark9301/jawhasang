@@ -3855,6 +3855,58 @@ CRCL shares=754, avgPrice=129.67, currentPrice=123.65`);
         assert 'INTC 보유 수량' in result['question']
         assert 'CRCL 수량' in result['question']
 
+    def test_estimated_purchase_from_krw_loss_quote_and_fx_updates_ledger(self, page, live_server_url):
+        from tests.conftest import E2E_PASSWORD
+        page.goto(f'{live_server_url}/login')
+        page.fill('input[name=password]', E2E_PASSWORD)
+        page.click('button[type=submit]')
+        page.wait_for_selector('#app-splash', state='hidden', timeout=15_000)
+        self._open_investment(page)
+        page.evaluate("""() => {
+            state.currentChatMessages = [];
+            state.investment.chat = [];
+            state.investment.decisions = [];
+            state.investment.events = [];
+            state.investment.positions = [];
+            state.investment.usdKrwRate = 1350;
+            window.fetchMarketQuoteData = async (symbols) => ({
+                quotes: [
+                    { symbol: 'INTC', price: 121.84 },
+                    { symbol: 'USDKRW=X', price: 1470 },
+                ],
+            });
+            render();
+        }""")
+
+        page.evaluate("""async () => {
+            await continueContextChat('포트폴리오 갱신해. 인텔 몇 주 샀는지는 모르겠고, 1억 4천만원 샀는데 지금 6프로 마이너스 상황이야.');
+        }""")
+        page.wait_for_function("() => state.investment.positions.find(p => p.symbol === 'INTC')?.estimated === true", timeout=8_000)
+        result = page.evaluate("""() => {
+            const p = state.investment.positions.find(pos => pos.symbol === 'INTC');
+            return {
+                shares: Math.round(p.shares * 100) / 100,
+                avgPrice: Math.round(p.avgPrice * 100) / 100,
+                currentPrice: p.currentPrice,
+                fx: state.investment.usdKrwRate,
+                estimated: p.estimated,
+                krwAmount: p.estimateBasis?.krwAmount,
+                lossPercent: p.estimateBasis?.lossPercent,
+                reply: state.currentChatMessages[state.currentChatMessages.length - 1]?.text || '',
+                eventTitle: state.investment.events.find(e => e.type === 'portfolio')?.title,
+            };
+        }""")
+
+        assert result['shares'] == 734.77
+        assert result['avgPrice'] == 129.62
+        assert result['currentPrice'] == 121.84
+        assert result['fx'] == 1470
+        assert result['estimated'] is True
+        assert result['krwAmount'] == 140000000
+        assert result['lossPercent'] == 6
+        assert '추정 원장 반영' in result['reply']
+        assert result['eventTitle'] == '포트폴리오 추정 갱신'
+
     def test_ledger_engine_separates_quote_updates_from_position_writes(self, page, live_server_url):
         from tests.conftest import E2E_PASSWORD
         page.goto(f'{live_server_url}/login')
