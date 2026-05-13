@@ -380,6 +380,56 @@ class TestDataAPI:
         assert any(a['type'] == 'cap_leverage' for a in engine['allocation']['actions'])
         assert any('빅 이벤트' in item for item in engine['allocation']['doNotDo'])
 
+    def test_market_regime_metrics_marks_insufficient_data_conservative(self):
+        from market_regime_engine import build_market_allocation_engine
+
+        engine = build_market_allocation_engine({
+            'positions': [
+                {'symbol': 'CASH', 'assetType': 'cash', 'shares': 20000, 'cashAmount': 20000},
+                {'symbol': 'QQQ', 'shares': 100, 'currentPrice': 400},
+            ],
+            'market': {
+                'regimeMetrics': {
+                    'indexTrend': 0.95,
+                    'sources': ['qqq'],
+                    'updatedAt': '2026-05-13T09:00:00+09:00',
+                }
+            },
+            'events': [],
+        }, '2026-05-13')
+
+        assert engine['regime']['metricsQuality']['dataQuality'] == 'insufficient'
+        assert engine['regime']['metricsQuality']['coverage'] < 3
+        assert engine['regime']['regime'] == 'sideways'
+        assert abs(engine['regime']['riskScore']) <= 0.15
+
+    def test_market_regime_metrics_marks_stale_data_conservative(self):
+        from market_regime_engine import build_market_allocation_engine
+
+        engine = build_market_allocation_engine({
+            'positions': [
+                {'symbol': 'CASH', 'assetType': 'cash', 'shares': 5000, 'cashAmount': 5000},
+                {'symbol': 'QLD', 'shares': 200, 'currentPrice': 100},
+            ],
+            'market': {
+                'regimeMetrics': {
+                    'indexTrend': 1,
+                    'breadth': 1,
+                    'volatility': -1,
+                    'ratesPressure': -1,
+                    'cryptoRisk': 1,
+                    'updatedAt': '2026-05-10T09:00:00+09:00',
+                    'sources': ['qqq', 'vix', 'rates'],
+                }
+            },
+            'events': [],
+        }, '2026-05-13')
+
+        assert engine['regime']['metricsQuality']['stale'] is True
+        assert engine['regime']['metricsQuality']['dataQuality'] == 'stale'
+        assert engine['regime']['regime'] == 'sideways'
+        assert abs(engine['regime']['riskScore']) <= 0.15
+
     def test_investment_desk_engine_includes_market_allocation_engine(self):
         from investment_desk_engine import build_investment_desk_engine
 

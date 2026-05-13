@@ -47,7 +47,7 @@ LLM은 판단의 최종 결정권자가 아니다. LLM 응답이 엔진 판정�
 
 ### Phase 1. Market Signal Schema
 
-상태: 다음 작업
+상태: 1차 구현 완료
 
 목표:
 
@@ -66,9 +66,10 @@ LLM은 판단의 최종 결정권자가 아니다. LLM 응답이 엔진 판정�
 
 구현:
 
-- 서버 함수 `build_market_regime_metrics(investment, market_data)` 추가
+- 서버 함수 `build_market_regime_metrics(investment, today_value)` 추가
 - 시장 데이터가 부족하면 `dataQuality=insufficient`로 표시
-- 데이터가 부족한 상태에서는 강한 판정을 하지 않고 `sideways` 또는 `unknown`에 가깝게 보수적으로 처리
+- `updatedAt/fetchedAt`이 2일 이상 오래되면 `dataQuality=stale`로 표시
+- 데이터가 부족하거나 오래된 상태에서는 risk score를 -0.15~0.15로 제한해 강한 상승/하락 판정을 하지 않도록 처리
 
 테스트:
 

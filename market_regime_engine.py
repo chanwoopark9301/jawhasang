@@ -11,6 +11,16 @@ from datetime import date, datetime
 from typing import Any, Dict, List, Tuple
 
 
+METRIC_KEYS = (
+    "indexTrend",
+    "breadth",
+    "volatility",
+    "ratesPressure",
+    "cryptoRisk",
+    "semiconductorMomentum",
+)
+
+
 def _num(value: Any, default: float = 0.0) -> float:
     if value is None or value == "":
         return default
@@ -73,17 +83,69 @@ def _portfolio_exposure(investment: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _market_metrics(investment: Dict[str, Any]) -> Dict[str, float]:
+def _clamp(value: float, low: float = -1.0, high: float = 1.0) -> float:
+    return max(low, min(high, value))
+
+
+def _parse_datetime(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+def _metric_quality(raw: Dict[str, Any], metrics: Dict[str, float], today: date) -> Dict[str, Any]:
+    coverage = sum(1 for key in METRIC_KEYS if raw.get(key) not in (None, ""))
+    updated_at = _parse_datetime(raw.get("updatedAt") or raw.get("fetchedAt"))
+    stale = False
+    age_days = None
+    if updated_at:
+        age_days = max(0, (today - updated_at.date()).days)
+        stale = age_days >= 2
+    sources = raw.get("sources") if isinstance(raw.get("sources"), list) else []
+    if stale:
+        data_quality = "stale"
+    elif coverage < 3:
+        data_quality = "insufficient"
+    else:
+        data_quality = "sufficient"
+    return {
+        "dataQuality": data_quality,
+        "coverage": coverage,
+        "requiredCoverage": 3,
+        "stale": stale,
+        "ageDays": age_days,
+        "updatedAt": updated_at.isoformat() if updated_at else None,
+        "sources": [str(item) for item in sources[:12]],
+        "missing": [key for key in METRIC_KEYS if raw.get(key) in (None, "")],
+    }
+
+
+def build_market_regime_metrics(investment: Dict[str, Any], today_value: Any = None) -> Dict[str, Any]:
     market = investment.get("market") if isinstance(investment.get("market"), dict) else {}
     raw = market.get("regimeMetrics") if isinstance(market.get("regimeMetrics"), dict) else {}
+    today = _today(today_value)
     metrics = {
-        "indexTrend": _num(raw.get("indexTrend"), _num(market.get("indexTrend"), 0.0)),
-        "breadth": _num(raw.get("breadth"), _num(market.get("breadth"), 0.0)),
-        "volatility": _num(raw.get("volatility"), _num(market.get("volatility"), 0.0)),
-        "ratesPressure": _num(raw.get("ratesPressure"), _num(market.get("ratesPressure"), 0.0)),
-        "cryptoRisk": _num(raw.get("cryptoRisk"), _num(market.get("cryptoRisk"), 0.0)),
+        "indexTrend": _clamp(_num(raw.get("indexTrend"), _num(market.get("indexTrend"), 0.0))),
+        "breadth": _clamp(_num(raw.get("breadth"), _num(market.get("breadth"), 0.0))),
+        "volatility": _clamp(_num(raw.get("volatility"), _num(market.get("volatility"), 0.0))),
+        "ratesPressure": _clamp(_num(raw.get("ratesPressure"), _num(market.get("ratesPressure"), 0.0))),
+        "cryptoRisk": _clamp(_num(raw.get("cryptoRisk"), _num(market.get("cryptoRisk"), 0.0))),
+        "semiconductorMomentum": _clamp(_num(raw.get("semiconductorMomentum"), _num(market.get("semiconductorMomentum"), 0.0))),
     }
-    return metrics
+    return {
+        "metrics": metrics,
+        "quality": _metric_quality(raw, metrics, today),
+    }
+
+
+def _market_metrics(investment: Dict[str, Any], today_value: Any = None) -> Dict[str, float]:
+    return build_market_regime_metrics(investment, today_value)["metrics"]
 
 
 def _near_big_events(investment: Dict[str, Any], today: date) -> List[Dict[str, Any]]:
@@ -121,15 +183,20 @@ def _near_big_events(investment: Dict[str, Any], today: date) -> List[Dict[str, 
 def classify_market_regime(investment: Dict[str, Any], today_value: Any = None) -> Dict[str, Any]:
     inv = investment if isinstance(investment, dict) else {}
     today = _today(today_value)
-    metrics = _market_metrics(inv)
+    metrics_result = build_market_regime_metrics(inv, today)
+    metrics = metrics_result["metrics"]
+    quality = metrics_result["quality"]
     events = _near_big_events(inv, today)
     risk_score = (
         metrics["indexTrend"] * 0.35
         + metrics["breadth"] * 0.25
         + metrics["cryptoRisk"] * 0.10
+        + metrics["semiconductorMomentum"] * 0.10
         - metrics["volatility"] * 0.20
         - metrics["ratesPressure"] * 0.10
     )
+    if quality["dataQuality"] in {"insufficient", "stale"}:
+        risk_score = _clamp(risk_score, -0.15, 0.15)
     if events:
         risk_score -= min(0.25, 0.08 * len(events))
     if risk_score >= 0.35:
@@ -154,6 +221,7 @@ def classify_market_regime(investment: Dict[str, Any], today_value: Any = None) 
         "eventDefense": bool(events),
         "bigEvents": events,
         "metrics": metrics,
+        "metricsQuality": quality,
     }
 
 

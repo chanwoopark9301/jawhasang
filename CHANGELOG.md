@@ -14,6 +14,7 @@
 - 포트폴리오의 현금, 위험자산, 레버리지, 고변동 종목 노출을 계산해 `raise_cash`, `cap_leverage`, `trim_event_risk` 같은 조절 행동을 만든다.
 - 투자 데스크 엔진 결과에 `marketRegime`을 포함해 오늘의 데스크가 종목 판단보다 먼저 장세와 비중 조절을 볼 수 있게 했다.
 - `MARKET_REGIME_ALLOCATION_IMPLEMENTATION_PLAN.md`를 추가해 시장 판단 엔진, 포트폴리오 조절 엔진, 데스크 UI, 대화 통합, 아침 배치 순서를 고정했다.
+- `investment.market.regimeMetrics` 품질 판정을 추가해 데이터가 부족하면 `insufficient`, 오래되면 `stale`로 표시하고 강한 장세 판정을 보수적으로 제한한다.
 
 ### 한투·빗썸 읽기 전용 브로커 잠금
 
