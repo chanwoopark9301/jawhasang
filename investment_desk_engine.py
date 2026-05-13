@@ -749,6 +749,7 @@ def build_market_regime_review(investment: Dict[str, Any], today_value: Any = No
                     cash_status,
                 ))
 
+    corrective_actions = _build_market_regime_corrective_actions(violations)
     score = -25 * len(violations)
     return {
         "windowDays": window_days,
@@ -756,6 +757,7 @@ def build_market_regime_review(investment: Dict[str, Any], today_value: Any = No
         "decisionCount": len(decisions),
         "violationCount": len(violations),
         "violations": violations[:20],
+        "correctiveActions": corrective_actions,
         "score": score,
         "summary": _market_regime_review_summary(score, violations),
     }
@@ -780,6 +782,32 @@ def _market_regime_review_summary(score: int, violations: List[Dict[str, Any]]) 
         return "No market-regime control violations found in the review window."
     symbols = ", ".join(sorted({item.get("symbol") for item in violations if item.get("symbol")})[:4])
     return f"{len(violations)} market-regime control violation(s) found: {symbols or 'portfolio'}."
+
+
+def _build_market_regime_corrective_actions(violations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    actions = []
+    seen = set()
+    for violation in violations:
+        symbol = str(violation.get("symbol") or "Portfolio").upper()
+        key = (symbol, violation.get("type"))
+        if key in seen:
+            continue
+        seen.add(key)
+        if violation.get("type") == "event_defense_buy":
+            actions.append({
+                "type": "cooldown_after_violation",
+                "symbol": symbol,
+                "priority": "high",
+                "title": f"{symbol} add cooldown",
+                "reason": "A buy/add happened after event-defense warnings, so the next add needs renewed desk confirmation.",
+                "requiredBeforeNextAction": [
+                    "Refresh daily desk",
+                    "Confirm event-defense level is no longer high",
+                    "Confirm cash is inside or above the target range",
+                    "Write explicit size and invalidation before any add",
+                ],
+            })
+    return actions[:10]
 
 
 def _why_it_matters(row: Dict[str, Any], thesis: Dict[str, Any] | None) -> str:

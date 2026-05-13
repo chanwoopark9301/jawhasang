@@ -348,7 +348,8 @@ function renderDailyDeskBrief(desk) {
   const review = desk.marketRegimeReview || {};
   const reviewBrief = review.snapshotCount ? `Review loop:
 - score=${Number(review.score || 0)} violations=${Number(review.violationCount || 0)} decisions=${Number(review.decisionCount || 0)}
-- ${(review.violations || []).slice(0, 4).map(item => `${item.symbol || 'Portfolio'} ${item.type || 'control'} ${item.reason || ''}`).join(' | ') || 'clean'}` : 'Review loop: unavailable';
+- ${(review.violations || []).slice(0, 4).map(item => `${item.symbol || 'Portfolio'} ${item.type || 'control'} ${item.reason || ''}`).join(' | ') || 'clean'}
+- corrective actions=${(review.correctiveActions || []).slice(0, 4).map(item => `${item.symbol || 'Portfolio'} ${item.title || item.type || 'action'}`).join(' | ') || 'none'}` : 'Review loop: unavailable';
   return `Daily Investment Desk (${desk.date})
 ${marketRegimeBrief}
 ${reviewBrief}

@@ -255,6 +255,7 @@ function renderInvestmentDeskMarketRegime(marketRegime) {
 function renderInvestmentDeskReviewLoop(review) {
   if (!review || !Number(review.snapshotCount || 0)) return '';
   const violations = Array.isArray(review.violations) ? review.violations.slice(0, 5) : [];
+  const correctiveActions = Array.isArray(review.correctiveActions) ? review.correctiveActions.slice(0, 5) : [];
   const tone = Number(review.violationCount || 0) > 0 ? 'block' : 'allow';
   return `<section class="investment-portfolio-alerts investment-desk-regime ${tone}" id="investment-desk-review-loop">
     <div class="investment-portfolio-list-head">
@@ -270,6 +271,9 @@ function renderInvestmentDeskReviewLoop(review) {
     ${violations.length ? `<ul class="investment-desk-list">${violations.map(item => `
       <li><strong>${esc(item.symbol || 'Portfolio')} ${esc(item.type || 'control')}</strong><span>${esc(item.date || '')} ${esc(item.action || '')} - ${esc(item.reason || '')}</span></li>
     `).join('')}</ul>` : `<p class="investment-muted-text">No market-regime control violation found in this review window.</p>`}
+    ${correctiveActions.length ? `<ul class="investment-desk-list">${correctiveActions.map(item => `
+      <li><strong>${esc(item.title || item.type || 'Corrective action')}</strong><span>${esc(item.reason || '')}</span></li>
+    `).join('')}</ul>` : ''}
   </section>`;
 }
 

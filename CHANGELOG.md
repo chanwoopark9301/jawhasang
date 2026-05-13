@@ -795,6 +795,15 @@
 - CPI D-1은 `high`, 보유 종목 실적 D-3은 `medium` 이상, 비보유 종목 일반 뉴스는 제외 또는 `low`로 처리하는 서버 테스트를 추가했다.
 ## 2026-05-13
 
+### Review Corrective Actions
+
+- `marketRegimeReview` now produces corrective actions after event-defense buy/add violations.
+- The daily desk Review Loop card displays those corrective actions.
+- AI briefing context now includes review-loop corrective actions.
+- Bumped static assets to `20260513-03` and service worker cache to `jip-v142`.
+
+## 2026-05-13
+
 ### Review Event Idempotency
 
 - Added regression coverage to ensure repeated desk refreshes do not duplicate the same market-regime review timeline event.

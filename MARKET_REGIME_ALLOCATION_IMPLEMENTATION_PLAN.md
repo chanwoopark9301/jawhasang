@@ -308,6 +308,15 @@ CPI, FOMC, 실적, 정책 법안, 지정학 이벤트가 가까워지면 자동�
 - 비보유 종목의 일반 뉴스는 방어 이벤트에서 제외하거나 `low`로만 취급한다.
 - `classify_market_regime()`은 `eventDefenseLevel`(`none`, `low`, `medium`, `high`)을 반환한다.
 - 기존 현금 방어 정책과 호환되도록 이벤트 방어 시 목표 현금 범위는 `30~45%` 하한을 유지한다.
+## 2026-05-13 Update - Phase 11 Corrective Actions complete
+
+- `marketRegimeReview` now returns `correctiveActions` when behavior contradicts prior desk warnings.
+- The first corrective action is `cooldown_after_violation`, used when a buy/add happens during event defense or under cash/leverage constraints.
+- Corrective actions include required checks before the next add: refresh desk, confirm event-defense level, confirm cash range, and write size/invalidation.
+- The daily desk `Review Loop` card now renders corrective actions.
+- `renderDailyDeskBrief()` includes corrective actions so AI briefing/chat context can reference the next behavior constraint.
+- Static assets were bumped to `20260513-03` and service worker cache to `jip-v142`.
+
 ## 2026-05-13 Update - Phase 10 Review Event Idempotency guard complete
 
 - Added regression coverage that runs `/api/investment/desk/engine` twice for the same date.

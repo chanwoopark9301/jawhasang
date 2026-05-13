@@ -1270,6 +1270,12 @@ class TestInvestmentPartner:
                             severity: 'high',
                             reason: 'Buy/add happened while event defense was active and leverage adds were capped.',
                         }],
+                        correctiveActions: [{
+                            type: 'cooldown_after_violation',
+                            symbol: 'QLD',
+                            title: 'QLD add cooldown',
+                            reason: 'A buy/add happened after event-defense warnings.',
+                        }],
                     },
                 },
             };
@@ -1290,6 +1296,7 @@ class TestInvestmentPartner:
         assert 'Review Loop' in review_text
         assert 'QLD' in review_text
         assert 'event_defense_buy' in review_text
+        assert 'QLD add cooldown' in review_text
 
     def test_daily_investment_desk_notification_payload_and_controls(self, logged_in_page):
         self._open_investment(logged_in_page)

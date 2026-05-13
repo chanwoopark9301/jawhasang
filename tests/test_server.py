@@ -684,6 +684,8 @@ class TestDataAPI:
         assert review['violations'][0]['type'] == 'event_defense_buy'
         assert review['violations'][0]['symbol'] == 'QLD'
         assert review['score'] < 0
+        assert review['correctiveActions'][0]['type'] == 'cooldown_after_violation'
+        assert review['correctiveActions'][0]['symbol'] == 'QLD'
 
     def test_investment_order_intent_endpoint_creates_draft(self, client):
         payload = {
