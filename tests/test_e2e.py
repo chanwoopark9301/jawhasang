@@ -2435,6 +2435,11 @@ $11,717.55
 
         prompt = logged_in_page.evaluate("() => _buildChatSysPrompt(false, null, null)")
 
+        assert 'Engine contract' in prompt
+        assert 'Portfolio Ledger Engine is the only source of truth' in prompt
+        assert 'Market Data Engine may refresh currentPrice' in prompt
+        assert 'actual mutation is decided by Portfolio Ledger Engine' in prompt
+        assert 'Do not say a save or ledger update is complete' in prompt
         assert '제 역할 밖' in prompt
         assert '원칙 후보' in prompt
         assert '보수적 기본안' in prompt

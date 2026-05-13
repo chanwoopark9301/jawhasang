@@ -112,7 +112,6 @@ function applyInvestmentQuotes(quotes, options = {}) {
     forceCurrentPrice: !!options.forceCurrentPrice,
   });
   state.investment = result.investment;
-  const fxQuote = map['USDKRW=X'];
   const target = state.investment;
   target.market = {
     source: 'yahoo-finance',

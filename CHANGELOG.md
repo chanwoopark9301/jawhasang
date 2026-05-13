@@ -8,6 +8,14 @@
 
 ## 2026-05-13
 
+### Investment Prompt Engine Alignment
+
+- Updated the investment chat system prompt so LLM responses follow the engine contract: the Portfolio Ledger Engine owns holdings/cash, Market Data Engine owns prices/FX, and Daily Desk/Regime/Scenario/Trade Gate engines own behavior controls.
+- Changed portfolio-update prompt rules so AI organizes user intent for the ledger engine instead of implying that text alone is a trusted ledger mutation.
+- Removed dead chat-side direct portfolio mutation helpers that predated the ledger engine, leaving portfolio snapshot writes on the new engine path.
+- Cleaned an unused market-data variable after quote updates moved through the ledger engine.
+- Bumped the static asset version to `20260513-07` and service worker cache to `jip-v146`.
+
 ### Portfolio Ledger Engine Write Gate
 
 - Added `js/investment-ledger-engine.js` as the single permission gate for portfolio snapshot, cash, and quote mutations.

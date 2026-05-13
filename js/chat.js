@@ -1015,30 +1015,6 @@ function parseInvestmentSnapshotNumber(value) {
   return m ? parseInvestmentNumber(m[0]) : 0;
 }
 
-function upsertInvestmentPortfolioSnapshotPosition(snapshot) {
-  const symbol = String(snapshot.symbol || '').toUpperCase();
-  const now = new Date().toISOString();
-  const idx = (state.investment.positions || []).findIndex(p =>
-    !isCashInvestmentPosition(p) && String(p.symbol || '').toUpperCase() === symbol
-  );
-  const previous = idx >= 0 ? state.investment.positions[idx] : {};
-  const next = {
-    ...previous,
-    id: previous.id || `ip-${symbol.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`,
-    assetType: previous.assetType || snapshot.assetType || 'stock',
-    symbol,
-    name: previous.name || snapshot.name || symbol,
-    shares: snapshot.shares > 0 ? snapshot.shares : parseInvestmentNumber(previous.shares),
-    avgPrice: snapshot.avgPrice > 0 ? snapshot.avgPrice : parseInvestmentNumber(previous.avgPrice),
-    currentPrice: snapshot.currentPrice > 0 ? snapshot.currentPrice : parseInvestmentNumber(previous.currentPrice),
-    manualPrice: snapshot.currentPrice > 0 ? true : previous.manualPrice,
-    marketUpdatedAt: snapshot.currentPrice > 0 ? now : previous.marketUpdatedAt,
-  };
-  if (idx >= 0) state.investment.positions[idx] = next;
-  else state.investment.positions.push(next);
-  return next;
-}
-
 function isInvestmentPortfolioSnapshotIntent(text) {
   const raw = String(text || '');
   const snapshotWords = /(?:\uD3EC\uD2B8\uD3F4\uB9AC\uC624|\uACC4\uC88C|\uBCF4\uC720\s*\uC218\uB7C9|\uC794\uC5EC\s*\uC218\uB7C9|\uD604\uC7AC\s*\uC0C1\uD0DC|\uC2A4\uB0C5\uC0F7|\uAC31\uC2E0|\uC218\uC815|\uBC18\uC601|portfolio|account|snapshot|position|update|sync)/i.test(raw);
@@ -1064,59 +1040,6 @@ function investmentTextMentionsPosition(text, position) {
     BTC: ['\uBE44\uD2B8\uCF54\uC778', 'bitcoin'],
   };
   return (aliases[symbol] || []).some(term => lower.includes(term));
-}
-
-function inferInvestmentPositionSnapshot(text, position = null) {
-  const raw = extractInvestmentPositionSnapshotContext(text, position);
-  const patch = {};
-  const shares = extractSnapshotNumber(raw, [
-    /(?:\uBCF4\uC720\s*)?\uC218\uB7C9[^0-9]{0,24}([0-9][0-9,.]*)\s*(?:\uC8FC|\uAC1C|shares?)/i,
-    /(?:\uC794\uC5EC|\uB0A8\uC740)[^0-9]{0,24}([0-9][0-9,.]*)\s*(?:\uC8FC|\uAC1C|shares?)/i,
-    /(?:remaining|left|holding|position|shares?|quantity|qty)[^0-9]{0,24}([0-9][0-9,.]*)\s*(?:shares?|ea|units?)?/i,
-    /([0-9][0-9,.]*)\s*(?:\uC8FC|shares?)\s*(?:\uBCF4\uC720|\uB0A8)/i,
-    /([0-9][0-9,.]*)\s*(?:shares?|units?)\s*(?:remaining|left|holding)/i,
-    /(?:^|[\s:·-])([0-9][0-9,.]*)\s*(?:\uC8FC|\uAC1C|shares?|units?)(?:\s|$|[·,])/i,
-  ]);
-  const avgPrice = extractSnapshotNumber(raw, [
-    /(?:\uD3C9\uB2E8|\uD3C9\uADE0\s*\uB2E8\uAC00|avg|average)[^0-9]{0,24}\$?\s*([0-9][0-9,.]*)/i,
-  ]);
-  const currentPrice = extractSnapshotNumber(raw, [
-    /(?:\uD604\uC7AC\uAC00|\uD604\uC7AC\s*\uAC00\uACA9|current)[^0-9]{0,24}\$?\s*([0-9][0-9,.]*)/i,
-  ]);
-  if (shares > 0) patch.shares = shares;
-  if (avgPrice > 0) patch.avgPrice = avgPrice;
-  if (currentPrice > 0) patch.currentPrice = currentPrice;
-  return patch;
-}
-
-function extractInvestmentPositionSnapshotContext(text, position) {
-  const raw = String(text || '');
-  if (!position) return raw;
-  const lines = raw.split(/\r?\n/);
-  const matched = [];
-  lines.forEach((line, index) => {
-    if (investmentTextMentionsPosition(line, position)) {
-      const trimmed = String(line || '').replace(/[*`]/g, '').trim();
-      const symbol = String(position?.symbol || '').toUpperCase();
-      const standaloneSymbolLine = trimmed.length <= 24 && normalizeInvestmentSnapshotSymbol(trimmed) === symbol;
-      if (!standaloneSymbolLine) {
-        const fragments = splitInvestmentSnapshotSentences(line)
-          .filter(fragment => investmentTextMentionsPosition(fragment, position));
-        matched.push((fragments.length ? fragments : [line]).join('\n'));
-        return;
-      }
-      const block = [line];
-      for (let j = index + 1; j < Math.min(lines.length, index + 6); j += 1) {
-        const next = String(lines[j] || '').trim();
-        const nextSymbol = normalizeInvestmentSnapshotSymbol(next);
-        if (nextSymbol && nextSymbol !== symbol) break;
-        block.push(lines[j]);
-      }
-      matched.push(block.join('\n'));
-    }
-  });
-  const context = matched.filter(Boolean).join('\n').trim();
-  return context || raw;
 }
 
 function splitInvestmentSnapshotSentences(text) {
@@ -1583,15 +1506,24 @@ function _buildChatSysPrompt(isMyRecords, topic, student, extraContext = '', use
 목표는 수익률 예측이나 종목 추천이 아니라, 사용자가 사전에 정한 원칙을 기억하고 감정적 매매를 줄이는 것입니다.
 감정 상태를 묻지 말고, 원칙·숫자·기록·뉴스 해석을 기준으로 짧고 분명하게 돕습니다.
 ${budgetLine}
+
+Engine contract:
+- Portfolio Ledger Engine is the only source of truth for shares, average price, cash, and realized trade application. AI text, rendered portfolio cards, and previous AI replies are not ledger facts.
+- Market Data Engine may refresh currentPrice, previousClose, changePercent, marketUpdatedAt, and USD/KRW only. It must never change shares, average price, or cash.
+- Daily Desk, Market Regime, Scenario, and Trade Gate engines produce behavior controls, market view, scenarios, and blocked/review actions. Treat those engine outputs as the frame for advice.
+- Your role is to explain engine outputs, organize user intent into clear fields, and ask for the one missing fact needed by the engine. Do not invent ledger changes from estimates or from your own answer.
+- When portfolio data appears inconsistent, say that the ledger and displayed summary must be reconciled, then ask for the exact authoritative values or refer to broker/account sync. Do not copy numbers from a rendered portfolio card back into the ledger.
+- If the user asks for current status, separate account facts from quote facts: holdings/cost/cash come from the ledger; prices/FX come from market data.
+
 매수/매도 단정이나 수익률 보장은 금지하지만, 원칙 수립·비중 축소·손절 조건·추가매수 조건에 대해서는 앱의 기본 원칙과 보유 데이터에 근거한 "원칙 후보" 또는 "보수적 기본안"을 먼저 제시할 수 있습니다.
 사용자가 "너가 추천해줘", "알아서 정해줘", "어떻게 세우면 좋을까"처럼 원칙 설계를 요청하면 "제 역할 밖"이라고 말하지 말고, 단정적 투자 조언이 아닌 실행 가능한 원칙안으로 답합니다.
 앱은 '/api/market/quote'를 통해 보유 종목 현재가와 지수를 조회할 수 있습니다. 시세/상태 컨텍스트가 제공된 경우 절대 "실시간 시세 조회 기능이 없다"고 말하지 않습니다.
 앱은 같은 시세 API로 USD/KRW 환율도 조회할 수 있습니다. 환율 컨텍스트가 제공된 경우 절대 "환율 조회 기능이 없다"고 말하지 않습니다.
 사용자가 "상태 어때", "현재 어때", "시세", "가격", "보유 종목 어때"처럼 물으면 현재가, 평단, 평가손익, 목표가/손절가 거리, 원칙상 확인할 점을 우선 답합니다.
-사용자가 "뉴스 동향에 기록", "투자 원칙으로 저장", "매매 기록으로 남겨"처럼 말하면 저장될 수 있게 제목과 본문을 정돈해서 답합니다.
-사용자가 "포트폴리오 수정", "포트폴리오 반영", "다시 시도", "반영된 포트폴리오 보여줘"처럼 말하면 실제 앱 데이터에 반영될 수 있도록 종목, 매수/매도, 체결 수량, 체결가, 잔여 수량을 명확히 적습니다.
-절대 "저는 실제로 포트폴리오 데이터를 직접 수정하는 기능이 없습니다" 또는 "앱에서 직접 변경해 주세요"라고 말하지 않습니다. 정보가 충분하면 반영 문장을 만들고, 부족하면 필요한 숫자 하나만 물어봅니다.
-저장에 필요한 정보가 부족하면 바로 저장하지 말고 딱 필요한 항목만 짧게 물어봅니다.
+When the user asks to save news, rules, or trade records, organize the title/body so the app can save them as structured artifacts.
+When the user asks to modify, reflect, retry, or show the portfolio, structure the intent for Portfolio Ledger Engine: symbol, buy/sell/hold, fill quantity, fill price, remaining quantity, cash, and FX rate.
+Never say you cannot modify portfolio data. However, actual mutation is decided by Portfolio Ledger Engine; if one required fact is missing, ask only for that one fact.
+Do not say a save or ledger update is complete unless the app/engine result explicitly says it changed.
 매매 기록에 필요한 최소 항목은 종목, 매수/매도/보유, 이유입니다. 가능하면 수량, 가격, 손절가, 목표가도 확인합니다.
 투자 원칙은 사용자의 말에서 원칙 문장을 만들되, 기준이 애매하면 "어느 조건에서 적용할지"를 먼저 물어봅니다.
 포트폴리오 비중이 원칙을 크게 초과한 경우에는 사용자가 숫자를 직접 정하지 않아도 기본 원칙(${inv.rules.maxPositionWeight}%)과 현재 비중을 근거로 1차 목표 비중, 단계적 축소안, 예외 조건을 제안합니다.

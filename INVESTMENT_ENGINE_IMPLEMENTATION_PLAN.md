@@ -2,6 +2,9 @@
 
 ## 2026-05-13 Ledger Parser Hardening
 
+- Prompt rules now explicitly follow the engine contract: Portfolio Ledger Engine is the account source of truth, Market Data Engine is quote/FX only, and Desk/Regime/Scenario/Trade Gate engines provide the behavior frame.
+- LLM output is treated as explanation and structured intent, not as ledger authority. It must not convert its own estimates or rendered UI text back into holdings.
+- Chat refactoring removed legacy direct portfolio mutation helpers that were no longer called after the ledger engine routing.
 - Implemented `investment-ledger-engine.js` as the browser-side write gate for portfolio snapshot, cash, and quote updates.
 - Ledger commands now carry `type` and `source`; source authority decides whether shares/average price/cash can change.
 - `market_data` commands are allowed to refresh `currentPrice`, `previousClose`, `changePercent`, and FX only; they cannot overwrite position size or cost basis.
