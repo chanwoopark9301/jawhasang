@@ -795,6 +795,14 @@
 - CPI D-1은 `high`, 보유 종목 실적 D-3은 `medium` 이상, 비보유 종목 일반 뉴스는 제외 또는 `low`로 처리하는 서버 테스트를 추가했다.
 ## 2026-05-13
 
+### Corrective Action Gate Enforcement
+
+- Trade gate now consumes review-loop corrective actions from the current or previous desk engine.
+- `cooldown_after_violation` blocks matching buy/add intents until the corrective checks are cleared.
+- Added server coverage for QLD buy/add being blocked after a prior review-loop violation.
+
+## 2026-05-13
+
 ### Review Corrective Actions
 
 - `marketRegimeReview` now produces corrective actions after event-defense buy/add violations.

@@ -857,6 +857,42 @@ class TestDataAPI:
         assert 'cap_leverage' in gate['blockedActions']
         assert any('Market allocation engine' in item for item in gate['reasons'])
 
+    def test_investment_trade_gate_blocks_buy_after_review_violation(self, client, monkeypatch):
+        import server
+
+        monkeypatch.setattr(server, '_read_investment_snapshot_from_tables', lambda inv: None)
+        client.post('/api/data',
+                    data=json.dumps({'investment': {
+                        'positions': [
+                            {'id': 'ip-qld', 'symbol': 'QLD', 'shares': 312, 'avgPrice': 88.88, 'currentPrice': 91.72},
+                            {'id': 'ip-cash', 'symbol': 'CASH', 'assetType': 'cash', 'shares': 42135, 'cashAmount': 42135},
+                        ],
+                        'desk': {
+                            'engine': {
+                                'date': '2026-05-13',
+                                'marketRegimeReview': {
+                                    'correctiveActions': [{
+                                        'type': 'cooldown_after_violation',
+                                        'symbol': 'QLD',
+                                        'title': 'QLD add cooldown',
+                                        'reason': 'A buy/add happened after event-defense warnings.',
+                                    }],
+                                },
+                            },
+                        },
+                    }}),
+                    content_type='application/json')
+
+        r = client.post('/api/investment/trade-gate',
+                        data=json.dumps({'symbol': 'QLD', 'action': 'buy', 'date': '2026-05-13'}),
+                        content_type='application/json')
+
+        assert r.status_code == 200
+        gate = r.get_json()['gate']
+        assert gate['status'] == 'block'
+        assert 'cooldown_after_violation' in gate['blockedActions']
+        assert any('cooldown' in item.lower() for item in gate['reasons'])
+
     def test_investment_broker_sync_requires_kis_credentials(self, client, monkeypatch):
         monkeypatch.delenv('KIS_APP_KEY', raising=False)
         monkeypatch.delenv('KIS_APP_SECRET', raising=False)

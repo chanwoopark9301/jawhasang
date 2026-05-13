@@ -928,6 +928,15 @@ def evaluate_trade_intent_gate(investment: Dict[str, Any], intent: Dict[str, Any
         if action in {"buy", "add"}:
             reasons.append(f"Market allocation engine do-not-do: {item}")
 
+    for corrective_action in _collect_review_corrective_actions(inv, engine, symbol, action):
+        action_type = str(corrective_action.get("type") or "review_corrective_action")
+        blocked_actions.append(action_type)
+        reasons.append(
+            "Review loop corrective action: "
+            + " ".join(str(part) for part in [corrective_action.get("title"), corrective_action.get("reason")] if part)
+        )
+        required.extend(corrective_action.get("requiredBeforeNextAction") or ["clear review-loop corrective action before order"])
+
     status = "allow"
     if action in {"buy", "add"}:
         hard_blocks = {
@@ -937,6 +946,7 @@ def evaluate_trade_intent_gate(investment: Dict[str, Any], intent: Dict[str, Any
             "immediate re-entry",
             "act on rumor",
             "add before thesis review",
+            "cooldown_after_violation",
         }
         if hard_blocks.intersection(set(blocked_actions)):
             status = "block"
@@ -960,6 +970,31 @@ def evaluate_trade_intent_gate(investment: Dict[str, Any], intent: Dict[str, Any
     if not required:
         required.append("confirm size, price, thesis, and invalidation before order")
     return _trade_gate_result(engine, symbol, action, status, reasons, required, blocked_actions, scenario)
+
+
+def _collect_review_corrective_actions(investment: Dict[str, Any], engine: Dict[str, Any], symbol: str, action: str) -> List[Dict[str, Any]]:
+    if action not in {"buy", "add"}:
+        return []
+    rows: List[Dict[str, Any]] = []
+    current_review = engine.get("marketRegimeReview") if isinstance(engine.get("marketRegimeReview"), dict) else {}
+    rows.extend([item for item in (current_review.get("correctiveActions") or []) if isinstance(item, dict)])
+    prior_engine = ((investment.get("desk") or {}).get("engine") or {}) if isinstance(investment.get("desk"), dict) else {}
+    prior_review = prior_engine.get("marketRegimeReview") if isinstance(prior_engine.get("marketRegimeReview"), dict) else {}
+    rows.extend([item for item in (prior_review.get("correctiveActions") or []) if isinstance(item, dict)])
+
+    filtered = []
+    seen = set()
+    for item in rows:
+        item_symbol = str(item.get("symbol") or "").strip().upper()
+        action_type = str(item.get("type") or "")
+        if item_symbol not in {"", "PORTFOLIO", symbol}:
+            continue
+        key = (item_symbol, action_type)
+        if key in seen:
+            continue
+        seen.add(key)
+        filtered.append(item)
+    return filtered
 
 
 def _allocation_action_applies_to_trade(action_type: str, symbol: str, action: str) -> bool:
