@@ -13,6 +13,7 @@
 - `market_regime_engine.py`를 추가해 LLM이 아니라 서버 규칙 엔진이 상승장/횡보장/하락장, 이벤트 방어 모드, 목표 현금 비중을 계산하게 했다.
 - 포트폴리오의 현금, 위험자산, 레버리지, 고변동 종목 노출을 계산해 `raise_cash`, `cap_leverage`, `trim_event_risk` 같은 조절 행동을 만든다.
 - 투자 데스크 엔진 결과에 `marketRegime`을 포함해 오늘의 데스크가 종목 판단보다 먼저 장세와 비중 조절을 볼 수 있게 했다.
+- `MARKET_REGIME_ALLOCATION_IMPLEMENTATION_PLAN.md`를 추가해 시장 판단 엔진, 포트폴리오 조절 엔진, 데스크 UI, 대화 통합, 아침 배치 순서를 고정했다.
 
 ### 한투·빗썸 읽기 전용 브로커 잠금
 
