@@ -1525,9 +1525,14 @@ async function fetchInvestmentReasoningContext(text) {
   const symbolResearch = (research.symbols || []).slice(0, 4).map(item =>
     `- ${item.symbol}: drivers=${(item.drivers || []).slice(0, 4).join(', ')}; needed=${(item.neededEvidence || []).slice(0, 3).join(', ')}`
   ).join('\n') || '- no symbol research frame';
+  const decision = reasoning.decisionProtocol || {};
+  const ruleDraft = reasoning.ruleDraft || null;
+  const foresight = (reasoning.foresightAgenda || []).slice(0, 4).map(item =>
+    `- ${item.symbol}: priority=${item.priority}; watch=${(item.watch || []).join(', ')}; why=${item.whyItMatters || ''}`
+  ).join('\n') || '- no foresight agenda';
   const questions = (reasoning.questions || []).slice(0, 5).map(q => `- ${q}`).join('\n') || '- no user question needed';
   const instructions = (reasoning.llmInstructions || []).map(x => `- ${x}`).join('\n') || '- use normal investment mode';
-  return `\n\n[Investment Reasoning Engine]\n- intentType: ${reasoning.intentType}\n- action: ${reasoning.action}\n- confidence: ${reasoning.confidence}\n- mentionedSymbols: ${(reasoning.mentionedSymbols || []).join(', ') || '-'}\n\nPortfolio interpretation:\n${portfolioLines}\n\nResearch frame:\n- macro: ${(research.macro || []).slice(0, 5).join('; ')}\n${symbolResearch}\n\nQuestions to ask only if needed:\n${questions}\n\nLLM behavior instructions:\n${instructions}\n`;
+  return `\n\n[Investment Reasoning Engine]\n- intentType: ${reasoning.intentType}\n- action: ${reasoning.action}\n- confidence: ${reasoning.confidence}\n- mentionedSymbols: ${(reasoning.mentionedSymbols || []).join(', ') || '-'}\n\nPortfolio interpretation:\n${portfolioLines}\n\nDecision protocol:\n- requiresGate: ${decision.requiresGate ? 'yes' : 'no'}\n- evidenceToCheck: ${(decision.evidenceToCheck || []).slice(0, 5).join('; ') || '-'}\n- doNotDo: ${(decision.doNotDo || []).slice(0, 5).join('; ') || '-'}\n\nRule draft:\n${ruleDraft ? `- symbol: ${ruleDraft.symbol || '-'}\n- template: ${ruleDraft.template || '-'}\n- evidenceHierarchy: ${(ruleDraft.evidenceHierarchy || []).join('; ')}` : '- none'}\n\nResearch frame:\n- macro: ${(research.macro || []).slice(0, 5).join('; ')}\n${symbolResearch}\n\nForesight agenda:\n${foresight}\n\nQuestions to ask only if needed:\n${questions}\n\nLLM behavior instructions:\n${instructions}\n`;
 }
 
 function inferInvestmentMarketSymbols(text) {

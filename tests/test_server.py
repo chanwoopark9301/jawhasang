@@ -921,6 +921,76 @@ class TestDataAPI:
         assert reasoning['interpretation']['existingSymbols'] == ['ETH-USD']
         assert 'ETH-USD' in reasoning['interpretation']['unchanged']
 
+    def test_investment_reasoning_engine_marks_residual_portfolio_ambiguity(self):
+        from investment_reasoning_engine import build_investment_reasoning
+
+        reasoning = build_investment_reasoning(
+            '이더리움은 그대로 두고 나머지 돈이랑 주식은 전부 인텔로 바꿨어.',
+            {
+                'positions': [
+                    {'symbol': 'ETH-USD', 'assetType': 'crypto', 'shares': 5, 'avgPrice': 4531.54, 'currentPrice': 2334.95},
+                    {'symbol': 'CRCL', 'shares': 113, 'avgPrice': 128.91, 'currentPrice': 123.65},
+                    {'symbol': 'IREN', 'shares': 510, 'avgPrice': 66.38, 'currentPrice': 61.2},
+                    {'symbol': 'CASH', 'assetType': 'cash', 'shares': 42135, 'cashAmount': 42135},
+                ],
+                'rules': {'maxPositionWeight': 25},
+            },
+            '2026-05-13',
+        )
+
+        interp = reasoning['interpretation']
+        assert interp['unchanged'] == ['ETH-USD']
+        assert interp['newOrIncrease'] == ['INTC']
+        assert interp['residualCandidates'] == ['CASH', 'CRCL', 'IREN']
+        assert interp['confirmationRequired'] is True
+        assert any('CRCL' in q and 'IREN' in q for q in reasoning['questions'])
+
+    def test_investment_reasoning_engine_trade_decision_requires_gate_and_evidence(self):
+        from investment_reasoning_engine import build_investment_reasoning
+
+        reasoning = build_investment_reasoning(
+            'CRCL 루머가 좋은데 지금 더 사도 돼?',
+            {
+                'positions': [
+                    {'symbol': 'CRCL', 'name': 'Circle', 'shares': 113, 'avgPrice': 128.91, 'currentPrice': 123.65, 'changePercent': 6.2},
+                    {'symbol': 'CASH', 'assetType': 'cash', 'shares': 42135, 'cashAmount': 42135},
+                ],
+                'events': [
+                    {'date': '2026-05-13', 'type': 'signal', 'symbol': 'CRCL', 'title': 'X rumor says bill may pass', 'source': 'x.com'},
+                ],
+                'rules': {'maxPositionWeight': 25, 'chaseLimit': 3},
+            },
+            '2026-05-13',
+        )
+
+        assert reasoning['intentType'] == 'trade_decision'
+        assert reasoning['action'] == 'run_trade_gate_before_ai'
+        assert reasoning['decisionProtocol']['requiresGate'] is True
+        assert 'official bill text or committee schedule' in reasoning['decisionProtocol']['evidenceToCheck']
+        assert any('rumor' in item.lower() for item in reasoning['decisionProtocol']['doNotDo'])
+        assert any('Trade Gate' in item for item in reasoning['llmInstructions'])
+
+    def test_investment_reasoning_engine_rule_design_returns_template(self):
+        from investment_reasoning_engine import build_investment_reasoning
+
+        reasoning = build_investment_reasoning(
+            '써클 손절 조건을 가격 말고 법안이랑 USDC 기준으로 세우고 싶어',
+            {
+                'positions': [
+                    {'symbol': 'CRCL', 'name': 'Circle', 'shares': 113, 'avgPrice': 128.91, 'currentPrice': 123.65},
+                ],
+                'rules': {'maxPositionWeight': 25},
+            },
+            '2026-05-13',
+        )
+
+        draft = reasoning['ruleDraft']
+        assert draft['symbol'] == 'CRCL'
+        assert 'USDC supply trend' in draft['evidenceHierarchy']
+        assert 'official bill text or committee schedule' in draft['evidenceHierarchy']
+        assert 'invalidation' in draft['template'].lower()
+        assert 'action' in draft['template'].lower()
+
     def test_investment_trade_gate_blocks_leverage_buy_during_event_defense(self, client, monkeypatch):
         import server
 

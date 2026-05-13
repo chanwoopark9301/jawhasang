@@ -2,6 +2,10 @@
 
 ## 2026-05-13 Ledger Parser Hardening
 
+- Refined the reasoning engine with residual-position ambiguity detection, trade-decision protocol, rule templates, and foresight agenda.
+- "The rest/everything else" now produces residual candidates from the actual ledger instead of assuming which holdings were sold.
+- Trade questions now carry a protocol requiring Trade Gate, official evidence checks, and do-not-do actions before the LLM gives a view.
+- Rule-design questions now return an invalidation/evidence/action/exception template.
 - Added the first server-side Investment Reasoning Engine. It sits before the LLM and turns natural language into intent type, ledger interpretation, autofill plan, missing fields, research frame, and behavior instructions.
 - Portfolio, rule-design, briefing, research, and trade-decision conversations now share the same reasoning frame instead of relying on unrelated prompt fragments.
 - The chat prompt now receives `[Investment Reasoning Engine]` context so the LLM explains the engine's interpretation and asks only for unresolved ambiguity.

@@ -200,6 +200,7 @@ def _symbol_clause(text: str, symbol: str) -> str:
 
 def _portfolio_interpretation(text: str, investment: Dict[str, Any], mentioned: List[str]) -> Dict[str, Any]:
     existing = {_symbol(p): p for p in _tradable_positions(investment)}
+    cash = _cash_position(investment)
     unchanged = []
     remove = []
     new_or_increase = []
@@ -238,14 +239,29 @@ def _portfolio_interpretation(text: str, investment: Dict[str, Any], mentioned: 
             "formula": "avgPrice = currentPrice / (1 - lossPercent); shares = (KRW / USDKRW) / avgPrice",
         })
 
+    residual_candidates: List[str] = []
+    residual_phrase = re.search(r"나머지|남은\s*(?:돈|주식|자금)|전부|everything\s+else|rest", text or "", re.I)
+    if residual_phrase and new_or_increase:
+        protected = set(unchanged + new_or_increase)
+        residual_candidates = [
+            symbol for symbol in sorted(existing.keys())
+            if symbol and symbol not in protected
+        ]
+        if cash and _position_value(cash) > 0:
+            residual_candidates.insert(0, "CASH")
+        if residual_candidates:
+            missing.append(f"Confirm whether residual phrase includes {', '.join(residual_candidates)}")
+
     return {
         "existingSymbols": sorted(existing.keys()),
         "unchanged": unchanged,
         "removeOrZero": remove,
         "newOrIncrease": new_or_increase,
+        "residualCandidates": residual_candidates,
         "ambiguousSymbols": ambiguous,
         "missingFields": missing,
         "autofill": autofill,
+        "confirmationRequired": bool(missing or ambiguous or residual_candidates),
     }
 
 
@@ -291,6 +307,105 @@ def _needed_evidence_for(symbol: str, thesis: Dict[str, Any]) -> List[str]:
     return ["official filings", "earnings/guidance", "sector and valuation context"]
 
 
+def _decision_protocol(intent: str, text: str, symbols: List[str], desk: Dict[str, Any]) -> Dict[str, Any]:
+    if intent != "trade_decision":
+        return {
+            "requiresGate": False,
+            "evidenceToCheck": [],
+            "doNotDo": [],
+            "nextStep": "none",
+        }
+    thesis_map = {str(t.get("symbol") or "").upper(): t for t in desk.get("theses") or [] if isinstance(t, dict)}
+    controls = {str(c.get("symbol") or "").upper(): c for c in desk.get("behaviorControls") or [] if isinstance(c, dict)}
+    target = symbols[0] if symbols else ""
+    thesis = thesis_map.get(target, {})
+    control = controls.get(target, {})
+    evidence = _needed_evidence_for(target, thesis)
+    do_not_do = []
+    raw = text or ""
+    if re.search(r"루머|rumor|x\.com|twitter|트윗|signal", raw, re.I):
+        do_not_do.append("Do not buy or add on rumor/X flow before official confirmation.")
+    do_not_do.extend(control.get("blockedActions") or [])
+    do_not_do.extend(control.get("doNotDo") or [])
+    if not do_not_do:
+        do_not_do.append("Do not act before checking size, thesis, invalidation, and cooldown.")
+    return {
+        "requiresGate": True,
+        "symbol": target,
+        "evidenceToCheck": evidence,
+        "doNotDo": do_not_do[:6],
+        "nextStep": "run_trade_gate_before_llm_advice",
+    }
+
+
+def _rule_draft(intent: str, text: str, symbols: List[str], desk: Dict[str, Any]) -> Dict[str, Any] | None:
+    if intent != "rule_design":
+        return None
+    thesis_map = {str(t.get("symbol") or "").upper(): t for t in desk.get("theses") or [] if isinstance(t, dict)}
+    symbol = symbols[0] if symbols else ""
+    thesis = thesis_map.get(symbol, {})
+    evidence = _needed_evidence_for(symbol, thesis)
+    drivers = thesis.get("drivers") or []
+    return {
+        "symbol": symbol,
+        "drivers": drivers,
+        "evidenceHierarchy": evidence,
+        "template": (
+            f"{symbol or 'POSITION'} rule: If [invalidation condition] is confirmed by "
+            f"[evidence], then [action]. Exception only if [counter-evidence] appears before execution."
+        ),
+        "decisionNeeded": [
+            "Which driver invalidates the thesis first?",
+            "What action follows confirmation: reduce, stop adding, hedge, or exit?",
+            "What official evidence overrides rumor or price noise?",
+        ],
+    }
+
+
+def _foresight_agenda(intent: str, symbols: List[str], investment: Dict[str, Any], desk: Dict[str, Any]) -> List[Dict[str, Any]]:
+    if intent not in {"briefing", "trade_decision", "rule_design", "research"}:
+        return []
+    rows = {row["symbol"]: row for row in _portfolio_context(investment)["holdings"]}
+    thesis_map = {str(t.get("symbol") or "").upper(): t for t in desk.get("theses") or [] if isinstance(t, dict)}
+    targets = symbols or [row["symbol"] for row in _portfolio_context(investment)["holdings"] if row["symbol"] and row["symbol"] != "CASH"]
+    agenda = []
+    for symbol in targets[:5]:
+        row = rows.get(symbol, {})
+        thesis = thesis_map.get(symbol, {})
+        evidence = _needed_evidence_for(symbol, thesis)
+        agenda.append({
+            "symbol": symbol,
+            "priority": _priority_from_weight(row.get("weight", 0.0)),
+            "whyItMatters": _why_symbol_matters(symbol, thesis),
+            "watch": evidence[:3],
+            "riskIfWrong": "position sizing and timing error" if row else "watchlist view may be premature",
+        })
+    return agenda
+
+
+def _priority_from_weight(weight: float) -> str:
+    if weight >= 25:
+        return "critical"
+    if weight >= 10:
+        return "high"
+    if weight > 0:
+        return "medium"
+    return "watch"
+
+
+def _why_symbol_matters(symbol: str, thesis: Dict[str, Any]) -> str:
+    profile = thesis.get("profile") or ""
+    if profile == "stablecoin_issuer":
+        return "Stablecoin supply, reserve yield, and legislation can move the stock more than headline EPS."
+    if profile == "crypto_beta":
+        return "Crypto liquidity and policy can lead risk appetite across related holdings."
+    if profile == "ai_miner_infrastructure":
+        return "AI contract execution, funding, and BTC economics decide whether the story is real."
+    if profile == "growth_index_semiconductor":
+        return "Market regime and breadth matter more than the narrative after a strong rally."
+    return f"{symbol} needs evidence that the original thesis still explains the price."
+
+
 def _action_for(intent: str, interpretation: Dict[str, Any], text: str) -> str:
     if intent == "portfolio_update":
         if interpretation.get("autofill") and not interpretation.get("missingFields"):
@@ -315,6 +430,9 @@ def build_investment_reasoning(text: str, investment: Dict[str, Any], today: Any
     desk = build_investment_desk_engine(inv, day)
     interpretation = _portfolio_interpretation(text or "", inv, mentioned) if intent == "portfolio_update" else {}
     research = _research_frame(intent, mentioned, inv, desk)
+    decision_protocol = _decision_protocol(intent, text or "", mentioned, desk)
+    rule_draft = _rule_draft(intent, text or "", mentioned, desk)
+    foresight = _foresight_agenda(intent, mentioned, inv, desk)
     action = _action_for(intent, interpretation, text or "")
     controls = [
         item for item in desk.get("behaviorControls") or []
@@ -336,6 +454,9 @@ def build_investment_reasoning(text: str, investment: Dict[str, Any], today: Any
         "ledgerContext": _portfolio_context(inv),
         "interpretation": interpretation,
         "researchFrame": research,
+        "decisionProtocol": decision_protocol,
+        "ruleDraft": rule_draft,
+        "foresightAgenda": foresight,
         "behaviorControls": controls,
         "questions": questions[:5],
         "llmInstructions": _llm_instructions(intent, action),
@@ -375,6 +496,8 @@ def _llm_instructions(intent: str, action: str) -> List[str]:
         base.append("Brief from portfolio exposure, market regime, evidence quality, and do-not-do actions; do not repeat a full account table.")
     if intent == "rule_design":
         base.append("Draft a rule with invalidation conditions, evidence required, action, and exception conditions.")
+    if intent == "trade_decision":
+        base.append("Run or respect the Trade Gate before giving any buy/sell view; separate rumor from official evidence.")
     if action == "autofill_then_estimated_write":
         base.append("Mark calculated holdings as estimated until broker-confirmed fills replace them.")
     return base

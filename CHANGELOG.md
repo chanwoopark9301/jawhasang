@@ -8,6 +8,15 @@
 
 ## 2026-05-13
 
+### Investment Reasoning Engine Refinement
+
+- Refined the reasoning engine to detect residual portfolio language such as "the rest/everything else" and list affected holdings that require confirmation before ledger writes.
+- Added trade-decision protocol output with required Trade Gate use, evidence to check, and do-not-do actions for rumor-driven buy/sell questions.
+- Added rule-draft templates with invalidation condition, evidence hierarchy, action, and exception structure for investment principle conversations.
+- Added a foresight agenda that prioritizes holdings by exposure and maps each symbol to the evidence most likely to move price.
+- Expanded chat prompt context to include decision protocol, rule draft, and foresight agenda from the reasoning engine.
+- Bumped the static asset version to `20260513-11` and service worker cache to `jip-v150`.
+
 ### Investment Reasoning Engine
 
 - Added `investment_reasoning_engine.py` as the natural-language reasoning layer before LLM responses.
