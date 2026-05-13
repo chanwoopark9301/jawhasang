@@ -134,6 +134,29 @@ async function continueContextChat(text) {
     && isInvestmentPortfolioEstimateIntent(text);
 
   if (isInvestment) {
+    const cashCorrectionUpdate = applyInvestmentCashZeroCorrectionFromChat(text);
+    if (cashCorrectionUpdate.changed) {
+      const today = new Date().toISOString().split('T')[0];
+      state.investment.events.push({
+        id: 'ie' + Date.now(),
+        date: today,
+        type: 'portfolio',
+        symbol: 'CASH',
+        title: '현금 제거 반영',
+        body: cashCorrectionUpdate.summary,
+        severity: 'info',
+        linkedDecisionId: null,
+        linkedRecordId: null,
+      });
+      hideTypingIndicator();
+      appendMessage('ai', `현금 항목을 원장에서 제거했어요.\n\n${cashCorrectionUpdate.summary}`);
+      refreshInvestmentSurfaces();
+      showToast('현금 항목을 원장에서 제거했어요.');
+      persistInvestmentChangesInBackground('cash zero correction');
+      finishContextChatTurn();
+      return;
+    }
+
     const pendingPortfolioUpdate = applyPendingInvestmentPortfolioSnapshotConfirmation(text);
     if (pendingPortfolioUpdate.changed) {
       const today = new Date().toISOString().split('T')[0];
@@ -775,6 +798,34 @@ function applyPendingInvestmentPortfolioSnapshotConfirmation(text) {
     changed: true,
     symbols: ledgerResult.symbols || pending.symbols || [],
     summary: pending.summary || `Ledger changes:\n${(ledgerResult.changes || []).map(item => `- ${item}`).join('\n')}`,
+  };
+}
+
+function isInvestmentCashZeroCorrectionText(text) {
+  const raw = String(text || '');
+  if (!/(?:\uD604\uAE08|\uC608\uC218\uAE08|cash)/i.test(raw)) return false;
+  return /(?:\uC65C|\uC874\uC7AC|\uC788\uB294\uB370|\uC5C6\uC560|\uC9C0\uC6CC|\uC0AD\uC81C|\uC774\uC81C\s*\uC5C6|0\s*(?:\uC6D0|USD|\$)?)/i.test(raw);
+}
+
+function applyInvestmentCashZeroCorrectionFromChat(text) {
+  if (!isInvestmentCashZeroCorrectionText(text)) return { changed: false, symbols: [], summary: '' };
+  state.investment = normalizeInvestmentState(state.investment);
+  const ledgerResult = applyInvestmentLedgerCommand(state.investment, {
+    type: 'setCash',
+    source: 'user_confirmed',
+    amount: 0,
+    rawText: String(text || ''),
+  });
+  if (!ledgerResult.ok) {
+    logger.warn('cash zero correction rejected', { reason: ledgerResult.reason });
+    return { changed: false, symbols: [], summary: '' };
+  }
+  state.investment = ledgerResult.investment;
+  state.investment.alerts = buildInvestmentRiskAlerts(state.investment.positions, state.investment.rules);
+  return {
+    changed: true,
+    symbols: ['CASH'],
+    summary: 'CASH 0으로 확정해 현금 포지션을 제거했습니다.',
   };
 }
 
@@ -1614,7 +1665,9 @@ function isInvestmentPortfolioSnapshotIntent(text) {
   const snapshotWords = /(?:\uD3EC\uD2B8\uD3F4\uB9AC\uC624|\uACC4\uC88C|\uBCF4\uC720\s*\uC218\uB7C9|\uC794\uC5EC\s*\uC218\uB7C9|\uD604\uC7AC\s*\uC0C1\uD0DC|\uC2A4\uB0C5\uC0F7|\uAC31\uC2E0|\uC218\uC815|\uBC18\uC601|portfolio|account|snapshot|position|update|sync)/i.test(raw);
   const valueWords = /(?:\uC218\uB7C9|\uC8FC|\uAC1C|\uD3C9\uB2E8|\uD3C9\uADE0\s*\uB2E8\uAC00|\uD604\uC7AC\uAC00|\uD604\uC7AC\s*\uAC00\uACA9|\uD604\uAE08|\uC608\uC218\uAE08|\uCD1D\s*\uD3C9\uAC00\uC561|shares?|qty|average|avg|current|cash|total value)/i.test(raw);
   const directCash = /(?:\uD604\uAE08|\uC608\uC218\uAE08|cash)[^\n]{0,80}(?:[0-9]|\uC5B5|\uB9CC|USD|\$)/i.test(raw);
-  return (snapshotWords && valueWords) || directCash;
+  const cashCorrection = /(?:\uD604\uAE08|\uC608\uC218\uAE08|cash)[^\n.\u3002]{0,32}(?:\uC5C6\uC560|\uC9C0\uC6CC|\uC0AD\uC81C|\uC65C\s*(?:\uC788|\uC874\uC7AC)|\uC774\uC81C\s*\uC5C6)/i.test(raw)
+    || (/(?:\uD604\uAE08|\uC608\uC218\uAE08|cash)/i.test(raw) && /(?:\uC65C|\uC874\uC7AC|\uC788\uB294\uB370|\uC5C6\uC560|\uC9C0\uC6CC|\uC0AD\uC81C)/i.test(raw));
+  return (snapshotWords && valueWords) || directCash || cashCorrection;
 }
 
 function investmentTextMentionsPosition(text, position) {
@@ -1676,8 +1729,9 @@ function inferInvestmentCashUsdFromText(text) {
 
 function inferInvestmentCashSnapshotUsdFromText(text, removedSymbols = []) {
   const raw = String(text || '');
-  const zeroCashIntent = /(?:\uD604\uAE08|\uC608\uC218\uAE08|cash)[^\n.\u3002]{0,24}(?:\uC5C6|\uC804\uBD80\s*(?:\uC778\uD154|INTC)|\uC774\uC81C\s*\uC5C6)/i.test(raw)
-    || /(?:\uD604\uAE08|\uC608\uC218\uAE08|cash)[^\n.\u3002]{0,16}(?:\s|:|=)0\s*(?:\uC6D0|KRW|USD|\$)?(?:\b|$)/i.test(raw);
+  const zeroCashIntent = /(?:\uD604\uAE08|\uC608\uC218\uAE08|cash)[^\n.\u3002]{0,32}(?:\uC5C6|\uC5C6\uC560|\uC9C0\uC6CC|\uC0AD\uC81C|\uC65C\s*(?:\uC788|\uC874\uC7AC)|\uC804\uBD80\s*(?:\uC778\uD154|INTC)|\uC774\uC81C\s*\uC5C6)/i.test(raw)
+    || /(?:\uD604\uAE08|\uC608\uC218\uAE08|cash)[^\n.\u3002]{0,16}(?:\s|:|=)0\s*(?:\uC6D0|KRW|USD|\$)?(?:\b|$)/i.test(raw)
+    || (/(?:\uD604\uAE08|\uC608\uC218\uAE08|cash)/i.test(raw) && /(?:\uC65C|\uC874\uC7AC|\uC788\uB294\uB370|\uC5C6\uC560|\uC9C0\uC6CC|\uC0AD\uC81C)/i.test(raw));
   if (zeroCashIntent) return 0;
   const cashUsd = inferInvestmentCashUsdFromText(raw);
   const wantsSaleProceeds = /(?:\uB9E4\uAC01\uAE08|\uB9E4\uB3C4\uAE08|proceeds|sold\s*cash|sale\s*cash)/i.test(raw);

@@ -4098,6 +4098,75 @@ ETH-USD: 5\uAC1C, \uD3C9\uB2E8 $611
         assert result['hasIren'] is False
         assert result['hasQld'] is False
 
+    def test_cash_why_exists_correction_removes_cash_position(self, page, live_server_url):
+        from tests.conftest import E2E_PASSWORD
+        page.goto(f'{live_server_url}/login')
+        page.fill('input[name=password]', E2E_PASSWORD)
+        page.click('button[type=submit]')
+        page.wait_for_selector('#app-splash', state='hidden', timeout=15_000)
+        self._open_investment(page)
+        result = page.evaluate(r"""async () => {
+            state.investment = normalizeInvestmentState({
+                positions: [{
+                    id: 'ip-intc-cash-correction', symbol: 'INTC', name: 'Intel', shares: 754, avgPrice: 129.67, currentPrice: 120.61,
+                }, {
+                    id: 'ip-cash-correction', assetType: 'cash', symbol: 'CASH', name: 'Cash', cashAmount: 101963.64, shares: 101963.64, avgPrice: 1, currentPrice: 1,
+                }],
+                events: [],
+                decisions: [],
+                rules: {},
+            });
+            window.__savedLedger = null;
+            window.apiSaveInvestmentLedgerSnapshot = async (investment) => {
+                window.__savedLedger = investment;
+                return { ok: true, investment };
+            };
+            await continueContextChat('\uD604\uAE08\uC774 \uC65C \uC874\uC7AC\uD558\uB294\uB370?');
+            await new Promise(resolve => setTimeout(resolve, 0));
+            return {
+                symbols: state.investment.positions.map(p => p.symbol).sort(),
+                savedSymbols: window.__savedLedger?.positions?.map(p => p.symbol).sort() || [],
+            };
+        }""")
+
+        assert result['symbols'] == ['INTC']
+        assert result['savedSymbols'] == ['INTC']
+
+    def test_eth_cost_basis_in_krw_phrase_updates_avg_price(self, page, live_server_url):
+        from tests.conftest import E2E_PASSWORD
+        page.goto(f'{live_server_url}/login')
+        page.fill('input[name=password]', E2E_PASSWORD)
+        page.click('button[type=submit]')
+        page.wait_for_selector('#app-splash', state='hidden', timeout=15_000)
+        self._open_investment(page)
+        result = page.evaluate(r"""async () => {
+            state.investment = normalizeInvestmentState({
+                positions: [{
+                    id: 'ip-eth-krw-correction', symbol: 'ETH-USD', name: 'Ethereum', assetType: 'crypto', shares: 5, avgPrice: 611, currentPrice: 2334.95,
+                }],
+                events: [],
+                decisions: [],
+                rules: {},
+                usdKrwRate: 1470,
+            });
+            window.__savedLedger = null;
+            window.apiSaveInvestmentLedgerSnapshot = async (investment) => {
+                window.__savedLedger = investment;
+                return { ok: true, investment };
+            };
+            await continueContextChat('ETH-USD 5\uAC1C, \uD3C9\uB2E8 611\uB9CC\uC6D0\uC774\uC57C. \uD3EC\uD2B8\uD3F4\uB9AC\uC624 \uAC31\uC2E0\uD574');
+            await new Promise(resolve => setTimeout(resolve, 0));
+            const eth = state.investment.positions.find(p => p.symbol === 'ETH-USD');
+            const savedEth = window.__savedLedger?.positions?.find(p => p.symbol === 'ETH-USD');
+            return {
+                avg: Math.round(eth.avgPrice * 100) / 100,
+                savedAvg: Math.round(savedEth.avgPrice * 100) / 100,
+            };
+        }""")
+
+        assert result['avg'] == 4156.46
+        assert result['savedAvg'] == 4156.46
+
     def test_confirmed_snapshot_replaces_polluted_position_name(self, page, live_server_url):
         from tests.conftest import E2E_PASSWORD
         page.goto(f'{live_server_url}/login')

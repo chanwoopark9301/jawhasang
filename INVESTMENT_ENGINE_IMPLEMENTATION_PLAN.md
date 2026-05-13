@@ -45,6 +45,12 @@
 - Added canonical names for common holdings such as INTC/CRCL/ETH-USD and E2E coverage for replacing an INTC name that had accidentally stored a full chat sentence.
 - Clarified the remaining ETH issue: `$611` is parsed as USD by design; KRW cost basis must be written as `611만원` or with a KRW amount so the parser can convert it.
 
+## 2026-05-14 Cash And KRW Correction Handling
+
+- Treat user corrections like "why does cash exist?" as a confirmed `cash=0` ledger command instead of sending them to the LLM as ordinary conversation.
+- Portfolio Ledger Engine now removes the CASH position when a confirmed snapshot sets cash to zero, regardless of whether the old row was auto-created or manual.
+- Added E2E coverage for removing accidental CASH and for correcting ETH-USD cost basis from `611만원` to a USD average price using the ledger FX rate.
+
 ## 2026-05-13 Ledger Parser Hardening
 
 - Refined the reasoning engine with residual-position ambiguity detection, trade-decision protocol, rule templates, and foresight agenda.

@@ -217,7 +217,7 @@ function investmentLedgerSetCashPosition(inv, amount, source = 'user_confirmed')
   const idx = (inv.positions || []).findIndex(p =>
     isCashInvestmentPosition(p) && String(p.currency || 'USD').toUpperCase() === 'USD'
   );
-  if (cashAmount <= 0 && idx >= 0 && (inv.positions[idx].id === 'ip-cash-auto' || inv.positions[idx].autoTradeCash)) {
+  if (cashAmount <= 0 && idx >= 0) {
     inv.positions.splice(idx, 1);
     return null;
   }
