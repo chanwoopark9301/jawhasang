@@ -528,6 +528,39 @@ class TestDataAPI:
         with pytest.raises(RuntimeError, match='read-only'):
             kis_broker._kis_get(cfg, 'token', '/uapi/domestic-stock/v1/trading/order-cash', 'TTTC0802U', {})
 
+    def test_kis_overseas_position_uses_now_pric2_and_row_exchange(self):
+        import kis_broker
+
+        pos = kis_broker._position_from_overseas({
+            'ovrs_pdno': 'CRCL',
+            'ovrs_item_name': '서클 인터넷 그룹',
+            'ovrs_cblc_qty': '113',
+            'pchs_avg_pric': '128.9104',
+            'now_pric2': '123.65',
+            'ovrs_stck_evlu_amt': '13972.45',
+            'ovrs_excg_cd': 'NYSE',
+        }, 'NASD')
+
+        assert pos['symbol'] == 'CRCL'
+        assert pos['market'] == 'NYSE'
+        assert pos['shares'] == 113
+        assert pos['currentPrice'] == 123.65
+
+    def test_kis_merge_positions_dedupes_same_symbol_from_multiple_exchanges(self):
+        import kis_broker
+
+        synced = [
+            {'id': 'kis-us-CRCL', 'symbol': 'CRCL', 'market': 'NASD', 'shares': 113, 'currentPrice': 0},
+            {'id': 'kis-us-CRCL', 'symbol': 'CRCL', 'market': 'NYSE', 'shares': 113, 'currentPrice': 123.65},
+        ]
+
+        merged = kis_broker._merge_positions([], synced)
+
+        assert len(merged) == 1
+        assert merged[0]['symbol'] == 'CRCL'
+        assert merged[0]['market'] == 'NYSE'
+        assert merged[0]['currentPrice'] == 123.65
+
     def test_bithumb_adapter_refuses_trading_mode_even_if_configured(self, monkeypatch):
         import bithumb_broker
 

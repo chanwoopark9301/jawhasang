@@ -149,14 +149,15 @@ def _position_from_overseas(row, exchange):
         return None
     shares = _num(row.get('ovrs_cblc_qty') or row.get('frcr_evlu_pfls_amt') or row.get('hldg_qty'))
     avg_price = _num(row.get('pchs_avg_pric') or row.get('avg_unpr3'))
-    current = _num(row.get('now_pric') or row.get('ovrs_now_pric'))
+    current = _num(row.get('now_pric2') or row.get('now_pric') or row.get('ovrs_now_pric'))
     value = _num(row.get('ovrs_stck_evlu_amt') or row.get('frcr_evlu_amt2'))
+    market = str(row.get('ovrs_excg_cd') or row.get('OVRS_EXCG_CD') or exchange).strip().upper()
     return {
         'id': f'kis-us-{symbol}',
         'symbol': symbol,
         'name': str(row.get('ovrs_item_name') or row.get('prdt_name') or symbol).strip(),
         'assetType': 'stock',
-        'market': exchange,
+        'market': market or exchange,
         'currency': 'USD',
         'shares': shares,
         'avgPrice': avg_price,
@@ -296,6 +297,7 @@ def sync_kis_account(investment: dict, days: int = 30):
                     positions.append(pos)
         except RuntimeError:
             continue
+    positions = _merge_positions([], positions)
 
     domestic_trades = _kis_get(
         config,
