@@ -206,6 +206,66 @@ async function apiFetchInvestmentLedgerSnapshot() {
   return data;
 }
 
+async function apiSaveInvestmentLedgerSnapshot(investment, options = {}) {
+  const retries = Number.isFinite(options.retries) ? options.retries : 1;
+  const timeoutMs = Number.isFinite(options.timeoutMs) ? options.timeoutMs : 12000;
+  let lastError = null;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      logger.info('investment ledger save request', {
+        attempt: attempt + 1,
+        maxAttempts: retries + 1,
+        positions: investment?.positions?.length || 0,
+      });
+      const res = await fetch('/api/investment/ledger', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ investment }),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      const text = await res.text();
+      let data = null;
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch (e) {
+        throw new Error(`investment ledger save returned non-json: ${res.status}`);
+      }
+      if (!res.ok || !data.ok) {
+        const requestId = data?.requestId ? ` requestId=${data.requestId}` : '';
+        throw new Error(`${data?.error || `investment ledger save failed: ${res.status}`}${requestId}`);
+      }
+      logger.info('investment ledger save complete', {
+        requestId: data.requestId,
+        positions: data.investment?.positions?.length || 0,
+      });
+      return data;
+    } catch (error) {
+      clearTimeout(timer);
+      lastError = error;
+      const timedOut = error?.name === 'AbortError';
+      if (attempt < retries) {
+        logger.warn('investment ledger save retry', {
+          attempt: attempt + 1,
+          timeout: timedOut,
+          error,
+        });
+        await _delay(350 * (attempt + 1));
+        continue;
+      }
+    }
+  }
+
+  if (lastError?.name === 'AbortError') {
+    throw new Error(`investment ledger save timeout after ${timeoutMs}ms`);
+  }
+  throw lastError || new Error('investment ledger save failed');
+}
+
 async function apiBuildInvestmentDeskEngine(payload = {}) {
   const res = await fetch('/api/investment/desk/engine', {
     method: 'POST',

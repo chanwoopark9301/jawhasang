@@ -270,6 +270,107 @@ class TestDataAPI:
         assert data['investment']['positions'][0]['shares'] == 510
         assert data['investment']['positions'][1]['cashAmount'] == 125000
 
+    def test_investment_ledger_post_saves_only_investment_snapshot(self, client, monkeypatch):
+        import server
+
+        mirrored = []
+        monkeypatch.setattr(server, '_mirror_investment_snapshot_to_tables', lambda data: mirrored.append(data['investment']) or True)
+        monkeypatch.setattr(server, '_read_investment_snapshot_from_tables', lambda inv: None)
+
+        client.post('/api/data',
+                    data=json.dumps({
+                        'students': [{'id': 's-keep', 'alias': 'A'}],
+                        'investment': {
+                            'positions': [
+                                {'id': 'ip-old', 'symbol': 'IREN', 'shares': 510, 'avgPrice': 66.38, 'currentPrice': 61.2},
+                                {'id': 'ip-cash-old', 'symbol': 'CASH', 'assetType': 'cash', 'cashAmount': 42135, 'shares': 42135},
+                            ],
+                            'rules': {'maxPositionWeight': 25},
+                            'journal': [],
+                            'events': [],
+                            'decisions': [],
+                        },
+                    }),
+                    content_type='application/json')
+
+        r = client.post('/api/investment/ledger',
+                        data=json.dumps({'investment': {
+                            'positions': [
+                                {'id': 'ip-eth', 'symbol': 'ETH-USD', 'assetType': 'crypto', 'shares': 5, 'avgPrice': 4156.46, 'currentPrice': 2353.74},
+                                {'id': 'ip-intc', 'symbol': 'INTC', 'shares': 754, 'avgPrice': 129.67, 'currentPrice': 0},
+                            ],
+                            'rules': {'maxPositionWeight': 25},
+                            'journal': [],
+                            'events': [{'id': 'ie-ledger', 'title': 'ledger saved', 'date': '2026-05-13'}],
+                            'decisions': [],
+                        }}),
+                        content_type='application/json')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['ok'] is True
+        assert data['normalized'] is True
+        assert [p['symbol'] for p in data['investment']['positions']] == ['ETH-USD', 'INTC']
+        assert data['investment']['positions'][0]['shares'] == 5
+        assert mirrored and [p['symbol'] for p in mirrored[-1]['positions']] == ['ETH-USD', 'INTC']
+
+        persisted = client.get('/api/data').get_json()
+        assert persisted['students'][0]['id'] == 's-keep'
+        assert [p['symbol'] for p in persisted['investment']['positions']] == ['ETH-USD', 'INTC']
+
+    def test_full_snapshot_mirror_deletes_positions_missing_from_snapshot(self, client, monkeypatch):
+        import server
+
+        monkeypatch.setattr(server, 'DATABASE_URL', 'postgres://unit-test')
+
+        calls = []
+
+        class FakeCursor:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def execute(self, sql, params=None):
+                calls.append((' '.join(sql.split()), params))
+
+            def fetchone(self):
+                return None
+
+            def fetchall(self):
+                return []
+
+        class FakeConn:
+            def cursor(self):
+                return FakeCursor()
+
+            def commit(self):
+                calls.append(('COMMIT', None))
+
+            def close(self):
+                calls.append(('CLOSE', None))
+
+        monkeypatch.setattr(server, '_get_db_conn', lambda: FakeConn())
+        monkeypatch.setattr(server, '_ensure_investment_tables', lambda conn: None)
+
+        mirrored = server._mirror_investment_snapshot_to_tables({
+            'investment': {
+                'positions': [
+                    {'id': 'ip-eth', 'symbol': 'ETH-USD', 'assetType': 'crypto', 'shares': 5, 'avgPrice': 4156.46, 'currentPrice': 2353.74},
+                    {'id': 'ip-intc', 'symbol': 'INTC', 'shares': 754, 'avgPrice': 129.67, 'currentPrice': 0},
+                ],
+                'events': [],
+                'decisions': [],
+            }
+        })
+
+        assert mirrored is True
+        delete_calls = [call for call in calls if call[0].startswith('DELETE FROM investment_positions')]
+        assert delete_calls, calls
+        assert delete_calls[0][1][0] == 'primary'
+        assert delete_calls[0][1][1] == ['ETH-USD', 'INTC']
+
     def test_investment_desk_engine_endpoint_generates_theses_controls_and_snapshot(self, client, monkeypatch):
         import server
 

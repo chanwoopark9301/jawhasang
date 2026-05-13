@@ -593,6 +593,19 @@ def _mirror_investment_snapshot_to_tables(data):
         _ensure_investment_tables(conn)
         with conn.cursor() as cur:
             account_id = _upsert_investment_account(cur, inv)
+            snapshot_symbols = [
+                str(position.get('symbol') or '').upper()
+                for position in inv.get('positions') or []
+                if position.get('symbol')
+            ]
+            if snapshot_symbols:
+                cur.execute("""
+                    DELETE FROM investment_positions
+                    WHERE account_id = %s
+                      AND NOT (symbol = ANY(%s))
+                """, (account_id, snapshot_symbols))
+            else:
+                cur.execute("DELETE FROM investment_positions WHERE account_id = %s", (account_id,))
             for position in inv.get('positions') or []:
                 if position.get('symbol'):
                     _upsert_investment_position_row(cur, account_id, position)
@@ -1041,11 +1054,37 @@ def save_data_route():
         log.error('POST /api/data 저장 실패: %s', e, exc_info=True)
         return jsonify({'error': '데이터 저장 실패'}), 500
 
-@app.route('/api/investment/ledger', methods=['GET'])
+@app.route('/api/investment/ledger', methods=['GET', 'POST'])
 @require_auth
 def investment_ledger_snapshot_route():
     request_id = f"iledger-{int(time.time() * 1000)}"
     try:
+        if request.method == 'POST':
+            payload = request.get_json(silent=True)
+            if not isinstance(payload, dict) or not isinstance(payload.get('investment'), dict):
+                log.warning('POST /api/investment/ledger [%s] invalid payload', request_id)
+                return jsonify({
+                    'ok': False,
+                    'error': 'investment payload required',
+                    'requestId': request_id,
+                }), 400
+
+            data = _normalize_data(read_data())
+            incoming = _normalize_data({'investment': payload.get('investment') or {}})['investment']
+            data['investment'] = incoming
+            mirrored = _mirror_investment_snapshot_to_tables(data)
+            write_data(data)
+            log.info('POST /api/investment/ledger [%s] saved positions=%d normalized=%s',
+                     request_id, len(incoming.get('positions') or []), mirrored)
+            return jsonify({
+                'ok': True,
+                'investment': incoming,
+                'positions': incoming.get('positions') or [],
+                'normalized': mirrored,
+                'source': 'investment-ledger-post',
+                'requestId': request_id,
+            })
+
         data = _normalize_data(read_data())
         inv = data['investment']
         ledger = _read_investment_snapshot_from_tables(inv)

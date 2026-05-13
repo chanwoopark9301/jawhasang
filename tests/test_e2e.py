@@ -3283,10 +3283,10 @@ $11,717.55
             }];
             state.investment.events = [];
             window.__saveResolved = false;
-            window.saveData = () => new Promise(resolve => {
+            window.apiSaveInvestmentLedgerSnapshot = () => new Promise(resolve => {
                 setTimeout(() => {
                     window.__saveResolved = true;
-                    resolve(true);
+                    resolve({ ok: true, investment: state.investment });
                 }, 1200);
             });
             render();
@@ -3299,7 +3299,7 @@ $11,717.55
                 'IREN remaining 510 shares avg 66.38 current 64\\ncash 125000 USD'
             );
             const iren = state.investment.positions.find(p => p.symbol === 'IREN');
-            const cash = state.investment.positions.find(p => p.assetType === 'cash');
+            const cash = state.investment.positions.find(p => p.assetType === 'cash' || p.symbol === 'CASH');
             return {
                 elapsed: performance.now() - started,
                 shares: iren.shares,
@@ -3329,10 +3329,10 @@ $11,717.55
             state.investment.events = [];
             window.__saveResolved = false;
             window.__unexpectedFetch = false;
-            window.saveData = () => new Promise(resolve => {
+            window.apiSaveInvestmentLedgerSnapshot = () => new Promise(resolve => {
                 setTimeout(() => {
                     window.__saveResolved = true;
-                    resolve(true);
+                    resolve({ ok: true, investment: state.investment });
                 }, 1200);
             });
             window.fetch = () => {
@@ -3346,7 +3346,7 @@ $11,717.55
             const started = performance.now();
             await continueContextChat('portfolio update IREN remaining 510 shares avg 66.38 current 64 cash 125000 USD');
             const iren = state.investment.positions.find(p => p.symbol === 'IREN');
-            const cash = state.investment.positions.find(p => p.assetType === 'cash');
+            const cash = state.investment.positions.find(p => p.assetType === 'cash' || p.symbol === 'CASH');
             return {
                 elapsed: performance.now() - started,
                 shares: iren.shares,

@@ -18,6 +18,13 @@
 - Added KRW-denominated crypto parsing for cases like "ETH 5개, 1개당 611만원, 현재 평가액 1730만원"; the engine converts it with the current USD/KRW rate and writes shares, average price, and current price.
 - Fixed snapshot dedupe so a later partial clause cannot overwrite a previously extracted non-zero quantity, average price, current price, or market value with zero.
 
+## 2026-05-13 Ledger Persistence Timeout Fix
+
+- Added `POST /api/investment/ledger` so confirmed portfolio snapshots save only the investment ledger instead of posting the entire app data blob.
+- Changed chat-driven portfolio persistence to use the ledger endpoint with a 12 second timeout, retry, explicit logging, and a user-visible timeout/failure toast.
+- Fixed normalized DB mirroring so a full portfolio snapshot deletes positions missing from the snapshot; stale rows can no longer resurrect IREN/QLD after the user removes them.
+- Updated E2E expectations so fast local ledger application is still immediate while the server save happens in the background.
+
 ## 2026-05-13 Ledger Parser Hardening
 
 - Refined the reasoning engine with residual-position ambiguity detection, trade-decision protocol, rule templates, and foresight agenda.

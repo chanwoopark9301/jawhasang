@@ -1088,19 +1088,44 @@ function refreshInvestmentSurfaces() {
 
 function persistInvestmentChangesInBackground(label = 'investment change') {
   const startedAt = performance.now();
-  saveData({ retries: 1 })
-    .then(ok => {
-      logger.info('투자 변경 백그라운드 저장 완료', {
+  const snapshot = normalizeInvestmentState(state.investment);
+  if (typeof _saveToLocalCache === 'function') _saveToLocalCache();
+  const savePromise = typeof apiSaveInvestmentLedgerSnapshot === 'function'
+    ? apiSaveInvestmentLedgerSnapshot(snapshot, { retries: 1, timeoutMs: 12000 })
+    : saveData({ retries: 1 });
+  return savePromise
+    .then(result => {
+      const ok = result === true || result?.ok === true;
+      if (result?.investment) {
+        state.investment = normalizeInvestmentState({
+          ...state.investment,
+          ...result.investment,
+          chat: state.investment.chat,
+          chatSessions: state.investment.chatSessions,
+          activeChatSessionId: state.investment.activeChatSessionId,
+        });
+        if (typeof _saveToLocalCache === 'function') _saveToLocalCache();
+      }
+      logger.info('investment background save complete', {
         label,
         ok,
         durationMs: Math.round(performance.now() - startedAt),
       });
+      if (!ok) throw new Error('investment background save returned false');
+      return result;
     })
     .catch(error => {
-      logger.warn('투자 변경 백그라운드 저장 실패', { label, error });
-      if (typeof showToast === 'function') showToast('화면에는 반영했지만 서버 저장이 지연됐어요. 잠시 후 다시 동기화합니다.');
+      logger.warn('investment background save failed', { label, error });
+      if (typeof showToast === 'function') {
+        const message = /timeout/i.test(String(error?.message || ''))
+          ? '원장 서버 저장이 시간 초과됐어요. 화면에는 보존했지만 서버 동기화를 다시 시도해 주세요.'
+          : '화면에는 반영했지만 서버 원장 저장에 실패했어요. 잠시 뒤 다시 동기화합니다.';
+        showToast(message);
+      }
+      return { ok: false, error: error?.message || String(error || 'save failed') };
     });
 }
+
 
 let _investmentLedgerPromptSyncAt = 0;
 
@@ -1580,7 +1605,9 @@ function inferInvestmentCashUsdFromText(text) {
 
 function inferInvestmentCashSnapshotUsdFromText(text) {
   const raw = String(text || '');
-  if (/(?:\uD604\uAE08|\uC608\uC218\uAE08|cash)[^\n.。]{0,24}(?:\uC5C6|0\s*(?:\uC6D0|KRW|USD|\$)?|\uC804\uBD80\s*(?:\uC778\uD154|INTC)|\uC774\uC81C\s*\uC5C6)/i.test(raw)) return 0;
+  const zeroCashIntent = /(?:\uD604\uAE08|\uC608\uC218\uAE08|cash)[^\n.\u3002]{0,24}(?:\uC5C6|\uC804\uBD80\s*(?:\uC778\uD154|INTC)|\uC774\uC81C\s*\uC5C6)/i.test(raw)
+    || /(?:\uD604\uAE08|\uC608\uC218\uAE08|cash)[^\n.\u3002]{0,16}(?:\s|:|=)0\s*(?:\uC6D0|KRW|USD|\$)?(?:\b|$)/i.test(raw);
+  if (zeroCashIntent) return 0;
   const cashUsd = inferInvestmentCashUsdFromText(raw);
   return cashUsd > 0 ? cashUsd : null;
 }
