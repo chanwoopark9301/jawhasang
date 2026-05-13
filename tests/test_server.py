@@ -825,6 +825,102 @@ class TestDataAPI:
         assert data['gate'] is None
         assert data['reply'] == ''
 
+    def test_investment_reasoning_engine_interprets_portfolio_restructure(self):
+        from investment_reasoning_engine import build_investment_reasoning
+
+        reasoning = build_investment_reasoning(
+            '나 이더리움 5개 그대로고 남은 돈과 주식은 전부 인텔로 바꿨어.',
+            {
+                'positions': [
+                    {'symbol': 'ETH-USD', 'name': 'Ethereum', 'assetType': 'crypto', 'shares': 5, 'avgPrice': 4531.54, 'currentPrice': 2334.95},
+                    {'symbol': 'CRCL', 'name': 'Circle', 'shares': 113, 'avgPrice': 128.91, 'currentPrice': 123.65},
+                    {'symbol': 'CASH', 'assetType': 'cash', 'cashAmount': 42135, 'shares': 42135},
+                ],
+                'rules': {'maxPositionWeight': 25},
+            },
+            '2026-05-13',
+        )
+
+        assert reasoning['intentType'] == 'portfolio_update'
+        assert reasoning['action'] == 'ask_missing_before_write'
+        assert reasoning['mentionedSymbols'] == ['INTC', 'ETH-USD']
+        assert 'ETH-USD' in reasoning['interpretation']['unchanged']
+        assert 'INTC' in reasoning['interpretation']['newOrIncrease']
+        assert any('INTC quantity' in item for item in reasoning['questions'])
+        assert any(row['symbol'] == 'CRCL' for row in reasoning['ledgerContext']['holdings'])
+
+    def test_investment_reasoning_engine_autofills_estimated_purchase_plan(self):
+        from investment_reasoning_engine import build_investment_reasoning
+
+        reasoning = build_investment_reasoning(
+            '인텔 몇 주 샀는지는 모르겠고 1억 4천만원 샀는데 지금 6프로 마이너스 상황이야.',
+            {'positions': [], 'rules': {}},
+            '2026-05-13',
+        )
+
+        assert reasoning['intentType'] == 'portfolio_update'
+        assert reasoning['action'] == 'autofill_then_estimated_write'
+        plan = reasoning['interpretation']['autofill'][0]
+        assert plan['type'] == 'estimated_purchase'
+        assert plan['symbols'] == ['INTC']
+        assert plan['inputs']['krwAmount'] == 140000000
+        assert plan['inputs']['lossPercent'] == 6
+        assert 'current quote' in plan['needs']
+        assert any('estimated' in item.lower() for item in reasoning['llmInstructions'])
+
+    def test_investment_reasoning_engine_builds_rule_and_briefing_frames(self):
+        from investment_reasoning_engine import build_investment_reasoning
+
+        inv = {
+            'positions': [
+                {'symbol': 'CRCL', 'name': 'Circle', 'shares': 113, 'avgPrice': 128.91, 'currentPrice': 123.65},
+                {'symbol': 'ETH-USD', 'name': 'Ethereum', 'assetType': 'crypto', 'shares': 5, 'avgPrice': 4531.54, 'currentPrice': 2334.95},
+            ],
+            'events': [
+                {'date': '2026-05-13', 'type': 'signal', 'symbol': 'CRCL', 'title': 'X rumor about stablecoin bill', 'source': 'x.com'},
+            ],
+            'rules': {'maxPositionWeight': 25},
+        }
+        rule = build_investment_reasoning('써클 손절 조건을 가격 말고 법안이랑 USDC 기준으로 세우고 싶어', inv, '2026-05-13')
+        briefing = build_investment_reasoning('오늘 중요한 시황 브리핑해줘', inv, '2026-05-13')
+
+        assert rule['intentType'] == 'rule_design'
+        assert rule['action'] == 'draft_rule_with_invalidation_questions'
+        assert 'CRCL' in rule['mentionedSymbols']
+        assert any('USDC supply' in item for item in rule['researchFrame']['symbols'][0]['neededEvidence'])
+        assert any('CRCL' in item for item in rule['questions'])
+        assert briefing['intentType'] == 'briefing'
+        assert briefing['action'] == 'build_desk_briefing'
+        assert 'what is already priced in versus not confirmed' in briefing['researchFrame']['macro']
+        assert any('Brief from portfolio exposure' in item for item in briefing['llmInstructions'])
+
+    def test_investment_reasoning_endpoint_uses_ledger_snapshot(self, client, monkeypatch):
+        import server
+
+        monkeypatch.setattr(server, '_read_investment_snapshot_from_tables', lambda inv: {
+            'positions': [
+                {'symbol': 'ETH-USD', 'name': 'Ethereum', 'assetType': 'crypto', 'shares': 5, 'avgPrice': 4531.54, 'currentPrice': 2334.95},
+                {'symbol': 'CASH', 'assetType': 'cash', 'cashAmount': 1000, 'shares': 1000},
+            ],
+            'ledgerSource': 'normalized-tables',
+        })
+        client.post('/api/data',
+                    data=json.dumps({'investment': {'positions': [{'symbol': 'CRCL', 'shares': 999, 'avgPrice': 1, 'currentPrice': 1}], 'rules': {}}}),
+                    content_type='application/json')
+
+        r = client.post('/api/investment/reasoning',
+                        data=json.dumps({'date': '2026-05-13', 'text': '이더리움은 그대로 두고 나머지는 인텔로 바꿨어'}),
+                        content_type='application/json')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['ok'] is True
+        reasoning = data['reasoning']
+        assert reasoning['intentType'] == 'portfolio_update'
+        assert reasoning['action'] == 'ask_missing_before_write'
+        assert reasoning['interpretation']['existingSymbols'] == ['ETH-USD']
+        assert 'ETH-USD' in reasoning['interpretation']['unchanged']
+
     def test_investment_trade_gate_blocks_leverage_buy_during_event_defense(self, client, monkeypatch):
         import server
 

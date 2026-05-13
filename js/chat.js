@@ -166,7 +166,13 @@ async function continueContextChat(text) {
   let investmentNewsContext = '';
   let investmentMarketContext = '';
   let investmentFxContext = '';
+  let investmentReasoningContext = '';
   if (isInvestment && !portfolioSnapshotRequest) {
+    try {
+      investmentReasoningContext = await fetchInvestmentReasoningContext(text);
+    } catch (e) {
+      logger.warn('투자 추론 컨텍스트 생성 실패', e);
+    }
     try {
       investmentNewsContext = await fetchInvestmentNewsContext(text);
     } catch (e) {
@@ -186,7 +192,7 @@ async function continueContextChat(text) {
 
   const chatPlan = planContextChatRequest({ isInvestment, text });
   // AI 역할: state.currentRole → AI_ROLE_PRESETS에서 prompt 조회. 없으면 topic.aiPrompt 폴백
-  const sysPrompt = _buildChatSysPrompt(isMyRecords, topic, student, [investmentNewsContext, investmentMarketContext, investmentFxContext].filter(Boolean).join('\n'), text, chatPlan);
+  const sysPrompt = _buildChatSysPrompt(isMyRecords, topic, student, [investmentReasoningContext, investmentNewsContext, investmentMarketContext, investmentFxContext].filter(Boolean).join('\n'), text, chatPlan);
 
   // 슬라이딩 윈도우: 비용 모드에 따라 최근 대화만 전송
   // 장기 맥락은 topic.patternAnalysis(사용자가 저장한 분석)가 시스템 프롬프트로 대체
@@ -1497,6 +1503,31 @@ function shouldFetchInvestmentMarketContext(text) {
   const ask = String(text || '').toLowerCase();
   if (state.view === 'investment' && state.replyMode === 'invest-status') return true;
   return /\uBE0C\uB9AC\uD551|\uC2DC\uD669|\uC624\uB298\s*\uC911\uC694|\uC2DC\uC7A5\s*\uBE0C\uB9AC\uD551|\uC0C1\uD0DC|\uC2DC\uC138|\uD604\uC7AC\uAC00|\uAC00\uACA9|\uC5B4\uB54C|\uD3C9\uAC00|\uC190\uC775|\uD3EC\uD2B8\uD3F4\uB9AC\uC624|\uD604\uAE08|\uC608\uC218\uAE08|\uC6D0\uD654|\uD658\uC728|\uB2EC\uB7EC|briefing|brief|market update|status|price|quote|position|portfolio|cash|krw|usd.?krw|exchange|fx/.test(ask);
+}
+
+async function fetchInvestmentReasoningContext(text) {
+  if (typeof apiBuildInvestmentReasoning !== 'function') return '';
+  const data = await apiBuildInvestmentReasoning({
+    text,
+    date: new Date().toISOString().split('T')[0],
+  });
+  const reasoning = data?.reasoning;
+  if (!reasoning) return '';
+  const interp = reasoning.interpretation || {};
+  const research = reasoning.researchFrame || {};
+  const portfolioLines = [
+    interp.unchanged?.length ? `- unchanged: ${interp.unchanged.join(', ')}` : '',
+    interp.removeOrZero?.length ? `- removeOrZero: ${interp.removeOrZero.join(', ')}` : '',
+    interp.newOrIncrease?.length ? `- newOrIncrease: ${interp.newOrIncrease.join(', ')}` : '',
+    interp.missingFields?.length ? `- missingFields: ${interp.missingFields.join('; ')}` : '',
+    interp.autofill?.length ? `- autofill: ${interp.autofill.map(a => `${a.type}(${(a.symbols || []).join(',')})`).join('; ')}` : '',
+  ].filter(Boolean).join('\n') || '- no portfolio interpretation';
+  const symbolResearch = (research.symbols || []).slice(0, 4).map(item =>
+    `- ${item.symbol}: drivers=${(item.drivers || []).slice(0, 4).join(', ')}; needed=${(item.neededEvidence || []).slice(0, 3).join(', ')}`
+  ).join('\n') || '- no symbol research frame';
+  const questions = (reasoning.questions || []).slice(0, 5).map(q => `- ${q}`).join('\n') || '- no user question needed';
+  const instructions = (reasoning.llmInstructions || []).map(x => `- ${x}`).join('\n') || '- use normal investment mode';
+  return `\n\n[Investment Reasoning Engine]\n- intentType: ${reasoning.intentType}\n- action: ${reasoning.action}\n- confidence: ${reasoning.confidence}\n- mentionedSymbols: ${(reasoning.mentionedSymbols || []).join(', ') || '-'}\n\nPortfolio interpretation:\n${portfolioLines}\n\nResearch frame:\n- macro: ${(research.macro || []).slice(0, 5).join('; ')}\n${symbolResearch}\n\nQuestions to ask only if needed:\n${questions}\n\nLLM behavior instructions:\n${instructions}\n`;
 }
 
 function inferInvestmentMarketSymbols(text) {

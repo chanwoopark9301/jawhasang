@@ -8,6 +8,15 @@
 
 ## 2026-05-13
 
+### Investment Reasoning Engine
+
+- Added `investment_reasoning_engine.py` as the natural-language reasoning layer before LLM responses.
+- The engine classifies investment utterances into portfolio updates, rule design, briefing, trade decisions, research, or ordinary conversation.
+- It reads the current ledger first, interprets unchanged/removed/new positions, detects autofill opportunities, and lists only the missing fields that require user confirmation.
+- Rule-design and briefing requests now get a research frame built from portfolio exposure, thesis drivers, scenario actions, market regime, and evidence needs.
+- Added `/api/investment/reasoning` and wired chat prompts to include the reasoning output before news/quote/FX context.
+- Bumped the static asset version to `20260513-10` and service worker cache to `jip-v149`.
+
 ### Estimated Purchase Ledger Inference
 
 - Added an estimated portfolio update path for cases where the user knows the KRW amount invested and current loss percentage but not the exact share count.

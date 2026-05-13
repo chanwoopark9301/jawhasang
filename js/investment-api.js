@@ -153,6 +153,24 @@ async function apiEvaluateInvestmentChatGate(payload) {
   return data;
 }
 
+async function apiBuildInvestmentReasoning(payload) {
+  const res = await fetch('/api/investment/reasoning', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify(payload || {}),
+  });
+  const text = await res.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch (e) {
+    throw new Error(`investment reasoning returned non-json: ${res.status}`);
+  }
+  if (!res.ok || !data.ok) throw new Error(data?.error || `investment reasoning failed: ${res.status}`);
+  return data;
+}
+
 async function apiCreateInvestmentTransaction(transaction) {
   const res = await fetch('/api/investment/transactions', {
     method: 'POST',

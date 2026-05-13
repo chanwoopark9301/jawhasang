@@ -2,6 +2,9 @@
 
 ## 2026-05-13 Ledger Parser Hardening
 
+- Added the first server-side Investment Reasoning Engine. It sits before the LLM and turns natural language into intent type, ledger interpretation, autofill plan, missing fields, research frame, and behavior instructions.
+- Portfolio, rule-design, briefing, research, and trade-decision conversations now share the same reasoning frame instead of relying on unrelated prompt fragments.
+- The chat prompt now receives `[Investment Reasoning Engine]` context so the LLM explains the engine's interpretation and asks only for unresolved ambiguity.
 - Added an estimated purchase inference path for incomplete account updates. When the user gives invested KRW amount, current loss percentage, and a symbol, the app can fetch quote/FX, reverse the loss into average price, estimate shares, and save the position as `estimated`.
 - Estimated ledger writes must retain `estimateBasis` so they remain visibly lower authority than broker-confirmed fills.
 - Natural-language portfolio chat now follows a ledger-first conversation flow: read current holdings, infer user intent, then ask for missing authoritative trade/account values before writing.

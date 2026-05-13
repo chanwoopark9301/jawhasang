@@ -24,6 +24,7 @@ from investment_backend import normalize_position, upsert_position
 from investment_broker import build_order_intent
 from investment_calendar import sync_investment_calendar
 from investment_desk_engine import build_investment_desk_engine, evaluate_chat_trade_gate, evaluate_trade_intent_gate
+from investment_reasoning_engine import build_investment_reasoning
 from kis_broker import sync_kis_account
 from flask import (
     Flask, request, jsonify, send_from_directory,
@@ -1468,6 +1469,40 @@ def investment_chat_gate_route():
         return jsonify({
             'ok': False,
             'error': 'investment chat gate failed',
+            'requestId': request_id,
+            'errorDetail': _safe_error_detail(e),
+        }), 500
+
+@app.route('/api/investment/reasoning', methods=['POST'])
+@require_auth
+def investment_reasoning_route():
+    request_id = f"ireason-{int(time.time() * 1000)}"
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({'ok': False, 'error': 'reasoning payload must be an object', 'requestId': request_id}), 400
+    try:
+        data = _normalize_data(read_data())
+        inv = data['investment']
+        ledger = _read_investment_snapshot_from_tables(inv)
+        if ledger and ledger.get('positions'):
+            inv = _normalize_data({
+                'investment': {
+                    **inv,
+                    'account': { **(inv.get('account') or {}), **(ledger.get('account') or {}) },
+                    'positions': ledger['positions'],
+                    'ledgerSource': ledger.get('ledgerSource'),
+                    'ledgerSyncedAt': datetime.now().isoformat(),
+                }
+            })['investment']
+        reasoning = build_investment_reasoning(payload.get('text') or '', inv, payload.get('date'))
+        log.info('POST /api/investment/reasoning [%s] intent=%s action=%s symbols=%s',
+                 request_id, reasoning.get('intentType'), reasoning.get('action'), ','.join(reasoning.get('mentionedSymbols') or []))
+        return jsonify({'ok': True, 'reasoning': reasoning, 'requestId': request_id})
+    except Exception as e:
+        log.error('POST /api/investment/reasoning [%s] failed: %s', request_id, e, exc_info=True)
+        return jsonify({
+            'ok': False,
+            'error': 'investment reasoning failed',
             'requestId': request_id,
             'errorDetail': _safe_error_detail(e),
         }), 500
