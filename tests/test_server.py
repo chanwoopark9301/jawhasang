@@ -331,6 +331,10 @@ class TestDataAPI:
         assert loaded['desk']['engine']['date'] == '2026-05-11'
         assert loaded['theses']['IREN']['status'] == 'under_pressure'
         assert loaded['deskSnapshots'][0]['topLine'] == engine['marketView']['topLine']
+        assert loaded['deskSnapshots'][0]['marketRegime']['regime']['regime'] == engine['marketRegime']['regime']['regime']
+        assert loaded['deskSnapshots'][0]['eventDefenseLevel'] == engine['marketRegime']['regime']['eventDefenseLevel']
+        assert loaded['deskSnapshots'][0]['targetCashRange'] == engine['marketRegime']['regime']['targetCashRange']
+        assert loaded['deskSnapshots'][0]['cashGap']['status'] == engine['marketRegime']['allocation']['cashGap']['status']
 
     def test_investment_desk_engine_is_dynamic_for_unknown_symbol(self):
         from investment_desk_engine import build_investment_desk_engine

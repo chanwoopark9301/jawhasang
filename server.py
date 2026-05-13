@@ -1118,11 +1118,20 @@ def investment_desk_engine_route():
             'lastPreparedAt': datetime.now().isoformat(),
         }
         snapshots = inv.get('deskSnapshots') if isinstance(inv.get('deskSnapshots'), list) else []
+        market_regime = engine.get('marketRegime') if isinstance(engine.get('marketRegime'), dict) else {}
+        regime_summary = market_regime.get('regime') if isinstance(market_regime.get('regime'), dict) else {}
+        allocation_summary = market_regime.get('allocation') if isinstance(market_regime.get('allocation'), dict) else {}
+        cash_gap = allocation_summary.get('cashGap') if isinstance(allocation_summary.get('cashGap'), dict) else {}
         snapshot = {
             'id': f"desk-{engine.get('date')}-{request_id}",
             'date': engine.get('date'),
             'generatedAt': engine.get('generatedAt'),
             'topLine': (engine.get('marketView') or {}).get('topLine'),
+            'marketRegime': market_regime,
+            'regime': regime_summary.get('regime'),
+            'eventDefenseLevel': regime_summary.get('eventDefenseLevel'),
+            'targetCashRange': regime_summary.get('targetCashRange'),
+            'cashGap': cash_gap,
             'engine': engine,
         }
         snapshots = [s for s in snapshots if str(s.get('date')) != str(engine.get('date'))]

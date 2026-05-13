@@ -760,6 +760,12 @@
 - Updated static asset cache to `20260511-13` and service worker cache to `jip-v115`.
 ## 2026-05-13
 
+### 아침 데스크 스냅샷 원장화
+
+- `/api/investment/desk/engine`가 저장하는 `investment.deskSnapshots`에 `marketRegime`, `regime`, `eventDefenseLevel`, `targetCashRange`, `cashGap`을 최상위 필드로 남기게 했다.
+- 같은 날짜의 데스크 스냅샷은 교체 저장하고 최근 20개만 유지하면서, 상세 추적용 `engine` 원본은 계속 보존한다.
+- 데스크 엔진 실행 후 저장된 스냅샷의 시장 구간/현금 밴드/현금 갭이 엔진 결과와 일치하는지 서버 테스트를 추가했다.
+
 ### 투자 대화와 시장 조절 엔진 통합
 
 - 투자 대화 프롬프트가 오늘의 데스크 요약을 통해 `Market regime`, 이벤트 방어 레벨, 목표 현금 밴드, 현금 갭, allocation action을 읽도록 검증했다.

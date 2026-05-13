@@ -263,6 +263,14 @@ CPI, FOMC, 실적, 정책 법안, 지정학 이벤트가 가까워지면 자동�
 3. Phase 4: 오늘의 데스크 UI에 `marketRegime` 카드 표시
 4. Phase 5: 투자 대화 프롬프트에 `marketRegime` 삽입
 5. Phase 6: 아침 배치가 marketRegime 스냅샷 저장
+## 2026-05-13 Update - Phase 6 Morning Batch 1차 구현 완료
+
+- `/api/investment/desk/engine`가 생성하는 `investment.deskSnapshots`에 `marketRegime`을 최상위 필드로 저장한다.
+- 스냅샷에 `regime`, `eventDefenseLevel`, `targetCashRange`, `cashGap`을 별도로 저장해 주간 리뷰/행동 복기에서 엔진 전체를 다시 파싱하지 않아도 되게 했다.
+- 데스크 스냅샷은 같은 날짜 기준으로 교체 저장되고 최근 20개만 유지한다.
+- 기존 엔진 전체도 `snapshot.engine`에 유지해 세부 분석이 필요할 때 원본 판단을 추적할 수 있다.
+- 서버 테스트로 데스크 엔진 실행 후 스냅샷의 시장 구간/이벤트 방어/현금 밴드/현금 갭이 엔진 결과와 일치하는지 검증했다.
+
 ## 2026-05-13 Update - Phase 5 Chat Integration 1차 구현 완료
 
 - 투자 대화 프롬프트가 `renderDailyDeskBrief()`를 통해 `Market regime`, `eventDefenseLevel`, `targetCash`, `cashGap`, allocation action을 포함하도록 검증했다.
