@@ -3592,6 +3592,85 @@ $11,717.55
         assert 'ETH-USD' in modal_text
         assert '포트폴리오 갱신 반영' not in modal_text
 
+    def test_chat_portfolio_snapshot_updates_intc_without_overwriting_remaining_holdings(self, page, live_server_url):
+        from tests.conftest import E2E_PASSWORD
+        page.goto(f'{live_server_url}/login')
+        page.fill('input[name=password]', E2E_PASSWORD)
+        page.click('button[type=submit]')
+        page.wait_for_selector('#app-splash', state='hidden', timeout=15_000)
+        self._open_investment(page)
+        page.evaluate("""() => {
+            state.currentChatMessages = [];
+            state.investment.chat = [];
+            state.investment.decisions = [];
+            state.investment.events = [];
+            state.investment.positions = [{
+                id: 'ip-iren-stale',
+                symbol: 'IREN',
+                name: 'Iris Energy',
+                shares: 510,
+                avgPrice: 66.38,
+                currentPrice: 61.2,
+            }, {
+                id: 'ip-qld-stale',
+                symbol: 'QLD',
+                name: 'QLD',
+                shares: 312,
+                avgPrice: 88.88,
+                currentPrice: 91.72,
+            }, {
+                id: 'ip-crcl-keep',
+                symbol: 'CRCL',
+                name: 'Circle',
+                shares: 113,
+                avgPrice: 128.91,
+                currentPrice: 123.65,
+            }, {
+                id: 'ip-eth-keep',
+                symbol: 'ETH-USD',
+                name: 'Ethereum',
+                assetType: 'crypto',
+                shares: 5,
+                avgPrice: 4531.54,
+                currentPrice: 2334.95,
+            }];
+            render();
+        }""")
+
+        page.evaluate("""async () => {
+            await saveInvestmentChatArtifacts(
+                'portfolio update: my account now has Intel, and the rest is only Circle and Ethereum',
+                'My account has Intel 754 shares, average price 129.67 USD. The rest is only Circle and Ethereum. Remove stale IREN and QLD positions.'
+            );
+        }""")
+
+        result = page.evaluate("""() => {
+            const bySymbol = Object.fromEntries(state.investment.positions.map(p => [p.symbol, p]));
+            return {
+                symbols: state.investment.positions.filter(p => !isCashInvestmentPosition(p)).map(p => p.symbol).sort(),
+                intcShares: bySymbol.INTC?.shares,
+                intcAvg: bySymbol.INTC?.avgPrice,
+                crclShares: bySymbol.CRCL?.shares,
+                crclAvg: bySymbol.CRCL?.avgPrice,
+                ethShares: bySymbol['ETH-USD']?.shares,
+                ethAvg: bySymbol['ETH-USD']?.avgPrice,
+                hasIren: Boolean(bySymbol.IREN),
+                hasQld: Boolean(bySymbol.QLD),
+            };
+        }""")
+
+        assert result == {
+            'symbols': ['CRCL', 'ETH-USD', 'INTC'],
+            'intcShares': 754,
+            'intcAvg': 129.67,
+            'crclShares': 113,
+            'crclAvg': 128.91,
+            'ethShares': 5,
+            'ethAvg': 4531.54,
+            'hasIren': False,
+            'hasQld': False,
+        }
+
     def test_portfolio_open_does_not_reconstruct_cash_from_historical_sells(self, logged_in_page):
         self._open_investment(logged_in_page)
         logged_in_page.evaluate("""() => {

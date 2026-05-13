@@ -1,5 +1,12 @@
 # Investment Engine Implementation Plan
 
+## 2026-05-13 Ledger Parser Hardening
+
+- Chat-based portfolio updates must be interpreted as ledger snapshots, not as loose text patches that can copy one symbol's quantity into another symbol.
+- Symbol-specific extraction now narrows context to the sentence fragment that mentions the target symbol, preserving decimal prices such as `129.67`.
+- "Only remaining holdings" language should rebuild the visible non-cash holdings set, while preserving unchanged holdings such as CRCL and ETH-USD.
+- The next ledger step remains moving critical holdings/trades/cash events out of encrypted whole-app JSON and into normalized append-only ledger tables.
+
 작성일: 2026-05-11
 
 ## 1. 목표

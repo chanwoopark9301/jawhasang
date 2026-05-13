@@ -751,6 +751,18 @@ function applyInvestmentPortfolioSnapshotFromChat(text) {
     changed.push(`${position.symbol || position.name} ${fields}`);
   });
 
+  const onlyRemainingSymbols = extractInvestmentOnlyRemainingSymbols(raw);
+  if (onlyRemainingSymbols.size) {
+    handledSymbols.forEach(symbol => onlyRemainingSymbols.add(symbol));
+    const beforeCount = state.investment.positions.length;
+    state.investment.positions = (state.investment.positions || []).filter(position =>
+      isCashInvestmentPosition(position) || onlyRemainingSymbols.has(String(position.symbol || '').toUpperCase())
+    );
+    if (state.investment.positions.length !== beforeCount) {
+      changed.push(`positions rebuilt: ${[...onlyRemainingSymbols].sort().join(', ')}`);
+    }
+  }
+
   (state.investment.positions || []).forEach(position => {
     if (isCashInvestmentPosition(position)) return;
     if (handledSymbols.has(String(position.symbol || '').toUpperCase())) return;
@@ -785,6 +797,34 @@ function applyInvestmentPortfolioSnapshotFromChat(text) {
   };
 }
 
+function extractInvestmentOnlyRemainingSymbols(text) {
+  const raw = String(text || '');
+  const allowed = new Set();
+  const patterns = [
+    /rest\s+is\s+only\s+([^.\n]+)/i,
+    /only\s+([^.\n]+?)\s+(?:left|remain|remaining)/i,
+    /나머지[^.\n]*(?:밖에|만)[^.\n]*/i,
+  ];
+  const segment = patterns.map(pattern => (raw.match(pattern) || [])[1] || (raw.match(pattern) || [])[0]).find(Boolean);
+  if (!segment) return allowed;
+  const probe = String(segment);
+  [
+    'IREN',
+    'CRCL',
+    'INTC',
+    'ETH-USD',
+    'BTC-USD',
+    'QLD',
+    'QQQM',
+  ].forEach(symbol => {
+    if (symbol === 'INTC' && /\b(?:intel|intc)\b|인텔/i.test(probe)) allowed.add('INTC');
+    else if (symbol === 'CRCL' && /circle|crcl|써클|서클/i.test(probe)) allowed.add('CRCL');
+    else if (symbol === 'ETH-USD' && /ethereum|ether|eth|이더리움/i.test(probe)) allowed.add('ETH-USD');
+    else if (new RegExp(`\\b${symbol.replace('-', '\\-')}\\b`, 'i').test(probe)) allowed.add(symbol);
+  });
+  return allowed;
+}
+
 function stripInvestmentPortfolioSnapshotFromRules(text) {
   const raw = String(text || '');
   if (!raw) return '';
@@ -807,7 +847,10 @@ function stripInvestmentPortfolioSnapshotFromRules(text) {
 function extractInvestmentPortfolioSnapshotRows(text) {
   const raw = String(text || '');
   const lines = raw.split(/\r?\n/);
-  const rows = extractInvestmentPortfolioSnapshotBlocks(lines);
+  const rows = [
+    ...extractInvestmentInlinePositionSnapshots(raw),
+    ...extractInvestmentPortfolioSnapshotBlocks(lines),
+  ];
   let header = null;
   for (const line of lines) {
     if (!line.includes('|')) {
@@ -841,6 +884,36 @@ function extractInvestmentPortfolioSnapshotRows(text) {
     if (snapshot.shares > 0 || snapshot.avgPrice > 0 || snapshot.currentPrice > 0) rows.push(snapshot);
   }
   return dedupeInvestmentPortfolioSnapshots(rows);
+}
+
+function extractInvestmentInlinePositionSnapshots(text) {
+  const rows = [];
+  const sentences = splitInvestmentSnapshotSentences(text);
+  sentences.forEach(sentence => {
+    const symbol = normalizeInvestmentSnapshotSymbol(sentence);
+    if (!symbol || symbol === 'CASH') return;
+    const shares = extractSnapshotNumber(sentence, [
+      /([0-9][0-9,.]*)\s*(?:shares?|units?|주|개)/i,
+      /(?:shares?|quantity|qty|수량)[^0-9]{0,24}([0-9][0-9,.]*)/i,
+    ]);
+    const avgPrice = extractSnapshotNumber(sentence, [
+      /(?:average\s*price|avg|average|평단|평균\s*단가)[^0-9]{0,24}\$?\s*([0-9][0-9,.]*)/i,
+    ]);
+    const currentPrice = extractSnapshotNumber(sentence, [
+      /(?:current\s*price|current|현재가|현재\s*가격)[^0-9]{0,24}\$?\s*([0-9][0-9,.]*)/i,
+    ]);
+    if (shares > 0 || avgPrice > 0 || currentPrice > 0) {
+      rows.push({
+        symbol,
+        name: inferInvestmentSnapshotName(symbol, sentence),
+        shares,
+        avgPrice,
+        currentPrice,
+        assetType: isInvestmentCryptoSymbol(symbol) ? 'crypto' : 'stock',
+      });
+    }
+  });
+  return rows;
 }
 
 function extractInvestmentPortfolioSnapshotBlocks(lines) {
@@ -916,6 +989,7 @@ function dedupeInvestmentPortfolioSnapshots(rows) {
 function normalizeInvestmentSnapshotSymbol(value) {
   const raw = String(value || '').replace(/[*`]/g, '').trim();
   const lower = raw.toLowerCase();
+  if (/\b(?:intel|intc)\b|인텔/i.test(raw)) return 'INTC';
   const aliases = [
     { symbol: 'IREN', terms: ['아이렌', 'iris energy', 'iren'] },
     { symbol: 'CRCL', terms: ['써클', '서클', 'circle', 'crcl'] },
@@ -1038,11 +1112,34 @@ function extractInvestmentPositionSnapshotContext(text, position) {
   const matched = [];
   lines.forEach((line, index) => {
     if (investmentTextMentionsPosition(line, position)) {
-      matched.push(lines.slice(index, Math.min(lines.length, index + 6)).join('\n'));
+      const trimmed = String(line || '').replace(/[*`]/g, '').trim();
+      const symbol = String(position?.symbol || '').toUpperCase();
+      const standaloneSymbolLine = trimmed.length <= 24 && normalizeInvestmentSnapshotSymbol(trimmed) === symbol;
+      if (!standaloneSymbolLine) {
+        const fragments = splitInvestmentSnapshotSentences(line)
+          .filter(fragment => investmentTextMentionsPosition(fragment, position));
+        matched.push((fragments.length ? fragments : [line]).join('\n'));
+        return;
+      }
+      const block = [line];
+      for (let j = index + 1; j < Math.min(lines.length, index + 6); j += 1) {
+        const next = String(lines[j] || '').trim();
+        const nextSymbol = normalizeInvestmentSnapshotSymbol(next);
+        if (nextSymbol && nextSymbol !== symbol) break;
+        block.push(lines[j]);
+      }
+      matched.push(block.join('\n'));
     }
   });
   const context = matched.filter(Boolean).join('\n').trim();
   return context || raw;
+}
+
+function splitInvestmentSnapshotSentences(text) {
+  return String(text || '')
+    .split(/(?:[。]+|[\n\r]+|\.(?=\s+[A-Z가-힣]|$))/)
+    .map(part => part.trim())
+    .filter(Boolean);
 }
 
 function extractSnapshotNumber(text, patterns) {

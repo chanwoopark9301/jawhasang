@@ -6,6 +6,15 @@
 - 기록 후 테스트를 실행하고, 통과한 변경만 커밋한다.
 - 커밋 후 `origin/main`으로 푸시한다.
 
+## 2026-05-13
+
+### Portfolio Ledger Chat Parser Guard
+
+- Fixed a portfolio chat parsing bug where a sentence like "Intel 754 shares, and the rest is Circle and Ethereum" could incorrectly copy Intel quantity/average price into CRCL and ETH-USD.
+- Added an E2E regression test that rebuilds the account to INTC + CRCL + ETH-USD, removes stale IREN/QLD holdings, and verifies CRCL/ETH values stay unchanged.
+- Added inline Intel/INTC recognition and "only remaining holdings" cleanup so chat-based portfolio snapshots update the ledger instead of accumulating stale positions.
+- Bumped the static asset version to `20260513-04` and service worker cache to `jip-v143`.
+
 ## 2026-05-08
 
 ### 시장 국면·포트폴리오 조절 엔진
