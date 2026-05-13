@@ -3968,6 +3968,74 @@ CRCL shares=754, avgPrice=129.67, currentPrice=123.65`);
         assert result['hasIren'] is False
         assert result['hasQld'] is False
 
+    def test_retry_portfolio_apply_recovers_candidate_from_recent_chat(self, page, live_server_url):
+        from tests.conftest import E2E_PASSWORD
+        page.goto(f'{live_server_url}/login')
+        page.fill('input[name=password]', E2E_PASSWORD)
+        page.click('button[type=submit]')
+        page.wait_for_selector('#app-splash', state='hidden', timeout=15_000)
+        self._open_investment(page)
+        result = page.evaluate(r"""async () => {
+            state.investment = normalizeInvestmentState({
+                positions: [{
+                    id: 'ip-crcl-retry', symbol: 'CRCL', name: 'Circle', shares: 5, avgPrice: 129.67, currentPrice: 123.65,
+                }, {
+                    id: 'ip-eth-wrong-retry', symbol: 'ETH-USD', name: 'Ethereum', assetType: 'crypto', shares: 754, avgPrice: 129.67, currentPrice: 2334.95,
+                }, {
+                    id: 'ip-intc-retry', symbol: 'INTC', name: 'Intel', shares: 754, avgPrice: 129.67, currentPrice: 0,
+                }, {
+                    id: 'ip-iren-retry', symbol: 'IREN', name: 'Iris Energy', shares: 510, avgPrice: 66.38, currentPrice: 61.2,
+                }, {
+                    id: 'ip-qld-retry', symbol: 'QLD', name: 'QLD', shares: 312, avgPrice: 88.88, currentPrice: 91.72,
+                }, {
+                    id: 'ip-cash-retry', assetType: 'cash', symbol: 'CASH', name: 'Cash', cashAmount: 42135, shares: 42135, avgPrice: 1, currentPrice: 1,
+                }],
+                events: [],
+                decisions: [],
+                rules: {},
+                usdKrwRate: 1470,
+            });
+            state.currentChatMessages = [{
+                role: 'user',
+                text: 'INTC 754 shares avg 129.67. CRCL quantity unchanged.',
+            }, {
+                role: 'user',
+                text: '\uC774\uB354\uB9AC\uC6C0 \uBCF4\uC720\uC218\uB7C9 5\uAC1C\uC774\uACE0, \uB9E4\uC218\uAC00\uB294 1 \uC774\uB354\uB9AC\uC6C0\uB2F9 611\uB9CC\uC6D0, \uD604\uC7AC \uD3C9\uAC00\uC561\uC740 1730\uB9CC\uC6D0\uC815\uB3C4\uC57C.',
+            }, {
+                role: 'ai',
+                text: 'Cash: existing $42,135 + IREN/QLD sale proceeds.',
+            }];
+            window.__savedLedger = null;
+            window.apiSaveInvestmentLedgerSnapshot = async (investment) => {
+                window.__savedLedger = investment;
+                return { ok: true, investment };
+            };
+            await continueContextChat('\uC774\uAC70 \uC801\uC6A9 \uB2E4\uC2DC \uD574\uC918');
+            await new Promise(resolve => setTimeout(resolve, 0));
+            const bySymbol = Object.fromEntries(state.investment.positions.map(p => [p.symbol, p]));
+            return {
+                symbols: state.investment.positions.map(p => p.symbol).sort(),
+                intcShares: bySymbol.INTC?.shares,
+                crclShares: bySymbol.CRCL?.shares,
+                ethShares: bySymbol['ETH-USD']?.shares,
+                ethAvg: Math.round(bySymbol['ETH-USD']?.avgPrice * 100) / 100,
+                ethCurrent: Math.round(bySymbol['ETH-USD']?.currentPrice * 100) / 100,
+                cash: Math.round((bySymbol.CASH?.cashAmount || 0) * 100) / 100,
+                savedSymbols: window.__savedLedger?.positions?.map(p => p.symbol).sort() || [],
+                reply: state.currentChatMessages[state.currentChatMessages.length - 1]?.text || '',
+            };
+        }""")
+
+        assert result['symbols'] == ['CASH', 'CRCL', 'ETH-USD', 'INTC']
+        assert result['savedSymbols'] == ['CASH', 'CRCL', 'ETH-USD', 'INTC']
+        assert result['intcShares'] == 754
+        assert result['crclShares'] == 5
+        assert result['ethShares'] == 5
+        assert result['ethAvg'] == 4156.46
+        assert result['ethCurrent'] == 2353.74
+        assert result['cash'] == 101963.64
+        assert '원장에 반영' in result['reply']
+
     def test_estimated_purchase_from_krw_loss_quote_and_fx_updates_ledger(self, page, live_server_url):
         from tests.conftest import E2E_PASSWORD
         page.goto(f'{live_server_url}/login')

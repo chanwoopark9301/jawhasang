@@ -25,6 +25,13 @@
 - Fixed normalized DB mirroring so a full portfolio snapshot deletes positions missing from the snapshot; stale rows can no longer resurrect IREN/QLD after the user removes them.
 - Updated E2E expectations so fast local ledger application is still immediate while the server save happens in the background.
 
+## 2026-05-13 Retry Apply Must Mutate Ledger
+
+- Added a recovery path for messages like "apply this again" or "reflect the previous portfolio" so they do not fall through to a plain AI reply.
+- The recovery path rebuilds a `portfolioSnapshot` candidate from recent user chat plus nearby assistant context, then applies it through Portfolio Ledger Engine and persists it through the ledger endpoint.
+- Added support for cash expressions such as "existing $42,135 + IREN/QLD sale proceeds"; removed symbols are valued from the current ledger and added to cash.
+- Added E2E coverage for the exact failure mode where pending confirmation state is gone but the recent chat still contains INTC/CRCL/ETH/cash-sale-proceeds facts.
+
 ## 2026-05-13 Ledger Parser Hardening
 
 - Refined the reasoning engine with residual-position ambiguity detection, trade-decision protocol, rule templates, and foresight agenda.
