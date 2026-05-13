@@ -20,6 +20,17 @@ METRIC_KEYS = (
     "semiconductorMomentum",
 )
 
+DEFAULT_ALLOCATION_POLICY: Dict[str, Any] = {
+    "cashRanges": {
+        "uptrend": [10, 25],
+        "sideways": [25, 40],
+        "downtrend": [40, 65],
+        "eventDefense": [30, 45],
+    },
+    "maxLeverageWeight": 25,
+    "maxVolatileWeight": 30,
+}
+
 
 def _num(value: Any, default: float = 0.0) -> float:
     if value is None or value == "":
@@ -85,6 +96,34 @@ def _portfolio_exposure(investment: Dict[str, Any]) -> Dict[str, Any]:
 
 def _clamp(value: float, low: float = -1.0, high: float = 1.0) -> float:
     return max(low, min(high, value))
+
+
+def _range_pair(value: Any, fallback: List[int]) -> List[int]:
+    if isinstance(value, (list, tuple)) and len(value) >= 2:
+        low = int(max(0, min(100, round(_num(value[0], fallback[0])))))
+        high = int(max(0, min(100, round(_num(value[1], fallback[1])))))
+        if low > high:
+            low, high = high, low
+        return [low, high]
+    return list(fallback)
+
+
+def _allocation_policy(investment: Dict[str, Any]) -> Dict[str, Any]:
+    custom = investment.get("allocationPolicy") if isinstance(investment.get("allocationPolicy"), dict) else {}
+    default_ranges = DEFAULT_ALLOCATION_POLICY["cashRanges"]
+    custom_ranges = custom.get("cashRanges") if isinstance(custom.get("cashRanges"), dict) else {}
+    ranges = {
+        key: _range_pair(custom_ranges.get(key), default_ranges[key])
+        for key in ("uptrend", "sideways", "downtrend", "eventDefense")
+    }
+    max_leverage = _num(custom.get("maxLeverageWeight"), DEFAULT_ALLOCATION_POLICY["maxLeverageWeight"])
+    max_volatile = _num(custom.get("maxVolatileWeight"), DEFAULT_ALLOCATION_POLICY["maxVolatileWeight"])
+    return {
+        "source": "custom" if custom else "default",
+        "cashRanges": ranges,
+        "maxLeverageWeight": max(0.0, min(100.0, max_leverage)),
+        "maxVolatileWeight": max(0.0, min(100.0, max_volatile)),
+    }
 
 
 def _parse_datetime(value: Any) -> datetime | None:
@@ -282,6 +321,7 @@ def _near_big_events(investment: Dict[str, Any], today: date) -> List[Dict[str, 
 def classify_market_regime(investment: Dict[str, Any], today_value: Any = None) -> Dict[str, Any]:
     inv = investment if isinstance(investment, dict) else {}
     today = _today(today_value)
+    policy = _allocation_policy(inv)
     metrics_result = build_market_regime_metrics(inv, today)
     metrics = metrics_result["metrics"]
     quality = metrics_result["quality"]
@@ -303,17 +343,16 @@ def classify_market_regime(investment: Dict[str, Any], today_value: Any = None) 
     if risk_score >= 0.35:
         regime = "uptrend"
         label = "상승장"
-        target_cash = [10, 25]
     elif risk_score <= -0.25:
         regime = "downtrend"
         label = "하락장"
-        target_cash = [40, 65]
     else:
         regime = "sideways"
         label = "횡보장"
-        target_cash = [25, 40]
+    target_cash = list(policy["cashRanges"][regime])
     if events:
-        target_cash = [max(target_cash[0], 30), max(target_cash[1], 45)]
+        event_cash = policy["cashRanges"]["eventDefense"]
+        target_cash = [max(target_cash[0], event_cash[0]), max(target_cash[1], event_cash[1])]
     return {
         "regime": regime,
         "label": label,
@@ -324,11 +363,13 @@ def classify_market_regime(investment: Dict[str, Any], today_value: Any = None) 
         "bigEvents": events,
         "metrics": metrics,
         "metricsQuality": quality,
+        "policy": policy,
     }
 
 
 def build_portfolio_allocation_plan(investment: Dict[str, Any], regime: Dict[str, Any]) -> Dict[str, Any]:
     exposure = _portfolio_exposure(investment if isinstance(investment, dict) else {})
+    policy = regime.get("policy") if isinstance(regime.get("policy"), dict) else _allocation_policy(investment if isinstance(investment, dict) else {})
     low, high = regime.get("targetCashRange") or [25, 40]
     cash_weight = exposure["cashWeight"]
     actions: List[Dict[str, Any]] = []
@@ -357,7 +398,12 @@ def build_portfolio_allocation_plan(investment: Dict[str, Any], regime: Dict[str
             "target": "유지",
         })
 
-    if exposure["leverageWeight"] > 0 and (regime.get("regime") != "uptrend" or regime.get("eventDefense")):
+    max_leverage = _num(policy.get("maxLeverageWeight"), DEFAULT_ALLOCATION_POLICY["maxLeverageWeight"])
+    max_volatile = _num(policy.get("maxVolatileWeight"), DEFAULT_ALLOCATION_POLICY["maxVolatileWeight"])
+
+    if exposure["leverageWeight"] > max_leverage or (
+        exposure["leverageWeight"] > 0 and (regime.get("regime") != "uptrend" or regime.get("eventDefense"))
+    ):
         actions.append({
             "type": "cap_leverage",
             "priority": "high",
@@ -366,7 +412,7 @@ def build_portfolio_allocation_plan(investment: Dict[str, Any], regime: Dict[str
             "target": "추가매수 금지, 이벤트 후 재평가",
         })
 
-    if exposure["volatileWeight"] >= 30 and regime.get("eventDefense"):
+    if exposure["volatileWeight"] >= max_volatile and regime.get("eventDefense"):
         actions.append({
             "type": "trim_event_risk",
             "priority": "high",
@@ -387,6 +433,14 @@ def build_portfolio_allocation_plan(investment: Dict[str, Any], regime: Dict[str
 
     return {
         "exposure": exposure,
+        "policy": {
+            "source": policy.get("source") or "default",
+            "cashRanges": policy.get("cashRanges") or DEFAULT_ALLOCATION_POLICY["cashRanges"],
+        },
+        "riskLimits": {
+            "maxLeverageWeight": max_leverage,
+            "maxVolatileWeight": max_volatile,
+        },
         "targetCashRange": regime.get("targetCashRange") or [25, 40],
         "cashGap": {
             "current": round(cash_weight, 2),

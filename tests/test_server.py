@@ -473,6 +473,55 @@ class TestDataAPI:
         assert events['crcl-er']['heldExposure'] is True
         assert 'nvda-news' not in events or events['nvda-news']['importance'] == 'low'
 
+    def test_allocation_policy_overrides_cash_band_and_risk_limits(self):
+        from market_regime_engine import build_market_allocation_engine
+
+        engine = build_market_allocation_engine({
+            'positions': [
+                {'symbol': 'CASH', 'assetType': 'cash', 'shares': 10000, 'cashAmount': 10000},
+                {'symbol': 'QLD', 'shares': 250, 'currentPrice': 100},
+                {'symbol': 'IREN', 'shares': 500, 'currentPrice': 60},
+            ],
+            'market': {'regimeMetrics': {'indexTrend': 0.2, 'breadth': 0.0, 'volatility': 0.3, 'updatedAt': '2026-05-13T09:00:00+09:00'}},
+            'events': [
+                {'id': 'cpi', 'date': '2026-05-14', 'type': 'macro', 'symbol': 'MACRO', 'title': 'CPI 발표'},
+            ],
+            'allocationPolicy': {
+                'cashRanges': {
+                    'sideways': [28, 42],
+                    'eventDefense': [40, 55],
+                },
+                'maxLeverageWeight': 15,
+                'maxVolatileWeight': 25,
+            },
+        }, '2026-05-13')
+
+        assert engine['regime']['targetCashRange'] == [40, 55]
+        assert engine['allocation']['policy']['source'] == 'custom'
+        assert engine['allocation']['riskLimits']['maxLeverageWeight'] == 15
+        assert engine['allocation']['riskLimits']['maxVolatileWeight'] == 25
+        assert engine['allocation']['cashGap']['status'] == 'too_low'
+        assert any(action['type'] == 'cap_leverage' for action in engine['allocation']['actions'])
+        assert any(action['type'] == 'trim_event_risk' for action in engine['allocation']['actions'])
+
+    def test_default_allocation_policy_deploys_excess_cash_in_uptrend(self):
+        from market_regime_engine import build_market_allocation_engine
+
+        engine = build_market_allocation_engine({
+            'positions': [
+                {'symbol': 'CASH', 'assetType': 'cash', 'shares': 60000, 'cashAmount': 60000},
+                {'symbol': 'QQQ', 'shares': 100, 'currentPrice': 400},
+            ],
+            'market': {'regimeMetrics': {'indexTrend': 0.9, 'breadth': 0.7, 'volatility': 0.0, 'ratesPressure': 0.0, 'updatedAt': '2026-05-13T09:00:00+09:00'}},
+            'events': [],
+        }, '2026-05-13')
+
+        assert engine['regime']['regime'] == 'uptrend'
+        assert engine['allocation']['policy']['source'] == 'default'
+        assert engine['allocation']['targetCashRange'] == [10, 25]
+        assert engine['allocation']['cashGap']['status'] == 'too_high'
+        assert any(action['type'] == 'deploy_cash_selectively' for action in engine['allocation']['actions'])
+
     def test_investment_desk_engine_includes_market_allocation_engine(self):
         from investment_desk_engine import build_investment_desk_engine
 

@@ -263,6 +263,15 @@ CPI, FOMC, 실적, 정책 법안, 지정학 이벤트가 가까워지면 자동�
 3. Phase 4: 오늘의 데스크 UI에 `marketRegime` 카드 표시
 4. Phase 5: 투자 대화 프롬프트에 `marketRegime` 삽입
 5. Phase 6: 아침 배치가 marketRegime 스냅샷 저장
+## 2026-05-13 Update - Phase 3 Portfolio Allocation Policy 1차 구현 완료
+
+- 서버 엔진에 기본 `allocationPolicy`를 추가했다.
+- 기본 현금 밴드는 `uptrend 10~25%`, `sideways 25~40%`, `downtrend 40~65%`, `eventDefense 30~45%`다.
+- `investment.allocationPolicy.cashRanges`가 있으면 DB/사용자 정책을 기본값보다 우선한다.
+- `maxLeverageWeight`, `maxVolatileWeight`를 정책으로 분리해 레버리지/고변동 노출 제한을 숫자 정책으로 판단한다.
+- `allocation.policy`, `allocation.riskLimits`를 반환해 UI/데스크가 같은 정책 원장을 읽게 했다.
+- TDD로 커스텀 정책 override와 상승장 현금 과다 시 `deploy_cash_selectively` 액션을 검증했다.
+
 ## 2026-05-13 Update - Phase 2 Big Event Risk Calendar 1차 구현 완료
 
 - `investment.events`의 일정/뉴스를 계좌 보유 종목과 연결해 `bigEvents`로 선별한다.

@@ -760,6 +760,13 @@
 - Updated static asset cache to `20260511-13` and service worker cache to `jip-v115`.
 ## 2026-05-13
 
+### 포트폴리오 조절 정책 객체
+
+- 시장 판단 엔진에 기본 `allocationPolicy`를 추가해 현금 밴드와 위험 노출 한도를 한 곳에서 읽게 했다.
+- `investment.allocationPolicy`가 있으면 사용자/DB 정책이 기본 현금 밴드와 레버리지·고변동 한도를 override하도록 했다.
+- `allocation.policy`, `allocation.riskLimits`를 반환해 데스크 UI와 대화 엔진이 같은 정책 원장을 참조할 수 있게 했다.
+- 커스텀 정책과 상승장 현금 과다 액션을 검증하는 서버 테스트를 추가했다.
+
 ### 시장 이벤트 방어 레벨
 
 - 시장 판단 엔진이 `investment.events`를 보유 종목과 연결해 CPI/FOMC/실적/정책/지정학 이벤트를 `bigEvents`로 분류하도록 했다.
