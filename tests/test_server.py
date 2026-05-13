@@ -550,6 +550,48 @@ class TestDataAPI:
         assert engine['marketRegime']['allocation']['cashGap']['status'] == 'too_high'
         assert 'marketRegime' in engine['marketView']
 
+    def test_market_regime_review_flags_buy_after_event_defense_warning(self):
+        from investment_desk_engine import build_investment_desk_engine
+
+        engine = build_investment_desk_engine({
+            'positions': [
+                {'symbol': 'QLD', 'shares': 312, 'avgPrice': 88.88, 'currentPrice': 91.72},
+                {'symbol': 'CASH', 'assetType': 'cash', 'shares': 42135, 'cashAmount': 42135},
+            ],
+            'deskSnapshots': [{
+                'date': '2026-05-12',
+                'regime': 'sideways',
+                'eventDefenseLevel': 'high',
+                'targetCashRange': [40, 55],
+                'cashGap': {'current': 33.3, 'status': 'too_low'},
+                'marketRegime': {
+                    'regime': {'regime': 'sideways', 'eventDefenseLevel': 'high', 'targetCashRange': [40, 55]},
+                    'allocation': {
+                        'cashGap': {'current': 33.3, 'status': 'too_low'},
+                        'actions': [{'type': 'cap_leverage', 'title': 'QLD add blocked'}],
+                        'doNotDo': ['Do not add leverage before CPI confirmation.'],
+                    },
+                },
+            }],
+            'decisions': [{
+                'id': 'dec-qld-buy',
+                'date': '2026-05-12',
+                'symbol': 'QLD',
+                'action': 'buy',
+                'tradeShares': 10,
+                'tradePrice': 91,
+            }],
+            'market': {'regimeMetrics': {'indexTrend': 0.2, 'breadth': 0.1, 'volatility': 0.4, 'updatedAt': '2026-05-13T09:00:00+09:00'}},
+        }, '2026-05-13')
+
+        review = engine['marketRegimeReview']
+        assert review['windowDays'] == 7
+        assert review['snapshotCount'] == 1
+        assert review['violationCount'] == 1
+        assert review['violations'][0]['type'] == 'event_defense_buy'
+        assert review['violations'][0]['symbol'] == 'QLD'
+        assert review['score'] < 0
+
     def test_investment_order_intent_endpoint_creates_draft(self, client):
         payload = {
             'symbol': 'IREN',

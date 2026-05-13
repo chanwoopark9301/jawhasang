@@ -7,7 +7,7 @@ pure and testable: no Flask, no network, no storage writes.
 from __future__ import annotations
 
 import re
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Tuple
 from market_regime_engine import build_market_allocation_engine
 
@@ -199,6 +199,16 @@ def _default_invalidation_rules(profile: str) -> List[str]:
 
 def _parse_event_date(event: Dict[str, Any]) -> date | None:
     raw = str(event.get("date") or event.get("published") or "")[:10]
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw).date()
+    except Exception:
+        return None
+
+
+def _parse_record_date(record: Dict[str, Any]) -> date | None:
+    raw = str(record.get("date") or record.get("createdAt") or record.get("timestamp") or "")[:10]
     if not raw:
         return None
     try:
@@ -678,6 +688,100 @@ def build_market_view(investment: Dict[str, Any], theses: List[Dict[str, Any]], 
     }
 
 
+def build_market_regime_review(investment: Dict[str, Any], today_value: Any = None, window_days: int = 7) -> Dict[str, Any]:
+    today = _today(today_value)
+    inv = investment if isinstance(investment, dict) else {}
+    start = today - timedelta(days=max(1, window_days))
+    snapshots = []
+    for snapshot in inv.get("deskSnapshots") or []:
+        if not isinstance(snapshot, dict):
+            continue
+        snapshot_date = _parse_record_date(snapshot)
+        if snapshot_date and start <= snapshot_date <= today:
+            snapshots.append((snapshot_date, snapshot))
+
+    decisions = []
+    for decision in inv.get("decisions") or []:
+        if not isinstance(decision, dict):
+            continue
+        decision_date = _parse_record_date(decision)
+        if decision_date and start <= decision_date <= today:
+            decisions.append((decision_date, decision))
+
+    snapshot_by_date = {snapshot_date.isoformat(): snapshot for snapshot_date, snapshot in snapshots}
+    violations: List[Dict[str, Any]] = []
+    for decision_date, decision in decisions:
+        action = str(decision.get("action") or "").strip().lower()
+        if action not in {"buy", "add"}:
+            continue
+        symbol = str(decision.get("symbol") or "").strip().upper()
+        snapshot = snapshot_by_date.get(decision_date.isoformat())
+        if not snapshot:
+            continue
+
+        nested_regime = snapshot.get("marketRegime") or {}
+        regime_info = nested_regime.get("regime") or {}
+        allocation = nested_regime.get("allocation") or {}
+        event_level = str(snapshot.get("eventDefenseLevel") or regime_info.get("eventDefenseLevel") or "normal").lower()
+        cash_gap = snapshot.get("cashGap") if isinstance(snapshot.get("cashGap"), dict) else allocation.get("cashGap") or {}
+        cash_status = str(cash_gap.get("status") or "ok")
+        allocation_actions = allocation.get("actions") or []
+        action_types = {str(item.get("type") or "") for item in allocation_actions if isinstance(item, dict)}
+
+        if event_level in {"medium", "high"}:
+            if "cap_leverage" in action_types and _allocation_action_applies_to_trade("cap_leverage", symbol, "buy"):
+                violations.append(_market_regime_violation(
+                    decision_date,
+                    decision,
+                    "event_defense_buy",
+                    "Buy/add happened while event defense was active and leverage adds were capped.",
+                    event_level,
+                    cash_status,
+                ))
+                continue
+            if cash_status == "too_low":
+                violations.append(_market_regime_violation(
+                    decision_date,
+                    decision,
+                    "event_defense_buy",
+                    "Buy/add happened while event defense was active and cash was below the target range.",
+                    event_level,
+                    cash_status,
+                ))
+
+    score = -25 * len(violations)
+    return {
+        "windowDays": window_days,
+        "snapshotCount": len(snapshots),
+        "decisionCount": len(decisions),
+        "violationCount": len(violations),
+        "violations": violations[:20],
+        "score": score,
+        "summary": _market_regime_review_summary(score, violations),
+    }
+
+
+def _market_regime_violation(decision_date: date, decision: Dict[str, Any], violation_type: str, reason: str, event_level: str, cash_status: str) -> Dict[str, Any]:
+    return {
+        "id": str(decision.get("id") or ""),
+        "date": decision_date.isoformat(),
+        "symbol": str(decision.get("symbol") or "").strip().upper(),
+        "action": str(decision.get("action") or "").strip().lower(),
+        "type": violation_type,
+        "severity": "high" if event_level == "high" else "medium",
+        "reason": reason,
+        "eventDefenseLevel": event_level,
+        "cashStatus": cash_status,
+    }
+
+
+def _market_regime_review_summary(score: int, violations: List[Dict[str, Any]]) -> str:
+    if not violations:
+        return "No market-regime control violations found in the review window."
+    symbols = ", ".join(sorted({item.get("symbol") for item in violations if item.get("symbol")})[:4])
+    return f"{len(violations)} market-regime control violation(s) found: {symbols or 'portfolio'}."
+
+
 def _why_it_matters(row: Dict[str, Any], thesis: Dict[str, Any] | None) -> str:
     if not thesis:
         return "Sizing exists before a written thesis; the next action needs a thesis first."
@@ -730,12 +834,14 @@ def build_investment_desk_engine(investment: Dict[str, Any], today_value: Any = 
     scenarios = build_scenarios(inv, theses, controls, evidence_map)
     market_regime = build_market_allocation_engine(inv, today)
     market_view = build_market_view(inv, theses, controls, today, evidence_map, market_regime)
+    market_regime_review = build_market_regime_review(inv, today)
     research_queue = build_research_queue(inv, theses)
     return {
         "version": "2026-05-13.py-engine-4",
         "generatedAt": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "date": today.isoformat(),
         "marketRegime": market_regime,
+        "marketRegimeReview": market_regime_review,
         "marketView": market_view,
         "theses": theses,
         "behaviorControls": controls,

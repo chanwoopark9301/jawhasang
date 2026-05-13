@@ -308,3 +308,11 @@ CPI, FOMC, 실적, 정책 법안, 지정학 이벤트가 가까워지면 자동�
 - 비보유 종목의 일반 뉴스는 방어 이벤트에서 제외하거나 `low`로만 취급한다.
 - `classify_market_regime()`은 `eventDefenseLevel`(`none`, `low`, `medium`, `high`)을 반환한다.
 - 기존 현금 방어 정책과 호환되도록 이벤트 방어 시 목표 현금 범위는 `30~45%` 하한을 유지한다.
+## 2026-05-13 Update - Phase 7 Review Loop 1st pass complete
+
+- Added `marketRegimeReview` to the Python desk engine.
+- The review loop reads recent `investment.deskSnapshots` and `investment.decisions` over a 7-day window.
+- If a desk snapshot had medium/high event defense, low cash, or a leverage cap, and a same-day decision still bought/added risk, the engine records a control violation.
+- Violations include date, symbol, action, severity, event-defense level, cash status, and a reusable reason for weekly review UI/reporting.
+- The review score is negative when behavior contradicts the prior desk warning.
+- TDD coverage now verifies QLD buy/add after a high event-defense warning is detected as `event_defense_buy`.
