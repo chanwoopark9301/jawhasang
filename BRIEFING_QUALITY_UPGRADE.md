@@ -41,6 +41,8 @@ Sector-rotation questions are analysis requests, not forbidden stock-picking req
 In short: sector-rotation questions are analysis requests.
 When the user asks what the next leading sector could be or whether to enter a hot sector now, the AI should not refuse. It should translate the question into a ranked theme scenario, explain what evidence would confirm or break each scenario, and then let behavior controls decide whether action is allowed today.
 
+The root issue is intent classification before behavior control. A short question like "what leads after semiconductors?" is not a request for a stock pick. It is a market-regime, sector-rotation, entry-timing, and market participant psychology question. The chat prompt now carries that intent frame explicitly before the rule/gate instructions, so the AI should interpret the question first and then apply controls.
+
 ## Example Contract
 
 For a large INTC position, the desk should not merely say "Intel looks weak/strong." It should state:

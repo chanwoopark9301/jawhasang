@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v168'; // Allow sector rotation analysis
+const CACHE_NAME = 'jip-v169'; // Classify market question intent
 
 const STATIC_ASSETS = [
   '/style.css',
