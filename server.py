@@ -364,6 +364,9 @@ def _normalize_data(data: dict) -> dict:
             'chat': inv.get('chat') if isinstance(inv.get('chat'), list) else [],
             'chatSessions': inv.get('chatSessions') if isinstance(inv.get('chatSessions'), list) else [],
             'activeChatSessionId': inv.get('activeChatSessionId'),
+            'account': inv.get('account') if isinstance(inv.get('account'), dict) else base.get('account', {}),
+            'ledgerSource': inv.get('ledgerSource'),
+            'ledgerSyncedAt': inv.get('ledgerSyncedAt'),
             'market': inv.get('market') if isinstance(inv.get('market'), dict) else base['market'],
             'alerts': inv.get('alerts') if isinstance(inv.get('alerts'), list) else [],
             'usdKrwRate': inv.get('usdKrwRate') or base['usdKrwRate'],
@@ -774,6 +777,23 @@ def _read_investment_snapshot_from_tables(inv=None):
     finally:
         conn.close()
 
+def _overlay_investment_ledger_snapshot(data):
+    data = _normalize_data(data)
+    ledger = _read_investment_snapshot_from_tables(data.get('investment') or {})
+    if not ledger or not ledger.get('positions'):
+        return data
+    inv = data.get('investment') or {}
+    data['investment'] = _normalize_data({
+        'investment': {
+            **inv,
+            'account': { **(inv.get('account') or {}), **(ledger.get('account') or {}) },
+            'positions': ledger['positions'],
+            'ledgerSource': ledger.get('ledgerSource'),
+            'ledgerSyncedAt': datetime.now().isoformat(),
+        }
+    })['investment']
+    return data
+
 def _decode_stored_data(raw):
     if raw is None:
         return EMPTY()
@@ -1023,7 +1043,7 @@ def static_files(filename):
 @require_auth
 def get_data():
     try:
-        data = read_data()
+        data = _overlay_investment_ledger_snapshot(read_data())
         return jsonify(data)
     except Exception as e:
         log.error('GET /api/data 처리 실패: %s', e, exc_info=True)
@@ -1060,11 +1080,14 @@ def investment_ledger_snapshot_route():
                     'requestId': request_id,
                 }), 400
 
-            data = _normalize_data(read_data())
             incoming = _normalize_data({'investment': payload.get('investment') or {}})['investment']
-            data['investment'] = incoming
-            mirrored = _mirror_investment_snapshot_to_tables(data)
-            write_data(data)
+            if DATABASE_URL:
+                mirrored = _mirror_investment_snapshot_to_tables({'investment': incoming})
+            else:
+                data = _normalize_data(read_data())
+                data['investment'] = incoming
+                mirrored = _mirror_investment_snapshot_to_tables(data)
+                write_data(data)
             log.info('POST /api/investment/ledger [%s] saved positions=%d normalized=%s',
                      request_id, len(incoming.get('positions') or []), mirrored)
             return jsonify({

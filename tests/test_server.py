@@ -318,6 +318,61 @@ class TestDataAPI:
         assert persisted['students'][0]['id'] == 's-keep'
         assert [p['symbol'] for p in persisted['investment']['positions']] == ['ETH-USD', 'INTC']
 
+    def test_investment_ledger_post_with_db_skips_full_app_storage_roundtrip(self, client, monkeypatch):
+        import server
+
+        monkeypatch.setattr(server, 'DATABASE_URL', 'postgres://unit-test')
+        mirrored = []
+        monkeypatch.setattr(server, '_mirror_investment_snapshot_to_tables', lambda data: mirrored.append(data['investment']) or True)
+        monkeypatch.setattr(server, 'read_data', lambda: (_ for _ in ()).throw(AssertionError('read_data should not run for DB ledger POST')))
+        monkeypatch.setattr(server, 'write_data', lambda data: (_ for _ in ()).throw(AssertionError('write_data should not run for DB ledger POST')))
+
+        r = client.post('/api/investment/ledger',
+                        data=json.dumps({'investment': {
+                            'positions': [
+                                {'id': 'ip-intc', 'symbol': 'INTC', 'shares': 754, 'avgPrice': 129.67, 'currentPrice': 120.61},
+                            ],
+                            'rules': {'maxPositionWeight': 25},
+                            'events': [],
+                            'decisions': [],
+                        }}),
+                        content_type='application/json')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['ok'] is True
+        assert data['normalized'] is True
+        assert mirrored and mirrored[-1]['positions'][0]['symbol'] == 'INTC'
+
+    def test_get_data_overlays_normalized_investment_ledger(self, client, monkeypatch):
+        import server
+
+        monkeypatch.setattr(server, 'read_data', lambda: {
+            'students': [{'id': 's-keep', 'alias': 'A'}],
+            'investment': {
+                'positions': [{'id': 'ip-stale', 'symbol': 'CASH', 'assetType': 'cash', 'shares': 1, 'cashAmount': 1}],
+                'rules': {'maxPositionWeight': 25},
+                'journal': [],
+                'events': [],
+                'decisions': [],
+            },
+        })
+        monkeypatch.setattr(server, '_read_investment_snapshot_from_tables', lambda inv: {
+            'ledgerSource': 'normalized-tables',
+            'account': {'id': 'primary', 'baseCurrency': 'USD', 'cashBalance': 0},
+            'positions': [
+                {'id': 'ip-intc-ledger', 'symbol': 'INTC', 'assetType': 'stock', 'shares': 754, 'avgPrice': 129.67, 'currentPrice': 120.61},
+            ],
+        })
+
+        r = client.get('/api/data')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['students'][0]['id'] == 's-keep'
+        assert [p['symbol'] for p in data['investment']['positions']] == ['INTC']
+        assert data['investment']['ledgerSource'] == 'normalized-tables'
+
     def test_full_snapshot_mirror_deletes_positions_missing_from_snapshot(self, client, monkeypatch):
         import server
 

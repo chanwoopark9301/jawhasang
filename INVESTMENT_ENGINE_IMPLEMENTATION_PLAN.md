@@ -1,5 +1,12 @@
 # Investment Engine Implementation Plan
 
+## 2026-05-14 Fast Normalized Ledger Persistence
+
+- Removed the expensive full app-storage read/encrypt/write roundtrip from `POST /api/investment/ledger` when Supabase is configured.
+- Ledger POST now writes the normalized investment tables directly and returns the incoming snapshot, keeping portfolio saves small and fast.
+- `/api/data` now overlays the normalized investment ledger on top of the encrypted app blob when reading, so screens still see the table-backed account truth.
+- Added server regression tests proving DB ledger POST does not call `read_data()` or `write_data()`, and that `/api/data` returns normalized ledger positions over stale app-storage positions.
+
 ## 2026-05-14 Toast Localization And Fast Ledger Save Feedback
 
 - Koreanized remaining investment toasts in the X signal/watchlist flow so user-facing failures no longer leak English fallback text.
