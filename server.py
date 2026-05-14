@@ -297,7 +297,7 @@ def _empty_investment():
         },
         'desk': {
             'autoPrepare': True,
-            'prepareTime': '09:00',
+            'prepareTime': '08:50',
             'lastPreparedDate': None,
             'lastPreparedAt': None,
             'status': 'idle',

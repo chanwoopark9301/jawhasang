@@ -179,7 +179,7 @@ function renderModalInvestmentDesk() {
         <p>계좌 수치판은 포트폴리오에서 보고, 여기서는 이번 주 거시 변수와 보유 종목의 미시 변수가 만나는 지점을 먼저 봅니다.</p>
         <div class="investment-desk-prep-status">
           <strong>${esc(investmentDeskPrepStatusLabel(prep.status))}</strong>
-          <span>${prep.lastPreparedAt ? `마지막 준비 ${formatDateTimeShort(prep.lastPreparedAt)}` : `매일 ${esc(prep.prepareTime || '09:00')} 이후 자동 준비`}</span>
+          <span>${prep.lastPreparedAt ? `마지막 준비 ${formatDateTimeShort(prep.lastPreparedAt)}` : `매일 ${esc(prep.prepareTime || '08:50')} 이후 자동 준비`}</span>
         </div>
       </section>
 

@@ -277,9 +277,9 @@ function scheduleDailyInvestmentDeskPreparation() {
   if (prefs.autoPrepare === false) return false;
 
   const today = new Date().toISOString().slice(0, 10);
-  const delay = nextInvestmentNotificationDelay(prefs.prepareTime || '09:00');
+  const delay = nextInvestmentNotificationDelay(prefs.prepareTime || '08:50');
   const now = new Date();
-  const [hRaw, mRaw] = String(prefs.prepareTime || '09:00').split(':');
+  const [hRaw, mRaw] = String(prefs.prepareTime || '08:50').split(':');
   const threshold = new Date(now);
   threshold.setHours(Math.min(23, Math.max(0, parseInt(hRaw, 10) || 9)), Math.min(59, Math.max(0, parseInt(mRaw, 10) || 0)), 0, 0);
 
@@ -317,6 +317,11 @@ async function prepareDailyInvestmentDesk(options = {}) {
   _investmentDeskPreparing = true;
   const steps = [];
   const errors = [];
+  const evidenceStats = {
+    requested: 0,
+    fetched: 0,
+    saved: 0,
+  };
   const markStep = (name, ok, detail = '') => {
     steps.push({ name, ok: !!ok, detail, at: new Date().toISOString() });
     if (!ok && detail) errors.push(`${name}: ${detail}`);
@@ -400,14 +405,26 @@ async function prepareDailyInvestmentDesk(options = {}) {
     }
 
     try {
+      const data = await apiBuildInvestmentDeskEngine({ date: today, phase: 'pre-evidence' });
+      if (data.investment) state.investment = normalizeInvestmentState(data.investment);
+      const queue = data.engine?.researchQueue || state.investment.desk?.engine?.researchQueue || [];
+      evidenceStats.requested = Array.isArray(queue) ? queue.length : 0;
+      markStep('evidence-request-engine', true, `${evidenceStats.requested} evidence requests`);
+    } catch (e) {
+      markStep('evidence-request-engine', false, e.message || 'evidence request engine failed');
+    }
+
+    try {
       const result = await syncDailyInvestmentDeskNews();
+      evidenceStats.fetched = result.fetched || 0;
+      evidenceStats.saved = result.added || 0;
       markStep('news-signal-sync', true, `${result.added || 0} saved / ${result.fetched || 0} fetched`);
     } catch (e) {
       markStep('news-signal-sync', false, e.message || 'news sync failed');
     }
 
     try {
-      const data = await apiBuildInvestmentDeskEngine({ date: today });
+      const data = await apiBuildInvestmentDeskEngine({ date: today, phase: 'post-evidence' });
       if (data.investment) state.investment = normalizeInvestmentState(data.investment);
       markStep('desk-engine', true, `${(data.engine?.behaviorControls || []).length} controls`);
     } catch (e) {
@@ -419,9 +436,13 @@ async function prepareDailyInvestmentDesk(options = {}) {
     state.investment.desk = {
       ...(state.investment.desk || {}),
       autoPrepare: state.investment.desk?.autoPrepare !== false,
-      prepareTime: state.investment.desk?.prepareTime || '09:00',
+      prepareTime: state.investment.desk?.prepareTime || '08:50',
       lastPreparedDate: today,
       lastPreparedAt: new Date().toISOString(),
+      evidenceRequestedAt: new Date().toISOString(),
+      evidenceRequestCount: evidenceStats.requested,
+      evidenceFetched: evidenceStats.fetched,
+      evidenceSaved: evidenceStats.saved,
       status: errors.length ? 'partial' : 'ready',
       steps,
       errors,
@@ -478,6 +499,27 @@ function buildDailyInvestmentDeskNewsQueries(symbols, investment) {
     const clean = sanitizeDailyDeskNewsQuery(query);
     if (clean) set.add(clean);
   };
+  const engine = inv.desk?.engine || {};
+  const researchQueue = Array.isArray(engine.researchQueue) ? engine.researchQueue : [];
+  researchQueue.forEach(item => {
+    if (!item || typeof item !== 'object') return;
+    const symbol = String(item.symbol || '').toUpperCase();
+    const query = String(item.query || '').trim();
+    const evidence = String(item.evidenceNeeded || '').trim();
+    if (query) add(query);
+    else if (symbol && evidence) add(`${symbol} ${evidence}`);
+  });
+  const viewQuality = engine.marketView?.viewQuality || {};
+  (Array.isArray(viewQuality.positionAssumptions) ? viewQuality.positionAssumptions : []).forEach(item => {
+    const symbol = String(item.symbol || '').toUpperCase();
+    const mustVerify = Array.isArray(item.mustVerify) ? item.mustVerify : [];
+    mustVerify.slice(0, 2).forEach(check => {
+      if (symbol && check) add(`${symbol} ${check} official filing trusted financial media`);
+    });
+  });
+  (Array.isArray(viewQuality.mustVerify) ? viewQuality.mustVerify : []).forEach(check => {
+    if (check) add(`${check} official source market impact`);
+  });
   if (has('CRCL') || has('ETH-USD') || has('ETH') || has('IREN')) {
     add('Digital Asset Market Structure Clarity Act markup');
     add('GENIUS Act stablecoin bill stablecoin issuer USDC');

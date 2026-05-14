@@ -1482,7 +1482,7 @@ class TestInvestmentPartner:
                 }],
                 events: [],
                 decisions: [],
-                desk: { autoPrepare: true, prepareTime: '09:00' },
+                desk: { autoPrepare: true, prepareTime: '08:50' },
             });
             window.__deskNewsRequest = null;
             window.__savedCount = 0;
@@ -1560,6 +1560,7 @@ class TestInvestmentPartner:
         assert 'server-ledger-sync' in result['stepNames']
         assert 'market-quote-sync' in result['stepNames']
         assert 'calendar-sync' in result['stepNames']
+        assert 'evidence-request-engine' in result['stepNames']
         assert 'news-signal-sync' in result['stepNames']
         assert result['newsSaved'] is True
         assert any('Clarity Act' in query for query in result['newsQueries'])
@@ -1589,7 +1590,7 @@ class TestInvestmentPartner:
                 }],
                 events: [],
                 decisions: [],
-                desk: { autoPrepare: true, prepareTime: '09:00' },
+                desk: { autoPrepare: true, prepareTime: '08:50' },
             });
             window.__refreshCount = 0;
             window.__saveCount = 0;
