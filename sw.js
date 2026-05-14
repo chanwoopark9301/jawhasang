@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v169'; // Classify market question intent
+const CACHE_NAME = 'jip-v170'; // Extract investment question intent engine
 
 const STATIC_ASSETS = [
   '/style.css',

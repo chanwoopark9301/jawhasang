@@ -43,6 +43,8 @@ When the user asks what the next leading sector could be or whether to enter a h
 
 The root issue is intent classification before behavior control. A short question like "what leads after semiconductors?" is not a request for a stock pick. It is a market-regime, sector-rotation, entry-timing, and market participant psychology question. The chat prompt now carries that intent frame explicitly before the rule/gate instructions, so the AI should interpret the question first and then apply controls.
 
+Implementation note: this intent frame now lives in `js/investment-question-intent.js` instead of being buried inside `chat.js`. Market analysis questions without concrete order details skip the trade gate, while concrete trade/order questions still go through behavior control.
+
 ## Example Contract
 
 For a large INTC position, the desk should not merely say "Intel looks weak/strong." It should state:
