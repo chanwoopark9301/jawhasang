@@ -1576,6 +1576,91 @@ class TestDataAPI:
         assert analyst['consensus']['targetConsensus'] == 70
         assert loaded['investment']['calendar']['eventsSynced'] == 3
 
+    def test_investment_desk_batch_runs_without_browser_and_persists_evidence(self, client, monkeypatch):
+        import server
+
+        monkeypatch.setattr(server, 'INVESTMENT_BATCH_SECRET', '')
+
+        client.post('/api/data',
+                    data=json.dumps({
+                        'students': [],
+                        'sessions': [],
+                        'my_topics': [],
+                        'my_records': [],
+                        'investment': {
+                            'positions': [{'id': 'ip-intc', 'symbol': 'INTC', 'shares': 10, 'avgPrice': 100}],
+                            'events': [],
+                            'desk': {'autoPrepare': True, 'prepareTime': '08:50'},
+                        },
+                    }),
+                    content_type='application/json')
+
+        monkeypatch.setattr(server, '_fetch_market_quote_payload', lambda symbols: {
+            'quotes': [
+                {'symbol': 'INTC', 'price': 120.5, 'changePercent': 1.2},
+                {'symbol': 'USDKRW=X', 'price': 1470},
+            ],
+            'missing': [],
+        })
+
+        def fake_calendar(investment, days=45):
+            inv = dict(investment)
+            inv['events'] = list(inv.get('events') or []) + [{
+                'id': 'macro-cpi-batch',
+                'date': '2026-05-14',
+                'type': 'macro',
+                'symbol': 'MACRO',
+                'title': 'CPI',
+            }]
+            return {'ok': True, 'investment': inv, 'eventsSynced': 1}
+
+        monkeypatch.setattr(server, 'sync_investment_calendar', fake_calendar)
+        monkeypatch.setattr(server, '_fetch_news_for_symbol', lambda symbol, limit: [
+            server._news_item(symbol, 'Intel trusted report', 'https://example.com/intc', '2026-05-14', 'Intel market impact.', 'google-news-rss')
+        ])
+        monkeypatch.setattr(server, '_fetch_google_rss_query_news', lambda query, limit: [])
+
+        r = client.post('/api/investment/desk/batch',
+                        data=json.dumps({'date': '2026-05-14', 'force': True}),
+                        content_type='application/json')
+
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data['ok'] is True
+        step_names = [step['name'] for step in data['steps']]
+        assert 'market-quote-sync' in step_names
+        assert 'evidence-request-engine' in step_names
+        assert 'news-signal-sync' in step_names
+        assert 'desk-engine' in step_names
+        inv = data['investment']
+        assert inv['positions'][0]['currentPrice'] == 120.5
+        assert inv['usdKrwRate'] == 1470
+        assert inv['desk']['lastServerBatchDate'] == '2026-05-14'
+        assert any(e.get('deskPrepared') for e in inv['events'])
+
+    def test_investment_desk_batch_requires_secret_when_configured(self, client, monkeypatch):
+        import server
+
+        monkeypatch.setattr(server, 'INVESTMENT_BATCH_SECRET', 'batch-secret')
+
+        r = client.post('/api/investment/desk/batch',
+                        data=json.dumps({'force': True}),
+                        content_type='application/json')
+
+        assert r.status_code == 401
+
+        monkeypatch.setattr(server, 'run_investment_desk_batch', lambda **kwargs: {
+            'ok': True,
+            'skipped': False,
+            'investment': {},
+            'steps': [],
+        })
+        r = client.post('/api/investment/desk/batch',
+                        data=json.dumps({'force': True}),
+                        headers={'Authorization': 'Bearer batch-secret'},
+                        content_type='application/json')
+        assert r.status_code == 200
+
     def test_investment_x_sync_requires_bearer_token(self, client, monkeypatch):
         import server
 

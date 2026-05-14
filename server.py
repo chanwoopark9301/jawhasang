@@ -47,6 +47,7 @@ ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY', '')
 FINNHUB_API_KEY   = os.getenv('FINNHUB_API_KEY', '')
 BENZINGA_API_KEY  = os.getenv('BENZINGA_API_KEY', '')
 X_BEARER_TOKEN    = os.getenv('X_BEARER_TOKEN', '')
+INVESTMENT_BATCH_SECRET = os.getenv('INVESTMENT_BATCH_SECRET', '')
 DATA_FILE         = 'data.json'
 SEC_USER_AGENT    = os.getenv('SEC_USER_AGENT', 'jip-investment-partner contact@example.com')
 
@@ -1192,6 +1193,222 @@ def investment_desk_engine_route():
         log.error('POST /api/investment/desk/engine [%s] failed: %s', request_id, e, exc_info=True)
         return _investment_error('investment desk engine failed', request_id, e)
 
+def _batch_request_authorized():
+    if INVESTMENT_BATCH_SECRET:
+        bearer = request.headers.get('Authorization', '')
+        header_secret = request.headers.get('X-Batch-Secret', '')
+        token = bearer[7:].strip() if bearer.lower().startswith('bearer ') else ''
+        return token == INVESTMENT_BATCH_SECRET or header_secret == INVESTMENT_BATCH_SECRET
+    return bool(session.get('auth'))
+
+def _investment_symbols_for_batch(inv):
+    positions = inv.get('positions') if isinstance(inv.get('positions'), list) else []
+    symbols = []
+    for position in positions:
+        symbol = str(position.get('symbol') or '').upper().strip()
+        asset_type = str(position.get('assetType') or '').lower()
+        if not symbol or symbol == 'CASH' or asset_type == 'cash':
+            continue
+        symbols.append(symbol)
+    symbols.extend(['^IXIC', '^GSPC', 'USDKRW=X'])
+    out = []
+    for symbol in symbols:
+        if symbol and symbol not in out:
+            out.append(symbol)
+    return out
+
+def _apply_batch_quotes(inv, quotes):
+    positions = inv.get('positions') if isinstance(inv.get('positions'), list) else []
+    quote_map = {str(q.get('symbol') or '').upper(): q for q in quotes if isinstance(q, dict)}
+    for position in positions:
+        symbol = str(position.get('symbol') or '').upper()
+        quote = quote_map.get(symbol)
+        if not quote:
+            continue
+        if quote.get('price') is not None:
+            position['currentPrice'] = quote.get('price')
+        if quote.get('changePercent') is not None:
+            position['changePercent'] = quote.get('changePercent')
+        position['quoteSource'] = quote.get('source') or quote.get('marketState') or 'server-batch'
+        position['priceUpdatedAt'] = datetime.now().isoformat()
+    fx = quote_map.get('USDKRW=X')
+    if fx and fx.get('price') is not None:
+        inv['usdKrwRate'] = fx.get('price')
+    inv['positions'] = positions
+    return inv
+
+def _build_server_desk_news_queries(inv, engine):
+    queries = []
+    seen = set()
+
+    def add(value):
+        clean = re.sub(r'\s+', ' ', str(value or '')).strip()
+        clean = re.sub(r'https?://\S+', ' ', clean)
+        clean = clean.replace('<', ' ').replace('>', ' ').strip()[:150]
+        key = clean.lower()
+        if clean and key not in seen:
+            seen.add(key)
+            queries.append(clean)
+
+    for item in engine.get('researchQueue') or []:
+        if not isinstance(item, dict):
+            continue
+        add(item.get('query') or f"{item.get('symbol') or ''} {item.get('evidenceNeeded') or ''}")
+
+    view_quality = ((engine.get('marketView') or {}).get('viewQuality') or {})
+    for item in view_quality.get('positionAssumptions') or []:
+        if not isinstance(item, dict):
+            continue
+        symbol = str(item.get('symbol') or '').upper()
+        for check in (item.get('mustVerify') or [])[:2]:
+            add(f"{symbol} {check} official filing trusted financial media")
+    for check in view_quality.get('mustVerify') or []:
+        add(f"{check} official source market impact")
+
+    positions = inv.get('positions') if isinstance(inv.get('positions'), list) else []
+    for position in positions:
+        symbol = str(position.get('symbol') or '').upper().strip()
+        asset_type = str(position.get('assetType') or '').lower()
+        if not symbol or symbol == 'CASH' or asset_type == 'cash':
+            continue
+        name = str(position.get('name') or '').strip()
+        label = f"{symbol} {name}".strip()
+        add(f"{label} earnings guidance analyst target official")
+        add(f"{label} latest trusted financial news market impact")
+    return queries[:8]
+
+def _server_desk_news_event(item):
+    title = str(item.get('title') or '').strip()
+    link = str(item.get('link') or '').strip()
+    key = hashlib.sha1((link or title).encode('utf-8', errors='ignore')).hexdigest()[:18]
+    published = str(item.get('published') or '')[:10]
+    return {
+        'id': f"server-desk-news-{datetime.now().date().isoformat()}-{key}",
+        'date': published if re.fullmatch(r'\d{4}-\d{2}-\d{2}', published) else datetime.now().date().isoformat(),
+        'type': 'signal' if item.get('kind') == 'general-news' else 'news',
+        'severity': 'watch',
+        'symbol': str(item.get('symbol') or '').upper(),
+        'title': title,
+        'body': '\n'.join([
+            f"## What happened",
+            f"- {str(item.get('summary') or title).strip()}",
+            '',
+            '## Source',
+            f"- [{title[:120]}]({link})" if link else f"- {item.get('source') or 'unknown'}",
+            '',
+            'Desk rule: confirm with official filings, company IR, trusted financial media, and price/volume before acting.',
+        ]),
+        'source': item.get('source') or 'server-desk-batch',
+        'sourceUrl': link,
+        'deskPrepared': True,
+        'createdAt': datetime.now().isoformat(),
+    }
+
+def run_investment_desk_batch(date_text=None, force=False, reason='server-batch'):
+    data = _read_data_with_investment_ledger()
+    inv = data['investment']
+    today = str(date_text or '')[:10] or datetime.now().date().isoformat()
+    desk = inv.get('desk') if isinstance(inv.get('desk'), dict) else {}
+    if not force and desk.get('lastServerBatchDate') == today:
+        return {'ok': True, 'skipped': True, 'investment': inv, 'steps': desk.get('serverBatchSteps') or []}
+
+    steps = []
+
+    def mark(name, ok=True, detail=''):
+        steps.append({'name': name, 'ok': bool(ok), 'detail': detail, 'at': datetime.now().isoformat()})
+
+    try:
+        broker = inv.get('broker') if isinstance(inv.get('broker'), dict) else {}
+        if str(broker.get('provider') or '').lower() == 'kis' or broker.get('status') == 'connected':
+            synced = sync_kis_account(inv, days=30)
+            if synced.get('ok') and isinstance(synced.get('investment'), dict):
+                inv = _normalize_investment(synced['investment'])
+            mark('broker-sync', True, f"{synced.get('positionsSynced', 0)} positions")
+        else:
+            mark('broker-sync', True, 'skipped: broker not connected')
+    except Exception as e:
+        mark('broker-sync', False, _safe_error_detail(e))
+
+    try:
+        symbols = _investment_symbols_for_batch(inv)
+        quote_payload = _fetch_market_quote_payload(symbols)
+        inv = _apply_batch_quotes(inv, quote_payload.get('quotes') or [])
+        mark('market-quote-sync', True, f"{len(quote_payload.get('quotes') or [])}/{len(symbols)} quotes")
+    except Exception as e:
+        mark('market-quote-sync', False, _safe_error_detail(e))
+
+    try:
+        calendar = sync_investment_calendar(inv, days=45)
+        if isinstance(calendar.get('investment'), dict):
+            inv = _normalize_investment(calendar['investment'])
+        mark('calendar-sync', True, f"{calendar.get('eventsSynced', 0)} events")
+    except Exception as e:
+        mark('calendar-sync', False, _safe_error_detail(e))
+
+    pre_engine = build_investment_desk_engine(inv, today)
+    mark('evidence-request-engine', True, f"{len(pre_engine.get('researchQueue') or [])} evidence requests")
+
+    fetched_news = []
+    try:
+        symbols = [s for s in _investment_symbols_for_batch(inv) if not s.startswith('^') and s != 'USDKRW=X']
+        for symbol in symbols:
+            fetched_news.extend(_fetch_news_for_symbol(symbol, 3))
+        for query in _build_server_desk_news_queries(inv, pre_engine):
+            fetched_news.extend(_fetch_google_rss_query_news(query, 3))
+        fetched_news = _dedupe_news(fetched_news)[:18]
+        events = inv.get('events') if isinstance(inv.get('events'), list) else []
+        existing = {str(e.get('sourceUrl') or e.get('title') or '').lower() for e in events if isinstance(e, dict)}
+        added = 0
+        for item in fetched_news:
+            event = _server_desk_news_event(item)
+            key = str(event.get('sourceUrl') or event.get('title') or '').lower()
+            if key and key not in existing:
+                events.append(event)
+                existing.add(key)
+                added += 1
+        inv['events'] = events
+        mark('news-signal-sync', True, f"{added} saved / {len(fetched_news)} fetched")
+    except Exception as e:
+        mark('news-signal-sync', False, _safe_error_detail(e))
+
+    engine = build_investment_desk_engine(inv, today)
+    inv['theses'] = {item['symbol']: item for item in engine.get('theses') or [] if item.get('symbol')}
+    inv['desk'] = {
+        **(inv.get('desk') if isinstance(inv.get('desk'), dict) else {}),
+        'engine': engine,
+        'status': 'ready',
+        'lastEngineAt': engine.get('generatedAt'),
+        'lastPreparedDate': today,
+        'lastPreparedAt': datetime.now().isoformat(),
+        'lastServerBatchDate': today,
+        'lastServerBatchAt': datetime.now().isoformat(),
+        'lastRunReason': reason,
+        'serverBatchSteps': steps,
+    }
+    mark('desk-engine', True, f"{len(engine.get('behaviorControls') or [])} controls")
+    data = _set_investment(data, inv)
+    write_data(data)
+    return {'ok': True, 'skipped': False, 'investment': data['investment'], 'engine': engine, 'steps': steps}
+
+@app.route('/api/investment/desk/batch', methods=['POST'])
+def investment_desk_batch_route():
+    request_id = f"ideskbatch-{int(time.time() * 1000)}"
+    if not _batch_request_authorized():
+        return _investment_error('batch authorization required', request_id, status=401)
+    payload = request.get_json(silent=True) or {}
+    try:
+        result = run_investment_desk_batch(
+            date_text=payload.get('date'),
+            force=bool(payload.get('force')),
+            reason=payload.get('reason') or 'server-batch',
+        )
+        log.info('POST /api/investment/desk/batch [%s] skipped=%s steps=%d',
+                 request_id, result.get('skipped'), len(result.get('steps') or []))
+        return jsonify({**result, 'requestId': request_id})
+    except Exception as e:
+        log.error('POST /api/investment/desk/batch [%s] failed: %s', request_id, e, exc_info=True)
+        return _investment_error('investment desk batch failed', request_id, e)
+
 def _upsert_market_regime_review_event(inv, date_value, review):
     if not isinstance(inv, dict) or not isinstance(review, dict):
         return
@@ -2080,6 +2297,37 @@ def market_quote():
         'fetchedAt': int(time.time()),
         'quotes': quotes,
     })
+
+def _fetch_market_quote_payload(symbols):
+    symbols = _parse_market_symbols(','.join(symbols or []))
+    quotes = []
+    source = 'server-batch-chart'
+    for fetcher, label in (
+        (_fetch_yahoo_chart_quotes, 'yahoo-chart'),
+        (_fetch_yahoo_search_quotes, 'yahoo-search'),
+        (_fetch_coingecko_crypto_quotes, 'coingecko'),
+        (_fetch_stooq_quotes, 'stooq'),
+        (_fetch_stockanalysis_quotes, 'stockanalysis'),
+    ):
+        found = {str(q.get('symbol') or '').upper() for q in quotes}
+        missing = [sym for sym in symbols if sym not in found]
+        if not missing:
+            break
+        batch = fetcher(missing)
+        if batch:
+            quotes.extend(batch)
+            source = label if not quotes else f'{source}+{label}'
+    found = {str(q.get('symbol') or '').upper() for q in quotes}
+    missing = [sym for sym in symbols if sym not in found]
+    if not quotes:
+        raise RuntimeError('market quote lookup failed')
+    return {
+        'source': source,
+        'requested': symbols,
+        'missing': missing,
+        'fetchedAt': int(time.time()),
+        'quotes': quotes,
+    }
 
 _NEWS_SOURCE_RANK = {
     'sec-edgar': 100,

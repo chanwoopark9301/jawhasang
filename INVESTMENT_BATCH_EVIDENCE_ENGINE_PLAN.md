@@ -67,6 +67,30 @@ checked.
 - News queries now prioritize the engine `researchQueue`.
 - The final desk engine runs after evidence is saved, so the briefing can use
   newly collected timeline events.
+- A server-side batch endpoint now exists at `/api/investment/desk/batch`.
+  This endpoint can be called by an external scheduler even when the browser app
+  is not open.
+
+## Server Scheduling
+
+The browser cannot run scheduled work after the app is closed. For true
+accumulation, Railway or an external cron must call the server endpoint.
+
+Recommended production setup:
+
+1. Set `INVESTMENT_BATCH_SECRET` in Railway.
+2. Schedule a daily POST request to:
+
+```text
+POST https://jawhasang-production.up.railway.app/api/investment/desk/batch
+Authorization: Bearer <INVESTMENT_BATCH_SECRET>
+Content-Type: application/json
+
+{"force": false, "reason": "pre-market-cron"}
+```
+
+3. Run it at `08:50` KST for the Korean market desk.
+4. Add a second schedule later for US premarket if needed.
 
 ## Next Stages
 
