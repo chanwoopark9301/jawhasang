@@ -152,7 +152,7 @@ async function addInvestmentSignalFromForm(event) {
   const title = (document.getElementById('is-title')?.value || '').trim() || (handle ? `@${handle} signal` : 'Market signal');
   const body = (document.getElementById('is-body')?.value || '').trim();
   const sourceUrl = (document.getElementById('is-url')?.value || '').trim();
-  if (!body && !sourceUrl) return showToast('X link or signal note is required.');
+  if (!body && !sourceUrl) return showToast('X 링크나 신호 메모를 입력해주세요.');
 
   state.investment.events.push({
     id: `x-manual-${Date.now()}`,
@@ -172,8 +172,8 @@ async function addInvestmentSignalFromForm(event) {
     handle,
   });
   const persisted = await saveData();
-  if (!persisted) return showToast('Server save failed. Please try again.');
-  showToast('Market signal saved.');
+  if (!persisted) return showToast('서버 저장에 실패했어요. 잠시 후 다시 시도해주세요.');
+  showToast('시장 신호를 저장했어요.');
   openModal('investment-signals');
   render();
 }
@@ -182,10 +182,10 @@ async function addInvestmentSignalAccountFromForm(event) {
   event.preventDefault();
   state.investment = normalizeInvestmentState(state.investment);
   const handle = (document.getElementById('isw-handle')?.value || '').trim().replace(/^@/, '');
-  if (!/^[A-Za-z0-9_]{1,15}$/.test(handle)) return showToast('Enter a valid X handle.');
+  if (!/^[A-Za-z0-9_]{1,15}$/.test(handle)) return showToast('올바른 X 계정명을 입력해주세요.');
   const watchlist = state.investment.signals.watchlist || [];
   if (watchlist.some(a => String(a.handle || '').toLowerCase() === handle.toLowerCase())) {
-    return showToast('This account is already in the watchlist.');
+    return showToast('이미 감시 목록에 있는 계정이에요.');
   }
   watchlist.push({
     handle,
@@ -195,8 +195,8 @@ async function addInvestmentSignalAccountFromForm(event) {
   });
   state.investment.signals.watchlist = watchlist;
   const persisted = await saveData();
-  if (!persisted) return showToast('Server save failed. Please try again.');
-  showToast('X watch account saved.');
+  if (!persisted) return showToast('서버 저장에 실패했어요. 잠시 후 다시 시도해주세요.');
+  showToast('X 감시 계정을 저장했어요.');
   openModal('investment-signals');
 }
 
@@ -206,8 +206,8 @@ async function removeInvestmentSignalAccount(handle) {
   state.investment.signals.watchlist = (state.investment.signals.watchlist || [])
     .filter(a => String(a.handle || '').toLowerCase() !== target);
   const persisted = await saveData();
-  if (!persisted) return showToast('Server save failed. Please try again.');
-  showToast('X watch account removed.');
+  if (!persisted) return showToast('서버 저장에 실패했어요. 잠시 후 다시 시도해주세요.');
+  showToast('X 감시 계정을 삭제했어요.');
   openModal('investment-signals');
 }
 
@@ -217,23 +217,23 @@ async function syncInvestmentXSignals() {
   if (button) {
     button.disabled = true;
     button.dataset.originalText = button.dataset.originalText || button.textContent;
-    button.textContent = 'Syncing...';
+    button.textContent = '동기화 중';
   }
   try {
     const data = await apiSyncInvestmentXSignals(state.investment.signals.watchlist || []);
     if (data.investment) state.investment = normalizeInvestmentState(data.investment);
     const count = data.signalsSynced || 0;
-    showToast(`X signal sync complete: ${count} new.`);
-    if (count > 0) notifyInvestmentSignal('Investment signal synced', `${count} new X market signal(s) were saved.`);
+    showToast(`X 시장 신호 ${count}건을 동기화했어요.`);
+    if (count > 0) notifyInvestmentSignal('투자 신호 동기화', `새 X 시장 신호 ${count}건을 저장했어요.`);
     render();
     if (state.activeModal === 'investment-signals') openModal('investment-signals');
   } catch (e) {
     logger.warn('X signal sync failed', e);
-    showToast(e.message || 'X signal sync failed. Check X_BEARER_TOKEN.');
+    showToast(e.message || 'X 신호 동기화에 실패했어요. X_BEARER_TOKEN을 확인해주세요.');
   } finally {
     if (button) {
       button.disabled = false;
-      button.textContent = button.dataset.originalText || 'Sync X';
+      button.textContent = button.dataset.originalText || 'X 동기화';
     }
   }
 }

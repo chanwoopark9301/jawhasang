@@ -1,5 +1,12 @@
 # Investment Engine Implementation Plan
 
+## 2026-05-14 Toast Localization And Fast Ledger Save Feedback
+
+- Koreanized remaining investment toasts in the X signal/watchlist flow so user-facing failures no longer leak English fallback text.
+- Changed chat-driven portfolio persistence to be non-blocking from the user's perspective: the ledger is reflected on screen/local cache immediately, while server save uses a 4.5 second timeout with no retry loop.
+- Timeout/failure feedback now says in Korean that the screen was updated and the server save will be checked on the next sync, instead of making the portfolio update feel frozen.
+- Added static regression tests for English toast leakage and slow ledger-save timeout settings.
+
 ## 2026-05-13 Chat Queue and Portfolio Update Latency
 
 - Replaced the blocking "AI is still replying" chat behavior with a small FIFO queue.

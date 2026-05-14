@@ -30,7 +30,7 @@ function enqueueContextChat(text) {
     length: clean.length,
   });
   if (typeof showToast === 'function') {
-    showToast(`Queued. I will send it after this reply. Waiting: ${queue.length}`);
+    showToast(`답변이 끝나면 이어서 보낼게요. 대기 ${queue.length}개`);
   }
   return queue.length;
 }
@@ -1060,7 +1060,7 @@ async function saveInvestmentChatArtifacts(userText, aiText) {
       source: 'chat',
     });
     await saveData();
-    showToast('Market signal saved.');
+    showToast('시장 신호를 저장했어요.');
     refreshInvestmentSurfaces();
     return;
   }
@@ -1222,7 +1222,7 @@ function persistInvestmentChangesInBackground(label = 'investment change') {
   const snapshot = normalizeInvestmentState(state.investment);
   if (typeof _saveToLocalCache === 'function') _saveToLocalCache();
   const savePromise = typeof apiSaveInvestmentLedgerSnapshot === 'function'
-    ? apiSaveInvestmentLedgerSnapshot(snapshot, { retries: 1, timeoutMs: 12000 })
+    ? apiSaveInvestmentLedgerSnapshot(snapshot, { retries: 0, timeoutMs: 4500 })
     : saveData({ retries: 1 });
   return savePromise
     .then(result => {
@@ -1249,8 +1249,8 @@ function persistInvestmentChangesInBackground(label = 'investment change') {
       logger.warn('investment background save failed', { label, error });
       if (typeof showToast === 'function') {
         const message = /timeout/i.test(String(error?.message || ''))
-          ? '원장 서버 저장이 시간 초과됐어요. 화면에는 보존했지만 서버 동기화를 다시 시도해 주세요.'
-          : '화면에는 반영했지만 서버 원장 저장에 실패했어요. 잠시 뒤 다시 동기화합니다.';
+          ? '화면에는 바로 반영했어요. 서버 저장이 5초 안에 끝나지 않아 다음 동기화에서 다시 확인할게요.'
+          : '화면에는 바로 반영했어요. 서버 저장은 잠시 뒤 다시 동기화할게요.';
         showToast(message);
       }
       return { ok: false, error: error?.message || String(error || 'save failed') };
