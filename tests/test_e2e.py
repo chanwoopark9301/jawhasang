@@ -722,6 +722,41 @@ class TestChatRoleAndReplyMode:
         }
         assert result['elapsed'] < 350
 
+    def test_investment_briefing_contexts_do_not_wait_for_slow_news(self, page, live_server_url):
+        from tests.conftest import E2E_PASSWORD
+        page.goto(f'{live_server_url}/login')
+        page.fill('input[name=password]', E2E_PASSWORD)
+        page.click('button[type=submit]')
+        page.wait_for_selector('#app', timeout=10_000)
+        page.wait_for_selector('#nav-invest', timeout=8_000)
+        page.click('#nav-invest')
+        page.wait_for_selector('#investment-view', timeout=8_000)
+        result = page.evaluate("""async () => {
+            window.__investmentChatContextTimeouts = { news: 120, reasoning: 1000, market: 1000, fx: 1000 };
+            const never = () => new Promise(() => {});
+            window.fetchInvestmentReasoningContext = async () => 'reasoning';
+            window.fetchInvestmentNewsContext = never;
+            window.fetchInvestmentMarketContext = async () => 'market';
+            window.fetchInvestmentFxContext = async () => 'fx';
+            fetchInvestmentReasoningContext = window.fetchInvestmentReasoningContext;
+            fetchInvestmentNewsContext = window.fetchInvestmentNewsContext;
+            fetchInvestmentMarketContext = window.fetchInvestmentMarketContext;
+            fetchInvestmentFxContext = window.fetchInvestmentFxContext;
+            const started = performance.now();
+            const context = await resolveInvestmentChatContexts('오늘 중요한 시황 브리핑해줘');
+            const elapsed = performance.now() - started;
+            delete window.__investmentChatContextTimeouts;
+            return { elapsed, context };
+        }""")
+
+        assert result['elapsed'] < 450
+        assert result['context'] == {
+            'reasoning': 'reasoning',
+            'news': '',
+            'market': 'market',
+            'fx': 'fx',
+        }
+
     def test_chat_enter_during_ime_composition_does_not_send(self, logged_in_page):
         logged_in_page.wait_for_selector('#nav-invest', timeout=8_000)
         logged_in_page.click('#nav-invest')

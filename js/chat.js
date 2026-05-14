@@ -384,6 +384,7 @@ async function resolveInvestmentChatContexts(text) {
     fx: '',
   };
   const startedAt = performance.now();
+  const isBriefing = isInvestmentBriefingIntent(text);
   const jobs = [
     ['reasoning', fetchInvestmentReasoningContext],
     ['news', fetchInvestmentNewsContext],
@@ -393,7 +394,7 @@ async function resolveInvestmentChatContexts(text) {
 
   const results = await Promise.allSettled(jobs.map(([key, fn]) =>
     Promise.resolve()
-      .then(() => fn(text))
+      .then(() => runInvestmentContextJob(key, fn, text, isBriefing))
       .then(value => ({ key, value: value || '' }))
   ));
 
@@ -414,6 +415,57 @@ async function resolveInvestmentChatContexts(text) {
     fxChars: context.fx.length,
   });
   return context;
+}
+
+async function runInvestmentContextJob(key, fn, text, isBriefing = false) {
+  const startedAt = performance.now();
+  const timeoutMs = investmentChatContextTimeoutMs(key, isBriefing);
+  const fallback = '';
+  try {
+    const value = await investmentContextTimeout(key, Promise.resolve().then(() => fn(text)), timeoutMs, fallback);
+    logger.info('Investment chat context job resolved', {
+      key,
+      durationMs: Math.round(performance.now() - startedAt),
+      timeoutMs,
+      chars: String(value || '').length,
+    });
+    return value || '';
+  } catch (error) {
+    logger.warn(`investment ${key} context failed`, error);
+    return fallback;
+  }
+}
+
+function investmentChatContextTimeoutMs(key, isBriefing = false) {
+  const testOverrides = typeof window !== 'undefined' ? window.__investmentChatContextTimeouts : null;
+  const override = Number(testOverrides?.[key]);
+  if (Number.isFinite(override) && override > 0) return override;
+  const briefingBudget = {
+    reasoning: 2500,
+    market: 3500,
+    fx: 2200,
+    news: 4500,
+  };
+  const normalBudget = {
+    reasoning: 4000,
+    market: 5000,
+    fx: 3000,
+    news: 8000,
+  };
+  return (isBriefing ? briefingBudget : normalBudget)[key] || (isBriefing ? 3500 : 6000);
+}
+
+function investmentContextTimeout(key, promise, timeoutMs, fallback = '') {
+  let timer = null;
+  const timeout = new Promise(resolve => {
+    timer = setTimeout(() => {
+      logger.warn('investment chat context timed out', { key, timeoutMs });
+      resolve(fallback);
+    }, timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
 }
 
 
@@ -2150,8 +2202,10 @@ async function fetchInvestmentNewsContext(text) {
   const queries = inferInvestmentNewsQueries(text);
   if (!symbols.length && !queries.length) return '';
   const today = new Date().toISOString().split('T')[0];
+  const isBriefing = isInvestmentBriefingIntent(text);
+  const limit = isBriefing ? 3 : 7;
   try {
-    const data = await apiFetchInvestmentNews(symbols, 7, queries);
+    const data = await apiFetchInvestmentNews(symbols, limit, queries);
     const items = Array.isArray(data.news) ? data.news : [];
     const targetLines = [
       symbols.length ? `- 조회 종목: ${symbols.join(', ')}` : '',
