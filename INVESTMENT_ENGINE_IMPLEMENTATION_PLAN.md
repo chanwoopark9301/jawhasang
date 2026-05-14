@@ -51,6 +51,12 @@
 - Portfolio Ledger Engine now removes the CASH position when a confirmed snapshot sets cash to zero, regardless of whether the old row was auto-created or manual.
 - Added E2E coverage for removing accidental CASH and for correcting ETH-USD cost basis from `611만원` to a USD average price using the ledger FX rate.
 
+## 2026-05-14 KRW Market Value Reconciliation UX
+
+- Fixed KRW market-value portfolio corrections such as "CRCL 2100만원, ETH 1700만원, INTC 1억4천, 나머지는 없어" so named positions are treated as holdings to update, not removal targets.
+- Reworked the portfolio reconciliation question into Korean and removed internal English phrases like "I will reconcile", "remove/zero", and "whether quantity is unchanged" from the user-facing prompt.
+- Pending snapshot summaries now show Korean labels and compute the effective keep set from both explicit keep symbols and parsed position rows.
+
 ## 2026-05-13 Ledger Parser Hardening
 
 - Refined the reasoning engine with residual-position ambiguity detection, trade-decision protocol, rule templates, and foresight agenda.

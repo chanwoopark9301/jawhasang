@@ -741,14 +741,21 @@ function buildInvestmentPortfolioReconciliationQuestion(text) {
   const pending = buildInvestmentPendingPortfolioSnapshotCommand(raw);
   if (pending) state._pendingInvestmentPortfolioSnapshot = pending;
   const nonCash = (inv.positions || []).filter(p => !isCashInvestmentPosition(p));
-  const current = nonCash.map(p => `${p.symbol}: ${formatShares(p.shares)} units, avg ${formatMoney(p.avgPrice)}`).join('\n') || 'No registered holdings';
+  const current = nonCash.map(p => `- ${p.symbol}: 수량 ${formatShares(p.shares)} · 평단 ${formatMoney(p.avgPrice)}`).join('\n') || '- 등록된 보유 종목 없음';
   const mentioned = extractInvestmentMentionedSymbols(raw);
   const keep = extractInvestmentKeepSymbols(raw);
+  const pendingRows = pending?.command?.positions || [];
+  const pendingRowSymbols = pendingRows.map(row => row.symbol).filter(Boolean);
+  const effectiveOnlySymbols = pending?.command?.onlySymbols
+    ? [...new Set([...(pending.command.onlySymbols || []), ...pendingRowSymbols])]
+    : [];
+  const pendingRowSet = new Set(pendingRowSymbols);
   const zeroIntent = [
-    ...extractInvestmentZeroSymbols(raw),
+    ...extractInvestmentZeroSymbols(raw).filter(symbol => !pendingRowSet.has(symbol)),
     ...(inv.positions || [])
       .filter(p => {
         const symbol = String(p.symbol || '').toUpperCase();
+        if (pendingRowSet.has(symbol)) return false;
         if (isCashInvestmentPosition(p)) return /(?:\uD604\uAE08|\uC608\uC218\uAE08|cash)[^\n.?]{0,40}(?:\uC5C6|0|\uC804\uBD80|\uC774\uC81C\s*\uC5C6)/i.test(raw);
         return investmentTextMentionsPosition(raw, p) && /(?:\uC5C6|\uD314|\uC815\uB9AC|\uC804\uBD80\s*(?:\uC778\uD154|INTC)|\uC774\uC81C\s*\uC5C6)/i.test(extractInvestmentSymbolClauseText(raw, symbol));
       })
@@ -758,21 +765,25 @@ function buildInvestmentPortfolioReconciliationQuestion(text) {
   const zeroUnique = [...new Set(zeroIntent)];
   const target = mentioned.find(symbol => !keep.includes(symbol) && !zeroUnique.includes(symbol)) || mentioned.find(symbol => symbol === 'INTC');
   const intentLines = [];
-  if (keep.length) intentLines.push(`- keep unchanged: ${keep.join(', ')}`);
-  if (zeroUnique.length) intentLines.push(`- remove/zero: ${zeroUnique.join(', ')}`);
-  if (target) intentLines.push(`- main/new holding: ${target}`);
+  if (pendingRowSymbols.length) intentLines.push(`- 평가액/평단 갱신: ${pendingRowSymbols.join(', ')}`);
+  if (keep.length) intentLines.push(`- 그대로 유지: ${keep.join(', ')}`);
+  if (zeroUnique.length) intentLines.push(`- 제거 후보: ${zeroUnique.join(', ')}`);
+  if (target && !pendingRowSet.has(target)) intentLines.push(`- 중심 종목: ${target}`);
   const missing = [];
-  if (target && !pending?.command?.positions?.some(row => row.symbol === target)) {
+  const hasExistingShares = symbol => (inv.positions || []).some(p =>
+    !isCashInvestmentPosition(p) && String(p.symbol || '').toUpperCase() === String(symbol || '').toUpperCase() && parseInvestmentNumber(p.shares) > 0
+  );
+  if (target && !pendingRows.some(row => row.symbol === target) && !hasExistingShares(target)) {
     const clause = extractInvestmentSymbolClauseText(raw, target);
-    if (!/(?:[0-9][0-9,.]*)\s*(?:\uC8FC|\uAC1C|shares?|qty)/i.test(clause)) missing.push(`${target} quantity`);
-    if (!/(?:\uD3C9\uB2E8|\uD3C9\uADE0\s*\uB2E8\uAC00|avg|average|\uB9E4\uC218\uAC00|\uC0B4\s*\uB54C)[^\n0-9]{0,40}[0-9]/i.test(clause)) missing.push(`${target} average/fill price`);
+    if (!/(?:[0-9][0-9,.]*)\s*(?:\uC8FC|\uAC1C|shares?|qty)/i.test(clause)) missing.push(`${target} 수량`);
+    if (!/(?:\uD3C9\uB2E8|\uD3C9\uADE0\s*\uB2E8\uAC00|avg|average|\uB9E4\uC218\uAC00|\uC0B4\s*\uB54C)[^\n0-9]{0,40}[0-9]/i.test(clause)) missing.push(`${target} 평단 또는 체결가`);
   }
-  if (mentioned.includes('CRCL') && !keep.includes('CRCL') && !/(?:[0-9][0-9,.]*)\s*(?:\uC8FC|shares?|qty)/i.test(extractInvestmentSymbolClauseText(raw, 'CRCL'))) {
-    missing.push('whether CRCL quantity is unchanged');
+  if (mentioned.includes('CRCL') && !keep.includes('CRCL') && !pendingRowSet.has('CRCL') && !hasExistingShares('CRCL') && !/(?:[0-9][0-9,.]*)\s*(?:\uC8FC|shares?|qty)/i.test(extractInvestmentSymbolClauseText(raw, 'CRCL'))) {
+    missing.push('CRCL 수량 유지 여부');
   }
-  const missingText = missing.length ? missing.map(item => `- ${item}`).join('\n') : '- confirm the candidate below';
-  const pendingText = pending?.summary ? `\n\nCandidate to apply after confirmation:\n${pending.summary}` : '';
-  return `I will reconcile before writing to the ledger.\n\nCurrent ledger:\n${current}\n\nI understand your intent as:\n${intentLines.join('\n') || '- rebuild some holdings from the current ledger into a new account snapshot'}${pendingText}\n\nPlease confirm only this before I write it:\n${missingText}\n\nIf correct, reply "ok", "confirm", or the Korean equivalent.`;
+  const missingText = missing.length ? missing.map(item => `- ${item}`).join('\n') : '- 아래 후보가 맞으면 "맞아" 또는 "확정"이라고 답해주세요.';
+  const pendingText = pending?.summary ? `\n\n원장 반영 후보:\n${summarizePendingInvestmentPortfolioSnapshot({ ...pending.command, onlySymbols: effectiveOnlySymbols.length ? effectiveOnlySymbols : pending.command.onlySymbols }, inv)}` : '';
+  return `원장에 쓰기 전에 먼저 대조할게요.\n\n현재 원장:\n${current}\n\n제가 이해한 변경 의도:\n${intentLines.join('\n') || '- 현재 원장 기준으로 포트폴리오를 재구성'}${pendingText}\n\n확인할 것:\n${missingText}`;
 }
 
 function isInvestmentPortfolioConfirmationText(text) {
@@ -881,8 +892,11 @@ function buildInvestmentPendingPortfolioSnapshotCommand(text, options = {}) {
   const keepSymbols = extractInvestmentKeepSymbols(contextRaw);
   const zeroSymbols = extractInvestmentZeroSymbols(contextRaw);
   const onlyRemainingSymbols = extractInvestmentOnlyRemainingSymbols(contextRaw);
-  const onlySymbols = new Set([...onlyRemainingSymbols, ...keepSymbols, ...rows.map(row => row.symbol)]);
-  zeroSymbols.forEach(symbol => onlySymbols.delete(symbol));
+  const rowSymbols = new Set(rows.map(row => row.symbol).filter(Boolean));
+  const onlySymbols = new Set([...onlyRemainingSymbols, ...keepSymbols, ...rowSymbols]);
+  zeroSymbols.forEach(symbol => {
+    if (!rowSymbols.has(symbol)) onlySymbols.delete(symbol);
+  });
   const cashUsd = inferInvestmentCashSnapshotUsdFromText(contextRaw, zeroSymbols);
   const command = {
     type: 'portfolioSnapshot',
@@ -976,25 +990,26 @@ function summarizePendingInvestmentPortfolioSnapshot(pending, inv) {
   (pending.positions || []).forEach(row => {
     const bits = [
       `${row.symbol}`,
-      row.shares > 0 ? `${formatShares(row.shares)} units` : '',
-      row.avgPrice > 0 ? `avg ${formatMoney(row.avgPrice)}` : '',
-      row.currentPrice > 0 ? `current ${formatMoney(row.currentPrice)}` : '',
-      row.marketValueUsd > 0 ? `value ${formatMoney(row.marketValueUsd)}` : '',
+      row.shares > 0 ? `수량 ${formatShares(row.shares)}` : '',
+      row.avgPrice > 0 ? `평단 ${formatMoney(row.avgPrice)}` : '',
+      row.currentPrice > 0 ? `현재가 ${formatMoney(row.currentPrice)}` : '',
+      row.marketValueUsd > 0 ? `평가액 ${formatMoney(row.marketValueUsd)}` : '',
     ].filter(Boolean);
     lines.push(`- ${bits.join(' | ')}`);
   });
   const only = Array.isArray(pending.onlySymbols) ? pending.onlySymbols : [];
   if (only.length) {
+    const effectiveOnly = new Set([...only, ...((pending.positions || []).map(row => row.symbol).filter(Boolean))]);
     const removed = (inv.positions || [])
       .filter(p => !isCashInvestmentPosition(p))
       .map(p => String(p.symbol || '').toUpperCase())
-      .filter(symbol => symbol && !only.includes(symbol));
-    lines.push(`- keep symbols: ${only.join(', ')}`);
-    if (removed.length) lines.push(`- remove symbols: ${removed.join(', ')}`);
+      .filter(symbol => symbol && !effectiveOnly.has(symbol));
+    lines.push(`- 유지할 종목: ${[...effectiveOnly].join(', ')}`);
+    if (removed.length) lines.push(`- 제거할 종목: ${removed.join(', ')}`);
   }
-  if (pending.cashUsd != null) lines.push(`- cash: ${formatMoney(pending.cashUsd)}`);
+  if (pending.cashUsd != null) lines.push(`- 현금: ${formatMoney(pending.cashUsd)}`);
   if (pending.usdKrwRate != null) lines.push(`- USD/KRW: ${pending.usdKrwRate}`);
-  return lines.join('\n') || '- no candidate changes';
+  return lines.join('\n') || '- 반영 후보 없음';
 }
 
 function extractInvestmentMentionedSymbols(text) {

@@ -3903,6 +3903,79 @@ CRCL shares=754, avgPrice=129.67, currentPrice=123.65`);
         assert 'INTC quantity' in result['question']
         assert 'whether CRCL quantity is unchanged' in result['question']
 
+    def test_krw_market_value_snapshot_question_is_korean_and_keeps_named_positions(self, page, live_server_url):
+        from tests.conftest import E2E_PASSWORD
+        page.goto(f'{live_server_url}/login')
+        page.fill('input[name=password]', E2E_PASSWORD)
+        page.click('button[type=submit]')
+        page.wait_for_selector('#app-splash', state='hidden', timeout=15_000)
+        self._open_investment(page)
+
+        result = page.evaluate(r"""() => {
+            state.investment = normalizeInvestmentState({
+                positions: [{
+                    id: 'ip-crcl-krw-value',
+                    symbol: 'CRCL',
+                    name: 'Circle Internet Group',
+                    shares: 113,
+                    avgPrice: 128.91,
+                    currentPrice: 123.65,
+                }, {
+                    id: 'ip-eth-krw-value',
+                    symbol: 'ETH-USD',
+                    name: 'Ethereum',
+                    assetType: 'crypto',
+                    shares: 5,
+                    avgPrice: 4156.46,
+                    currentPrice: 2334.95,
+                }, {
+                    id: 'ip-intc-krw-value',
+                    symbol: 'INTC',
+                    name: 'Intel',
+                    shares: 754,
+                    avgPrice: 129.67,
+                    currentPrice: 120.61,
+                }, {
+                    id: 'ip-cash-krw-value',
+                    assetType: 'cash',
+                    symbol: 'CASH',
+                    name: 'Cash',
+                    cashAmount: 101963.64,
+                    shares: 101963.64,
+                    avgPrice: 1,
+                    currentPrice: 1,
+                }],
+                events: [],
+                decisions: [],
+                rules: {},
+                usdKrwRate: 1470,
+            });
+            const ask = '\uD3EC\uD2B8\uD3F4\uB9AC\uC624 \uB2E4\uC2DC \uAC31\uC2E0\uD574. \uC368\uD074\uC740 \uCD1D \uD3C9\uAC00\uC561\uC774 2100\uB9CC\uC6D0\uC815\uB3C4\uC774\uACE0, \uC774\uB354\uB9AC\uC6C0\uC740 1700\uB9CC\uC6D0, \uADF8\uB9AC\uACE0 \uC778\uD154\uC740 1\uC5B5 4\uCC9C. \uB098\uBA38\uC9C0\uB294 \uC5C6\uC5B4.';
+            const question = buildInvestmentPortfolioReconciliationQuestion(ask);
+            const pending = state._pendingInvestmentPortfolioSnapshot;
+            return {
+                question,
+                pendingSymbols: pending.symbols.sort(),
+                onlySymbols: pending.command.onlySymbols.sort(),
+                rows: pending.command.positions.map(row => ({
+                    symbol: row.symbol,
+                    marketValueUsd: row.marketValueUsd,
+                })).sort((a, b) => a.symbol.localeCompare(b.symbol)),
+            };
+        }""")
+
+        assert '원장에 쓰기 전에 먼저 대조할게요' in result['question']
+        assert 'I will reconcile' not in result['question']
+        assert 'remove/zero: CRCL' not in result['question']
+        assert 'whether CRCL quantity is unchanged' not in result['question']
+        assert result['pendingSymbols'] == ['CRCL', 'ETH-USD', 'INTC']
+        assert result['onlySymbols'] == ['CRCL', 'ETH-USD', 'INTC']
+        assert result['rows'] == [
+            {'symbol': 'CRCL', 'marketValueUsd': 14285.71},
+            {'symbol': 'ETH-USD', 'marketValueUsd': 11564.63},
+            {'symbol': 'INTC', 'marketValueUsd': 95238.1},
+        ]
+
     def test_pending_portfolio_confirmation_applies_reconciled_snapshot(self, page, live_server_url):
         from tests.conftest import E2E_PASSWORD
         page.goto(f'{live_server_url}/login')
