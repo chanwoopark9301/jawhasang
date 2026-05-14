@@ -834,10 +834,12 @@ class TestInvestmentPartner:
         page.click('#nav-invest')
         page.wait_for_selector('#investment-view', timeout=8_000)
 
-    def test_investment_chat_persists_by_market_session(self, logged_in_page):
+    def test_investment_chat_persists_by_kst_segment(self, logged_in_page):
         self._open_investment(logged_in_page)
 
         result = logged_in_page.evaluate("""() => {
+            const originalSegment = investmentChatSegmentForDate;
+            investmentChatSegmentForDate = () => ({ date: '2026-05-14', segment: 'day', label: '09:00-18:00', order: 1 });
             state.investment.chat = [];
             state.investment.chatSessions = [];
             state.investment.activeChatSessionId = null;
@@ -845,29 +847,34 @@ class TestInvestmentPartner:
                 { role: 'user', text: 'IREN risk check' },
                 { role: 'ai', text: 'Hold the desk context.' },
             ];
-            const session = ensureInvestmentChatSession();
+            const session = ensureInvestmentChatSession(new Date('2026-05-14T01:00:00Z'));
             saveChatHistory();
             const key = _chatStorageKey();
             state.currentChatMessages = [];
             state.investment.chat = [];
             const restored = loadChatHistory();
+            investmentChatSegmentForDate = originalSegment;
             return {
                 restored,
                 key,
                 sessionId: session.id,
                 activeId: state.investment.activeChatSessionId,
+                segment: session.segment,
+                label: session.label,
                 text: state.currentChatMessages[0]?.text,
                 storedCount: state.investment.chatSessions.find(s => s.id === session.id)?.messages.length,
             };
         }""")
 
         assert result['restored'] is True
-        assert result['key'].startswith('jip_chat_v2_investment_market-')
+        assert result['key'].startswith('jip_chat_v2_investment_kst-')
         assert result['sessionId'] == result['activeId']
+        assert result['segment'] == 'day'
+        assert result['label'] == '09:00-18:00'
         assert result['text'] == 'IREN risk check'
         assert result['storedCount'] == 2
 
-    def test_investment_market_close_saves_chat_summary_event(self, logged_in_page):
+    def test_investment_segment_close_saves_summary_and_compacts_messages(self, logged_in_page):
         self._open_investment(logged_in_page)
 
         result = logged_in_page.evaluate("""() => {
@@ -878,9 +885,11 @@ class TestInvestmentPartner:
             state.investment = normalizeInvestmentState({
                 events: [],
                 chatSessions: [{
-                    id: 'market-2026-05-07',
+                    id: 'kst-2026-05-07-day',
                     date: '2026-05-07',
                     market: 'US',
+                    segment: 'day',
+                    label: '09:00-18:00',
                     startedAt: '2026-05-07T14:00:00.000Z',
                     updatedAt: '2026-05-07T20:30:00.000Z',
                     messages: [
@@ -888,9 +897,9 @@ class TestInvestmentPartner:
                         { role: 'ai', text: 'Keep a risk desk note and watch position size.' },
                     ],
                 }],
-                activeChatSessionId: 'market-2026-05-07',
+                activeChatSessionId: 'kst-2026-05-07-day',
             });
-            const changed = maybeFinalizeInvestmentMarketChatSession(new Date('2026-05-08T21:01:00Z'));
+            const changed = maybeFinalizeInvestmentMarketChatSession(new Date('2026-05-07T09:01:00Z'));
             const session = state.investment.chatSessions[0];
             const event = state.investment.events[0];
             window.showToast = originalToast;
@@ -902,17 +911,23 @@ class TestInvestmentPartner:
                 body: event?.body,
                 summarizedAt: session.summarizedAt,
                 summaryEventId: session.summaryEventId,
+                messageCount: session.messageCount,
+                remainingMessages: session.messages.length,
+                summary: session.summary,
                 toast: window.__marketCloseToast,
             };
         }""")
 
         assert result['changed'] is True
-        assert result['eventId'] == 'market-chat-summary-market-2026-05-07'
+        assert result['eventId'] == 'investment-chat-summary-kst-2026-05-07-day'
         assert result['eventType'] == 'review'
-        assert result['source'] == 'market-chat-session'
+        assert result['source'] == 'investment-chat-segment'
         assert 'IREN' in result['body']
         assert result['summarizedAt']
         assert result['summaryEventId'] == result['eventId']
+        assert result['messageCount'] == 2
+        assert result['remainingMessages'] == 0
+        assert '09:00-18:00' in result['summary']
         assert result['toast'] is None
 
     def test_investment_nav_renders_chat_first_layout(self, logged_in_page):

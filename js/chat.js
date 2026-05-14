@@ -2523,6 +2523,34 @@ function investmentNewYorkParts(date = new Date()) {
   };
 }
 
+function investmentKstParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    weekday: 'short',
+  }).formatToParts(date).reduce((acc, part) => {
+    acc[part.type] = part.value;
+    return acc;
+  }, {});
+  return {
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    weekday: parts.weekday,
+    hour: Number(parts.hour || 0),
+    minute: Number(parts.minute || 0),
+  };
+}
+
+function previousInvestmentCalendarDate(dateText) {
+  const d = new Date(`${dateText}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 function previousInvestmentWeekday(dateText) {
   const d = new Date(`${dateText}T12:00:00Z`);
   do {
@@ -2543,14 +2571,40 @@ function isAfterInvestmentMarketClose(date = new Date()) {
   return ny.hour > 16 || (ny.hour === 16 && ny.minute >= 0);
 }
 
+function investmentChatSegmentForDate(date = new Date()) {
+  const kst = investmentKstParts(date);
+  const minutes = (kst.hour * 60) + kst.minute;
+  if (minutes >= 9 * 60 && minutes < 18 * 60) {
+    return { date: kst.date, segment: 'day', label: '09:00-18:00', order: 1 };
+  }
+  if (minutes >= 18 * 60 && minutes < (23 * 60 + 30)) {
+    return { date: kst.date, segment: 'evening', label: '18:00-23:30', order: 2 };
+  }
+  if (minutes >= (23 * 60 + 30)) {
+    return { date: kst.date, segment: 'overnight', label: '23:30-05:00', order: 3 };
+  }
+  if (minutes < 5 * 60) {
+    return { date: previousInvestmentCalendarDate(kst.date), segment: 'overnight', label: '23:30-05:00', order: 3 };
+  }
+  return { date: kst.date, segment: 'preopen', label: '05:00-09:00', order: 0 };
+}
+
+function investmentChatSegmentRank(session) {
+  const date = String(session?.date || '');
+  const orderMap = { preopen: 0, day: 1, evening: 2, overnight: 3 };
+  return `${date}:${orderMap[session?.segment] ?? -1}`;
+}
+
 function investmentChatSessionId(date = investmentMarketSessionDate()) {
+  if (date && typeof date === 'object' && date.segment) return `kst-${date.date}-${date.segment}`;
   return `market-${date}`;
 }
 
 function ensureInvestmentChatSession(date = new Date()) {
   state.investment = normalizeInvestmentState(state.investment);
-  const sessionDate = investmentMarketSessionDate(date);
-  const sessionId = investmentChatSessionId(sessionDate);
+  const segment = investmentChatSegmentForDate(date);
+  const sessionDate = segment.date;
+  const sessionId = investmentChatSessionId(segment);
   let session = state.investment.chatSessions.find(s => s.id === sessionId);
 
   if (!session) {
@@ -2558,11 +2612,15 @@ function ensureInvestmentChatSession(date = new Date()) {
       id: sessionId,
       date: sessionDate,
       market: 'US',
+      segment: segment.segment,
+      label: segment.label,
       startedAt: new Date().toISOString(),
       updatedAt: null,
       closedAt: null,
       summarizedAt: null,
       summaryEventId: null,
+      summary: '',
+      messageCount: 0,
       messages: [],
     };
     if (!state.investment.chatSessions.length && Array.isArray(state.investment.chat) && state.investment.chat.length) {
@@ -2570,6 +2628,9 @@ function ensureInvestmentChatSession(date = new Date()) {
       session.updatedAt = new Date().toISOString();
     }
     state.investment.chatSessions.push(session);
+  } else {
+    session.segment = session.segment || segment.segment;
+    session.label = session.label || segment.label;
   }
 
   state.investment.activeChatSessionId = session.id;
@@ -2670,33 +2731,40 @@ function _sanitizeChatHistory(msgs) {
 function maybeFinalizeInvestmentMarketChatSession(date = new Date()) {
   if (!state.investment) return false;
   state.investment = normalizeInvestmentState(state.investment);
-  const currentSessionDate = investmentMarketSessionDate(date);
-  const afterClose = isAfterInvestmentMarketClose(date);
+  const currentSegment = investmentChatSegmentForDate(date);
+  const currentRank = `${currentSegment.date}:${currentSegment.order}`;
   let changed = false;
 
   state.investment.chatSessions.forEach(session => {
-    const canClose = session.date < currentSessionDate || (session.date === currentSessionDate && afterClose);
+    const canClose = investmentChatSegmentRank(session) < currentRank;
     const messages = _sanitizeChatHistory(session.messages || []);
     const hasNewMessages = !session.summarizedAt || (session.updatedAt && new Date(session.updatedAt) > new Date(session.summarizedAt));
     if (!canClose || !hasNewMessages || messages.filter(m => m.role !== 'system').length < 2) return;
 
-    const eventId = session.summaryEventId || `market-chat-summary-${session.id}`;
+    const eventId = session.summaryEventId || `investment-chat-summary-${session.id}`;
     const exists = state.investment.events.some(e => e.id === eventId);
+    const summary = buildInvestmentChatSessionSummary(messages, session.date, session.label || session.segment || '');
     const nextEvent = {
       id: eventId,
       date: session.date,
       type: 'review',
       symbol: inferInvestmentSymbol(messages.map(m => m.text).join('\n')),
-      title: `${session.date} 장 마감 대화 요약`,
-      body: buildInvestmentChatSessionSummary(messages, session.date),
+      title: `${session.date} ${session.label || session.segment || ''} 투자 대화 요약`,
+      body: summary,
       severity: 'info',
-      source: 'market-chat-session',
+      source: 'investment-chat-segment',
     };
     if (!exists) state.investment.events.push(nextEvent);
     else state.investment.events = state.investment.events.map(e => e.id === eventId ? { ...e, ...nextEvent } : e);
     session.closedAt = session.closedAt || date.toISOString();
     session.summarizedAt = date.toISOString();
     session.summaryEventId = eventId;
+    session.summary = summary;
+    session.messageCount = messages.length;
+    session.messages = [];
+    try {
+      localStorage.removeItem(`jip_chat_v2_investment_${session.id}`);
+    } catch (_) {}
     changed = true;
   });
 
@@ -2705,13 +2773,13 @@ function maybeFinalizeInvestmentMarketChatSession(date = new Date()) {
     saveData();
     if (typeof renderRightPanel === 'function') renderRightPanel();
     logger.info('장 마감 대화 세션을 투자 타임라인 이벤트로 자동 정리', {
-      count: state.investment.events.filter(e => e.source === 'market-chat-session').length,
+      count: state.investment.events.filter(e => e.source === 'investment-chat-segment').length,
     });
   }
   return changed;
 }
 
-function buildInvestmentChatSessionSummary(messages, dateText) {
+function buildInvestmentChatSessionSummary(messages, dateText, label = '') {
   const userLines = messages
     .filter(m => m.role === 'user')
     .map(m => String(m.text || '').trim())
@@ -2724,18 +2792,18 @@ function buildInvestmentChatSessionSummary(messages, dateText) {
   const candidates = userLines.filter(line => keywordRe.test(line)).slice(-8);
   const lastAi = aiLines.slice(-3).map(line => line.split(/\n+/).slice(0, 4).join('\n')).join('\n\n');
   const summaryLines = [
-    `## ${dateText} 장중 대화 요약`,
+    `## ${dateText}${label ? ` ${label}` : ''} 투자 대화 요약`,
     '',
-    `- 사용자 발화 ${userLines.length}개, AI 응답 ${aiLines.length}개를 기준으로 정리했습니다.`,
+    `- 사용자 발화 ${userLines.length}개, AI 답변 ${aiLines.length}개를 기준으로 정리했습니다.`,
   ];
   if (candidates.length) {
-    summaryLines.push('', '### 저장 후보 발화');
+    summaryLines.push('', '### 투자 판단 후보 발화');
     candidates.forEach(line => summaryLines.push(`- ${line.replace(/\s+/g, ' ').slice(0, 180)}`));
   }
   if (lastAi) {
     summaryLines.push('', '### 마지막 판단 맥락', lastAi.slice(0, 1200));
   }
-  summaryLines.push('', '> 이 항목은 장 마감 후 자동 생성된 대화 세션 요약입니다. 실제 매매 반영은 매매기록/포트폴리오 이벤트를 기준으로 다시 확인하세요.');
+  summaryLines.push('', '> 이 항목은 시간 구간 마감 시 자동 생성된 대화 요약입니다. 실제 매매/포트폴리오 반영은 원장과 매매 기록 기준으로 확인하세요.');
   return summaryLines.join('\n');
 }
 
