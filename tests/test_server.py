@@ -95,6 +95,7 @@ class TestDataAPI:
         assert len(data['investment']['signals']['watchlist']) >= 1
         assert data['investment']['desk']['autoPrepare'] is True
         assert data['investment']['desk']['prepareTime'] == '08:50'
+        assert data['investment']['desk']['prepareTimes'] == ['08:50', '20:50']
 
     def test_save_and_load_data(self, client, sample_student, sample_session_short):
         payload = {
@@ -1636,7 +1637,44 @@ class TestDataAPI:
         assert inv['positions'][0]['currentPrice'] == 120.5
         assert inv['usdKrwRate'] == 1470
         assert inv['desk']['lastServerBatchDate'] == '2026-05-14'
+        assert inv['desk']['lastServerBatchSlot']
         assert any(e.get('deskPrepared') for e in inv['events'])
+
+    def test_investment_desk_batch_allows_two_daily_slots(self, client, monkeypatch):
+        import server
+
+        monkeypatch.setattr(server, 'INVESTMENT_BATCH_SECRET', '')
+        client.post('/api/data',
+                    data=json.dumps({
+                        'students': [],
+                        'sessions': [],
+                        'my_topics': [],
+                        'my_records': [],
+                        'investment': {
+                            'positions': [{'id': 'ip-intc', 'symbol': 'INTC', 'shares': 1, 'avgPrice': 100}],
+                            'events': [],
+                            'desk': {'autoPrepare': True, 'prepareTimes': ['08:50', '20:50']},
+                        },
+                    }),
+                    content_type='application/json')
+        monkeypatch.setattr(server, '_fetch_market_quote_payload', lambda symbols: {'quotes': [{'symbol': 'INTC', 'price': 100}], 'missing': []})
+        monkeypatch.setattr(server, 'sync_investment_calendar', lambda investment, days=45: {'ok': True, 'investment': investment, 'eventsSynced': 0})
+        monkeypatch.setattr(server, '_fetch_news_for_symbol', lambda symbol, limit: [])
+        monkeypatch.setattr(server, '_fetch_google_rss_query_news', lambda query, limit: [])
+
+        first = client.post('/api/investment/desk/batch',
+                            data=json.dumps({'date': '2026-05-14', 'slot': '08:50'}),
+                            content_type='application/json')
+        second = client.post('/api/investment/desk/batch',
+                             data=json.dumps({'date': '2026-05-14', 'slot': '20:50'}),
+                             content_type='application/json')
+        third = client.post('/api/investment/desk/batch',
+                            data=json.dumps({'date': '2026-05-14', 'slot': '20:50'}),
+                            content_type='application/json')
+
+        assert first.get_json()['skipped'] is False
+        assert second.get_json()['skipped'] is False
+        assert third.get_json()['skipped'] is True
 
     def test_investment_desk_batch_requires_secret_when_configured(self, client, monkeypatch):
         import server

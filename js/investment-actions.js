@@ -277,28 +277,57 @@ function scheduleDailyInvestmentDeskPreparation() {
   if (prefs.autoPrepare === false) return false;
 
   const today = new Date().toISOString().slice(0, 10);
-  const delay = nextInvestmentNotificationDelay(prefs.prepareTime || '08:50');
   const now = new Date();
-  const [hRaw, mRaw] = String(prefs.prepareTime || '08:50').split(':');
-  const threshold = new Date(now);
-  threshold.setHours(Math.min(23, Math.max(0, parseInt(hRaw, 10) || 9)), Math.min(59, Math.max(0, parseInt(mRaw, 10) || 0)), 0, 0);
-
-  if (now >= threshold && prefs.lastPreparedDate !== today) {
-    scheduleStartupDailyInvestmentDeskPreparation();
+  const slots = investmentDeskPrepareTimes(prefs);
+  const dueSlot = slots
+    .map(time => ({ time, at: investmentDeskTimeToday(time, now) }))
+    .filter(item => now >= item.at && prefs.lastPreparedKey !== `${today}-${item.time}`)
+    .sort((a, b) => b.at - a.at)[0];
+  if (dueSlot) {
+    scheduleStartupDailyInvestmentDeskPreparation(dueSlot.time);
   }
+  const nextSlot = nextInvestmentDeskPrepareSlot(slots, now);
+  const delay = Math.max(1000, nextSlot.at - now);
   _investmentDeskPrepareTimer = setTimeout(() => {
-    prepareDailyInvestmentDesk({ force: true, silent: true, reason: 'scheduled' })
+    prepareDailyInvestmentDesk({ force: true, silent: true, reason: 'scheduled', slot: nextSlot.time })
       .finally(() => scheduleDailyInvestmentDeskPreparation());
   }, delay);
   return true;
 }
 
-function scheduleStartupDailyInvestmentDeskPreparation() {
+function investmentDeskPrepareTimes(prefs = {}) {
+  const raw = Array.isArray(prefs.prepareTimes) && prefs.prepareTimes.length
+    ? prefs.prepareTimes
+    : [prefs.prepareTime || '08:50', '20:50'];
+  return [...new Set(raw.map(t => String(t || '').trim()).filter(t => /^\d{1,2}:\d{2}$/.test(t)))]
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function investmentDeskTimeToday(timeText, base = new Date()) {
+  const [hRaw, mRaw] = String(timeText || '08:50').split(':');
+  const at = new Date(base);
+  at.setHours(Math.min(23, Math.max(0, parseInt(hRaw, 10) || 8)), Math.min(59, Math.max(0, parseInt(mRaw, 10) || 50)), 0, 0);
+  return at;
+}
+
+function nextInvestmentDeskPrepareSlot(slots, now = new Date()) {
+  for (const time of slots) {
+    const at = investmentDeskTimeToday(time, now);
+    if (at > now) return { time, at };
+  }
+  const first = slots[0] || '08:50';
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return { time: first, at: investmentDeskTimeToday(first, tomorrow) };
+}
+
+function scheduleStartupDailyInvestmentDeskPreparation(slot = '') {
   const run = () => prepareDailyInvestmentDesk({
     force: false,
     silent: true,
     reason: 'startup-after-prepare-time',
     background: true,
+    slot,
   });
   setTimeout(run, 20000);
 }
@@ -312,7 +341,9 @@ async function prepareDailyInvestmentDesk(options = {}) {
     && lastServerSyncAgeMs() < 60000;
   state.investment = normalizeInvestmentState(state.investment);
   const today = new Date().toISOString().slice(0, 10);
-  if (!options.force && state.investment.desk?.lastPreparedDate === today) return false;
+  const slot = options.slot || '';
+  const runKey = slot ? `${today}-${slot}` : today;
+  if (!options.force && (state.investment.desk?.lastPreparedKey || state.investment.desk?.lastPreparedDate) === runKey) return false;
 
   _investmentDeskPreparing = true;
   const steps = [];
@@ -437,7 +468,10 @@ async function prepareDailyInvestmentDesk(options = {}) {
       ...(state.investment.desk || {}),
       autoPrepare: state.investment.desk?.autoPrepare !== false,
       prepareTime: state.investment.desk?.prepareTime || '08:50',
+      prepareTimes: investmentDeskPrepareTimes(state.investment.desk),
       lastPreparedDate: today,
+      lastPreparedKey: runKey,
+      lastPreparedSlot: slot,
       lastPreparedAt: new Date().toISOString(),
       evidenceRequestedAt: new Date().toISOString(),
       evidenceRequestCount: evidenceStats.requested,

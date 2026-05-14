@@ -46,9 +46,10 @@ checked.
 
 ## Schedule
 
-- Default desk preparation time: `08:50` KST.
+- Default desk preparation times: `08:50` and `20:50` KST.
 - Reason: the user should see the market view about 10 minutes before the Korean
-  regular market open.
+  regular market open, and again around 21:00 before US-market decisions become
+  psychologically tempting.
 - Future extension: support separate schedules for Korean, US premarket, US open,
   and US after-hours.
 
@@ -89,8 +90,19 @@ Content-Type: application/json
 {"force": false, "reason": "pre-market-cron"}
 ```
 
-3. Run it at `08:50` KST for the Korean market desk.
-4. Add a second schedule later for US premarket if needed.
+3. Run it at `08:50` KST for the Korean market desk:
+
+```json
+{"force": false, "slot": "08:50", "reason": "kr-market-preopen-cron"}
+```
+
+4. Run it again at `20:50` KST for the evening/US-market desk:
+
+```json
+{"force": false, "slot": "20:50", "reason": "us-market-evening-cron"}
+```
+
+5. Add more schedules later for US premarket or after-hours if needed.
 
 ## Next Stages
 

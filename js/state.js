@@ -160,7 +160,9 @@ function defaultInvestmentState() {
     desk: {
       autoPrepare: true,
       prepareTime: '08:50',
+      prepareTimes: ['08:50', '20:50'],
       lastPreparedDate: null,
+      lastPreparedKey: null,
       lastPreparedAt: null,
       status: 'idle',
       steps: [],

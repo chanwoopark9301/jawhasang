@@ -299,7 +299,9 @@ def _empty_investment():
         'desk': {
             'autoPrepare': True,
             'prepareTime': '08:50',
+            'prepareTimes': ['08:50', '20:50'],
             'lastPreparedDate': None,
+            'lastPreparedKey': None,
             'lastPreparedAt': None,
             'status': 'idle',
             'steps': [],
@@ -1304,12 +1306,14 @@ def _server_desk_news_event(item):
         'createdAt': datetime.now().isoformat(),
     }
 
-def run_investment_desk_batch(date_text=None, force=False, reason='server-batch'):
+def run_investment_desk_batch(date_text=None, force=False, reason='server-batch', slot=None):
     data = _read_data_with_investment_ledger()
     inv = data['investment']
     today = str(date_text or '')[:10] or datetime.now().date().isoformat()
+    batch_slot = str(slot or datetime.now().strftime('%H:%M'))[:5]
+    batch_key = f'{today}-{batch_slot}'
     desk = inv.get('desk') if isinstance(inv.get('desk'), dict) else {}
-    if not force and desk.get('lastServerBatchDate') == today:
+    if not force and desk.get('lastServerBatchKey') == batch_key:
         return {'ok': True, 'skipped': True, 'investment': inv, 'steps': desk.get('serverBatchSteps') or []}
 
     steps = []
@@ -1379,8 +1383,12 @@ def run_investment_desk_batch(date_text=None, force=False, reason='server-batch'
         'status': 'ready',
         'lastEngineAt': engine.get('generatedAt'),
         'lastPreparedDate': today,
+        'lastPreparedKey': batch_key,
+        'lastPreparedSlot': batch_slot,
         'lastPreparedAt': datetime.now().isoformat(),
         'lastServerBatchDate': today,
+        'lastServerBatchKey': batch_key,
+        'lastServerBatchSlot': batch_slot,
         'lastServerBatchAt': datetime.now().isoformat(),
         'lastRunReason': reason,
         'serverBatchSteps': steps,
@@ -1401,6 +1409,7 @@ def investment_desk_batch_route():
             date_text=payload.get('date'),
             force=bool(payload.get('force')),
             reason=payload.get('reason') or 'server-batch',
+            slot=payload.get('slot'),
         )
         log.info('POST /api/investment/desk/batch [%s] skipped=%s steps=%d',
                  request_id, result.get('skipped'), len(result.get('steps') or []))
