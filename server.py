@@ -801,6 +801,23 @@ def _overlay_investment_ledger_snapshot(data):
 def _read_data_with_investment_ledger():
     return _overlay_investment_ledger_snapshot(read_data())
 
+def _normalize_investment(inv):
+    return _normalize_data({'investment': inv if isinstance(inv, dict) else {}})['investment']
+
+def _set_investment(data, inv):
+    data = _normalize_data(data)
+    data['investment'] = _normalize_investment(inv)
+    return data
+
+def _investment_error(message, request_id=None, detail=None, status=500, **extra):
+    payload = {'ok': False, 'error': message}
+    if request_id:
+        payload['requestId'] = request_id
+    if detail is not None:
+        payload['errorDetail'] = _safe_error_detail(detail)
+    payload.update(extra)
+    return jsonify(payload), status
+
 def _decode_stored_data(raw):
     if raw is None:
         return EMPTY()
@@ -1087,13 +1104,9 @@ def investment_ledger_snapshot_route():
             payload = request.get_json(silent=True)
             if not isinstance(payload, dict) or not isinstance(payload.get('investment'), dict):
                 log.warning('POST /api/investment/ledger [%s] invalid payload', request_id)
-                return jsonify({
-                    'ok': False,
-                    'error': 'investment payload required',
-                    'requestId': request_id,
-                }), 400
+                return _investment_error('investment payload required', request_id, status=400)
 
-            incoming = _normalize_data({'investment': payload.get('investment') or {}})['investment']
+            incoming = _normalize_investment(payload.get('investment') or {})
             if DATABASE_URL:
                 mirrored = _mirror_investment_snapshot_to_tables({'investment': incoming}, False)
             else:
@@ -1126,12 +1139,7 @@ def investment_ledger_snapshot_route():
         })
     except Exception as e:
         log.error('GET /api/investment/ledger [%s] failed: %s', request_id, e, exc_info=True)
-        return jsonify({
-            'ok': False,
-            'error': 'investment ledger snapshot failed',
-            'requestId': request_id,
-            'errorDetail': _safe_error_detail(e),
-        }), 500
+        return _investment_error('investment ledger snapshot failed', request_id, e)
 
 @app.route('/api/investment/desk/engine', methods=['POST'])
 @require_auth
@@ -1182,12 +1190,7 @@ def investment_desk_engine_route():
         return jsonify({'ok': True, 'investment': inv, 'engine': engine, 'requestId': request_id})
     except Exception as e:
         log.error('POST /api/investment/desk/engine [%s] failed: %s', request_id, e, exc_info=True)
-        return jsonify({
-            'ok': False,
-            'error': 'investment desk engine failed',
-            'requestId': request_id,
-            'errorDetail': _safe_error_detail(e),
-        }), 500
+        return _investment_error('investment desk engine failed', request_id, e)
 
 def _upsert_market_regime_review_event(inv, date_value, review):
     if not isinstance(inv, dict) or not isinstance(review, dict):
@@ -1443,7 +1446,7 @@ def investment_trade_gate_route():
     request_id = f"igate-{int(time.time() * 1000)}"
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
-        return jsonify({'ok': False, 'error': 'trade gate payload must be an object', 'requestId': request_id}), 400
+        return _investment_error('trade gate payload must be an object', request_id, status=400)
     try:
         data = _read_data_with_investment_ledger()
         inv = data['investment']
@@ -1453,12 +1456,7 @@ def investment_trade_gate_route():
         return jsonify({'ok': True, 'gate': gate, 'requestId': request_id})
     except Exception as e:
         log.error('POST /api/investment/trade-gate [%s] failed: %s', request_id, e, exc_info=True)
-        return jsonify({
-            'ok': False,
-            'error': 'investment trade gate failed',
-            'requestId': request_id,
-            'errorDetail': _safe_error_detail(e),
-        }), 500
+        return _investment_error('investment trade gate failed', request_id, e)
 
 @app.route('/api/investment/chat-gate', methods=['POST'])
 @require_auth
@@ -1466,7 +1464,7 @@ def investment_chat_gate_route():
     request_id = f"ichatgate-{int(time.time() * 1000)}"
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
-        return jsonify({'ok': False, 'error': 'chat gate payload must be an object', 'requestId': request_id}), 400
+        return _investment_error('chat gate payload must be an object', request_id, status=400)
     try:
         data = _read_data_with_investment_ledger()
         inv = data['investment']
@@ -1478,12 +1476,7 @@ def investment_chat_gate_route():
         return jsonify({'ok': True, **result, 'requestId': request_id})
     except Exception as e:
         log.error('POST /api/investment/chat-gate [%s] failed: %s', request_id, e, exc_info=True)
-        return jsonify({
-            'ok': False,
-            'error': 'investment chat gate failed',
-            'requestId': request_id,
-            'errorDetail': _safe_error_detail(e),
-        }), 500
+        return _investment_error('investment chat gate failed', request_id, e)
 
 @app.route('/api/investment/reasoning', methods=['POST'])
 @require_auth
@@ -1491,7 +1484,7 @@ def investment_reasoning_route():
     request_id = f"ireason-{int(time.time() * 1000)}"
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
-        return jsonify({'ok': False, 'error': 'reasoning payload must be an object', 'requestId': request_id}), 400
+        return _investment_error('reasoning payload must be an object', request_id, status=400)
     try:
         data = _read_data_with_investment_ledger()
         inv = data['investment']
@@ -1501,12 +1494,7 @@ def investment_reasoning_route():
         return jsonify({'ok': True, 'reasoning': reasoning, 'requestId': request_id})
     except Exception as e:
         log.error('POST /api/investment/reasoning [%s] failed: %s', request_id, e, exc_info=True)
-        return jsonify({
-            'ok': False,
-            'error': 'investment reasoning failed',
-            'requestId': request_id,
-            'errorDetail': _safe_error_detail(e),
-        }), 500
+        return _investment_error('investment reasoning failed', request_id, e)
 
 @app.route('/api/investment/broker/sync', methods=['POST'])
 @require_auth
@@ -1518,7 +1506,7 @@ def investment_broker_sync_route():
         result = sync_kis_account(data.get('investment') or {}, days=days)
         if not result.get('ok'):
             return jsonify(result), 400
-        data['investment'] = _normalize_data({'investment': result['investment']})['investment']
+        data = _set_investment(data, result['investment'])
         write_data(data)
         return jsonify({
             'ok': True,
@@ -1541,7 +1529,7 @@ def investment_bithumb_sync_route():
         result = sync_bithumb_account(data.get('investment') or {}, days=days)
         if not result.get('ok'):
             return jsonify(result), 400
-        data['investment'] = _normalize_data({'investment': result['investment']})['investment']
+        data = _set_investment(data, result['investment'])
         write_data(data)
         return jsonify({
             'ok': True,
@@ -1563,7 +1551,7 @@ def investment_calendar_sync_route():
     try:
         data = _read_data_with_investment_ledger()
         result = sync_investment_calendar(data.get('investment') or {}, days=days)
-        data['investment'] = _normalize_data({'investment': result['investment']})['investment']
+        data = _set_investment(data, result['investment'])
         write_data(data)
         return jsonify({
             'ok': True,

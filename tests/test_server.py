@@ -423,6 +423,28 @@ class TestDataAPI:
         assert [p['symbol'] for p in data['investment']['positions']] == ['INTC']
         assert data['investment']['ledgerSource'] == 'normalized-tables'
 
+    def test_set_investment_helper_preserves_app_data_and_normalizes_defaults(self):
+        import server
+
+        data = server._set_investment(
+            {
+                'students': [{'id': 's-keep'}],
+                'sessions': [],
+                'aiResults': {},
+                'my_topics': [],
+                'my_records': [],
+            },
+            {
+                'positions': [{'id': 'ip-intc', 'symbol': 'INTC', 'shares': 754}],
+                'rules': {'maxPositionWeight': 25},
+            },
+        )
+
+        assert data['students'][0]['id'] == 's-keep'
+        assert data['investment']['positions'][0]['symbol'] == 'INTC'
+        assert data['investment']['rules']['maxPositionWeight'] == 25
+        assert 'cooldownMinutes' in data['investment']['rules']
+
     def test_full_snapshot_mirror_deletes_positions_missing_from_snapshot(self, client, monkeypatch):
         import server
 

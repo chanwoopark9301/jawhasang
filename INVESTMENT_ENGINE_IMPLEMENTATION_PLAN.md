@@ -1,5 +1,12 @@
 # Investment Engine Implementation Plan
 
+## 2026-05-14 Server Investment Refactor
+
+- Added small server helpers for investment normalization, investment replacement inside the full app data shape, and consistent investment error responses.
+- Replaced repeated `normalize_data({'investment': ...})['investment']` call sites in ledger, broker, Bithumb, and calendar sync routes.
+- Applied the shared error response helper to ledger, desk, trade gate, chat gate, and reasoning routes.
+- Added regression coverage for preserving non-investment app data while replacing the investment state.
+
 ## 2026-05-14 Database Structure Scan And Hardening
 
 - Scanned the DB path end to end: encrypted `app_storage`, normalized investment tables, ledger read/write overlay, KIS/Bithumb/calendar/X sync, and trade/position endpoints.
