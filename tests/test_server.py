@@ -1122,6 +1122,31 @@ class TestDataAPI:
         assert 'what is already priced in versus not confirmed' in briefing['researchFrame']['macro']
         assert any('Brief from portfolio exposure' in item for item in briefing['llmInstructions'])
 
+    def test_investment_briefing_engine_builds_assumption_quality_frame(self):
+        from investment_desk_engine import build_investment_desk_engine
+        from investment_reasoning_engine import build_investment_reasoning
+
+        inv = {
+            'positions': [
+                {'symbol': 'INTC', 'name': 'Intel', 'shares': 754, 'avgPrice': 129.67, 'currentPrice': 120.29},
+                {'symbol': 'CRCL', 'name': 'Circle', 'shares': 113, 'avgPrice': 128.91, 'currentPrice': 123.65},
+                {'symbol': 'ETH-USD', 'name': 'Ethereum', 'assetType': 'crypto', 'shares': 5, 'avgPrice': 4156, 'currentPrice': 2310},
+            ],
+            'events': [],
+            'rules': {'maxPositionWeight': 25},
+        }
+
+        engine = build_investment_desk_engine(inv, '2026-05-14')
+        quality = engine['marketView']['viewQuality']
+        intel = next(item for item in quality['positionAssumptions'] if item['symbol'] == 'INTC')
+        reasoning = build_investment_reasoning('오늘 중요한 시황 브리핑해줘', inv, '2026-05-14')
+
+        assert intel['coreAssumption']
+        assert 'foundry' in ' '.join(intel['mustVerify']).lower()
+        assert 'invalidation' in intel
+        assert 'core assumption' in engine['summary'].lower()
+        assert any('Core assumption' in item for item in reasoning['llmInstructions'])
+
     def test_investment_reasoning_endpoint_uses_ledger_snapshot(self, client, monkeypatch):
         import server
 

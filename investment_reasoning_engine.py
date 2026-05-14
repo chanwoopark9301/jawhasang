@@ -304,6 +304,8 @@ def _needed_evidence_for(symbol: str, thesis: Dict[str, Any]) -> List[str]:
         return ["contract acceptance/RPO/ARR", "funding or dilution filings", "BTC/hash economics"]
     if profile == "growth_index_semiconductor":
         return ["Nasdaq breadth", "AI capex trend", "rates and valuation pressure"]
+    if profile == "turnaround_semiconductor":
+        return ["foundry loss and breakeven path", "gross margin / free cash flow recovery", "data center or AI CPU competitiveness", "CHIPS/subsidy execution"]
     return ["official filings", "earnings/guidance", "sector and valuation context"]
 
 
@@ -403,6 +405,8 @@ def _why_symbol_matters(symbol: str, thesis: Dict[str, Any]) -> str:
         return "AI contract execution, funding, and BTC economics decide whether the story is real."
     if profile == "growth_index_semiconductor":
         return "Market regime and breadth matter more than the narrative after a strong rally."
+    if profile == "turnaround_semiconductor":
+        return "Turnaround stocks need proof in margins, foundry losses, and competitive position before size is trusted."
     return f"{symbol} needs evidence that the original thesis still explains the price."
 
 
@@ -494,6 +498,8 @@ def _llm_instructions(intent: str, action: str) -> List[str]:
     ]
     if intent == "briefing":
         base.append("Brief from portfolio exposure, market regime, evidence quality, and do-not-do actions; do not repeat a full account table.")
+        base.append("Core assumption first: name the account assumption most likely to hurt the user, then give evidence map, invalidation condition, and action rule.")
+        base.append("Do not invent analyst targets, consensus, or current prices unless they appear in supplied market/news context; say which source must confirm them.")
     if intent == "rule_design":
         base.append("Draft a rule with invalidation conditions, evidence required, action, and exception conditions.")
     if intent == "trade_decision":

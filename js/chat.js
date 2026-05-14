@@ -2347,6 +2347,14 @@ Daily Investment Desk briefing rules:
 - Mark unofficial X/trader flow as unconfirmed until official filings, company IR, trusted financial media, or price/volume data confirm it.
 - If the user asks for a recommendation, give a ranked scenario/action plan with invalidation conditions, not a guaranteed prediction.
 
+High-quality briefing contract:
+- Core assumption first: start with the one account assumption most likely to hurt the user if wrong.
+- Evidence map: separate priced-in facts, unconfirmed signals, missing evidence, and official/trusted sources to verify.
+- Position view: for the top 2-3 exposures only, state core assumption, must-verify evidence, invalidation condition, and do-not-do action.
+- Do not invent analyst targets, consensus, current prices, earnings dates, or price forecasts unless they appear in supplied market/news/desk context.
+- If a number is not in context, say which official source, company IR, SEC filing, trusted financial media, or market data endpoint must confirm it.
+- End with behavior control: what not to do today, what would change the view, and what single action is allowed now.
+
 오늘의 투자 데스크:
 ${dailyDeskBrief}
 

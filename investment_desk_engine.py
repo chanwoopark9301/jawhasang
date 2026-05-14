@@ -128,6 +128,12 @@ def _profile_for(position: Dict[str, Any]) -> Dict[str, Any]:
             "drivers": ["Nasdaq breadth", "AI capex", "rates", "valuation", "momentum exhaustion"],
             "questions": ["Is breadth confirming the index move?", "Is this entry or chase?"],
         }
+    if symbol == "INTC" or any(k in text for k in ["intel", "foundry", "pc cycle", "data center cpu", "chips act"]):
+        return {
+            "profile": "turnaround_semiconductor",
+            "drivers": ["foundry losses", "gross margin recovery", "data center/AI CPU competitiveness", "PC cycle", "CHIPS/subsidy execution"],
+            "questions": ["Is the move backed by margin/foundry improvement?", "Is AI/data center share stabilizing?", "Is policy support turning into cash flow?"],
+        }
     return {
         "profile": "single_equity",
         "drivers": ["earnings", "guidance", "valuation", "sector trend", "company filings"],
@@ -167,6 +173,8 @@ def _default_thesis(symbol: str, profile: str) -> str:
         return f"{symbol} depends on AI infrastructure execution, funding quality, BTC economics, and dilution control."
     if profile == "growth_index_semiconductor":
         return f"{symbol} is a growth/Nasdaq exposure where entry quality matters more than narrative strength."
+    if profile == "turnaround_semiconductor":
+        return f"{symbol} is a semiconductor turnaround exposure that must be judged by foundry loss reduction, margin recovery, and data center/AI competitiveness."
     return f"{symbol} needs a written thesis, event calendar, and invalidation rule before aggressive sizing."
 
 
@@ -189,6 +197,11 @@ def _default_invalidation_rules(profile: str) -> List[str]:
         "growth_index_semiconductor": [
             "Nasdaq move is narrow and rates move against duration assets.",
             "Position is entered after a sharp rally without a pullback or stop.",
+        ],
+        "turnaround_semiconductor": [
+            "Foundry losses do not shrink or management pushes out the breakeven path.",
+            "Gross margin or free cash flow fails to recover while valuation already assumes a turnaround.",
+            "Data center/AI CPU competitiveness remains weak versus AMD/NVIDIA/TSMC-linked alternatives.",
         ],
     }
     return mapping.get(profile, [
@@ -685,6 +698,7 @@ def build_market_view(investment: Dict[str, Any], theses: List[Dict[str, Any]], 
         "falsificationFocus": _build_falsification_focus(theses, key_issues),
         "thesisEvidence": evidence_map or {},
         "marketRegime": market_regime or {},
+        "viewQuality": _build_view_quality_frame(theses, key_issues, evidence_map or {}, market_regime or {}),
     }
 
 
@@ -849,6 +863,72 @@ def _build_falsification_focus(theses: List[Dict[str, Any]], key_issues: List[Di
             "rules": (thesis.get("invalidationRules") or [])[:3],
         })
     return rows
+
+
+def _build_view_quality_frame(theses: List[Dict[str, Any]], key_issues: List[Dict[str, Any]], evidence_map: Dict[str, Dict[str, Any]], market_regime: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    issue_by_symbol = {str(issue.get("symbol") or "").upper(): issue for issue in key_issues}
+    assumptions: List[Dict[str, Any]] = []
+    for thesis in theses:
+        symbol = str(thesis.get("symbol") or "").upper()
+        if symbol not in issue_by_symbol:
+            continue
+        profile = str(thesis.get("profile") or "single_equity")
+        evidence = evidence_map.get(symbol) or {}
+        assumptions.append({
+            "symbol": symbol,
+            "profile": profile,
+            "coreAssumption": _core_assumption_for_profile(symbol, profile),
+            "mustVerify": _must_verify_for_profile(profile),
+            "invalidation": (thesis.get("invalidationRules") or [])[:3],
+            "evidenceStatus": evidence.get("status") or "unproven",
+            "weakEvidenceRule": "D/E evidence, rumor, X flow, or weak RSS can frame a question but cannot justify a trade.",
+        })
+    regime = (market_regime or {}).get("regime") or {}
+    allocation = (market_regime or {}).get("allocation") or {}
+    return {
+        "principle": "Start from the account's breakable assumptions, then map evidence, invalidation, and action. Do not invent analyst targets or consensus numbers unless supplied by context.",
+        "marketRegimeAssumption": {
+            "regime": regime.get("regime") or "unknown",
+            "targetCashRange": regime.get("targetCashRange") or [],
+            "cashGap": allocation.get("cashGap") or {},
+            "mustVerify": ["index breadth", "rates/Fed/CPI path", "sector leadership quality", "event calendar"],
+        },
+        "positionAssumptions": assumptions,
+        "answerContract": [
+            "Name the single account assumption that can hurt most today.",
+            "Separate priced-in facts from unconfirmed evidence.",
+            "For the top exposures, give core assumption, must-verify evidence, invalidation, and do-not-do action.",
+            "If data is missing, say what official source or market data must confirm it.",
+        ],
+    }
+
+
+def _core_assumption_for_profile(symbol: str, profile: str) -> str:
+    if profile == "stablecoin_issuer":
+        return f"{symbol} works only if stablecoin supply, reserve yield, and legislation keep supporting the business model."
+    if profile == "crypto_beta":
+        return f"{symbol} works only if crypto liquidity and policy/rate conditions remain risk-on enough to support the beta."
+    if profile == "ai_miner_infrastructure":
+        return f"{symbol} works only if AI infrastructure execution and funding quality become real revenue, not just narrative."
+    if profile == "growth_index_semiconductor":
+        return f"{symbol} works only if the Nasdaq/semiconductor move is broad and not just late-cycle chase."
+    if profile == "turnaround_semiconductor":
+        return f"{symbol} works only if the turnaround is backed by foundry loss reduction, margin recovery, and data center/AI competitiveness."
+    return f"{symbol} works only if the original thesis still explains price, valuation, and the next catalyst."
+
+
+def _must_verify_for_profile(profile: str) -> List[str]:
+    if profile == "stablecoin_issuer":
+        return ["USDC supply trend", "reserve yield sensitivity to Fed path", "official stablecoin/market-structure bill text", "earnings call commentary"]
+    if profile == "crypto_beta":
+        return ["spot crypto trend", "ETF/on-chain/flow confirmation", "dollar/rate path", "policy calendar"]
+    if profile == "ai_miner_infrastructure":
+        return ["contract acceptance/RPO/ARR", "capex funding source", "dilution filings", "BTC/hash economics"]
+    if profile == "growth_index_semiconductor":
+        return ["Nasdaq breadth", "AI capex trend", "rates/valuation pressure", "entry quality versus chase"]
+    if profile == "turnaround_semiconductor":
+        return ["foundry losses and breakeven path", "gross margin/free cash flow recovery", "data center/AI CPU competitiveness", "PC cycle and CHIPS/subsidy execution"]
+    return ["official filings", "earnings/guidance", "sector valuation context", "price/volume confirmation"]
 
 
 def build_investment_desk_engine(investment: Dict[str, Any], today_value: Any = None) -> Dict[str, Any]:
@@ -1198,6 +1278,16 @@ def render_engine_brief(engine: Dict[str, Any]) -> str:
     lines.append("Thesis drivers:")
     for thesis in theses[:4]:
         lines.append(f"- {thesis.get('symbol')}: {', '.join((thesis.get('drivers') or [])[:4])}")
+    view_quality = view.get("viewQuality") or {}
+    if view_quality:
+        lines.append("View quality contract:")
+        lines.append(f"- Principle: {view_quality.get('principle')}")
+        for item in (view_quality.get("positionAssumptions") or [])[:3]:
+            lines.append(
+                f"- {item.get('symbol')} core assumption: {item.get('coreAssumption')} | "
+                f"must verify: {', '.join((item.get('mustVerify') or [])[:4])} | "
+                f"invalidation: {'; '.join((item.get('invalidation') or [])[:2])}"
+            )
     lines.append("Scenarios:")
     for scenario in scenarios[:3]:
         lines.append(
