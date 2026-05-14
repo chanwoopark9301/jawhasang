@@ -37,6 +37,10 @@ When the user asks whether an investment idea makes sense, what the next market 
 
 This is meant to prevent generic checklist answers. The AI should sound like a thinking partner, but the ledger, market data, and desk engines remain the authority for account facts and behavior controls.
 
+Sector-rotation questions are analysis requests, not forbidden stock-picking requests.
+In short: sector-rotation questions are analysis requests.
+When the user asks what the next leading sector could be or whether to enter a hot sector now, the AI should not refuse. It should translate the question into a ranked theme scenario, explain what evidence would confirm or break each scenario, and then let behavior controls decide whether action is allowed today.
+
 ## Example Contract
 
 For a large INTC position, the desk should not merely say "Intel looks weak/strong." It should state:
