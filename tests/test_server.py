@@ -274,7 +274,10 @@ class TestDataAPI:
         import server
 
         mirrored = []
-        monkeypatch.setattr(server, '_mirror_investment_snapshot_to_tables', lambda data: mirrored.append(data['investment']) or True)
+        monkeypatch.setattr(server, '_mirror_investment_snapshot_to_tables', lambda data, include_history=True: mirrored.append({
+            'investment': data['investment'],
+            'include_history': include_history,
+        }) or True)
         monkeypatch.setattr(server, '_read_investment_snapshot_from_tables', lambda inv: None)
 
         client.post('/api/data',
@@ -312,7 +315,7 @@ class TestDataAPI:
         assert data['normalized'] is True
         assert [p['symbol'] for p in data['investment']['positions']] == ['ETH-USD', 'INTC']
         assert data['investment']['positions'][0]['shares'] == 5
-        assert mirrored and [p['symbol'] for p in mirrored[-1]['positions']] == ['ETH-USD', 'INTC']
+        assert mirrored and [p['symbol'] for p in mirrored[-1]['investment']['positions']] == ['ETH-USD', 'INTC']
 
         persisted = client.get('/api/data').get_json()
         assert persisted['students'][0]['id'] == 's-keep'
@@ -323,7 +326,10 @@ class TestDataAPI:
 
         monkeypatch.setattr(server, 'DATABASE_URL', 'postgres://unit-test')
         mirrored = []
-        monkeypatch.setattr(server, '_mirror_investment_snapshot_to_tables', lambda data: mirrored.append(data['investment']) or True)
+        monkeypatch.setattr(server, '_mirror_investment_snapshot_to_tables', lambda data, include_history=True: mirrored.append({
+            'investment': data['investment'],
+            'include_history': include_history,
+        }) or True)
         monkeypatch.setattr(server, 'read_data', lambda: (_ for _ in ()).throw(AssertionError('read_data should not run for DB ledger POST')))
         monkeypatch.setattr(server, 'write_data', lambda data: (_ for _ in ()).throw(AssertionError('write_data should not run for DB ledger POST')))
 
@@ -342,7 +348,51 @@ class TestDataAPI:
         data = r.get_json()
         assert data['ok'] is True
         assert data['normalized'] is True
-        assert mirrored and mirrored[-1]['positions'][0]['symbol'] == 'INTC'
+        assert mirrored and mirrored[-1]['investment']['positions'][0]['symbol'] == 'INTC'
+        assert mirrored[-1]['include_history'] is False
+
+    def test_ledger_snapshot_mirror_can_skip_history_for_fast_position_save(self, monkeypatch):
+        import server
+
+        monkeypatch.setattr(server, 'DATABASE_URL', 'postgres://unit-test')
+        calls = []
+
+        class FakeCursor:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def execute(self, sql, params=None):
+                calls.append((' '.join(sql.split()), params))
+
+        class FakeConn:
+            def cursor(self):
+                return FakeCursor()
+
+            def commit(self):
+                calls.append(('COMMIT', None))
+
+            def close(self):
+                calls.append(('CLOSE', None))
+
+        monkeypatch.setattr(server, '_get_db_conn', lambda: FakeConn())
+        monkeypatch.setattr(server, '_ensure_investment_tables', lambda conn: None)
+
+        mirrored = server._mirror_investment_snapshot_to_tables({
+            'investment': {
+                'positions': [{'id': 'ip-intc', 'symbol': 'INTC', 'shares': 754, 'avgPrice': 129.67, 'currentPrice': 120.61}],
+                'decisions': [{'id': 'tx-should-skip', 'symbol': 'INTC', 'action': 'buy', 'tradeShares': 1, 'tradePrice': 1}],
+                'events': [{'id': 'event-should-skip', 'title': 'skip me'}],
+            }
+        }, include_history=False)
+
+        assert mirrored is True
+        sql = '\n'.join(call[0] for call in calls)
+        assert 'investment_positions' in sql
+        assert 'investment_transactions' not in sql
+        assert 'investment_events' not in sql
 
     def test_get_data_overlays_normalized_investment_ledger(self, client, monkeypatch):
         import server

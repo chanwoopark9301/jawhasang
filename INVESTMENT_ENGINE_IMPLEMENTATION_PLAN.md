@@ -1,5 +1,16 @@
 # Investment Engine Implementation Plan
 
+## 2026-05-14 Database Structure Scan And Hardening
+
+- Scanned the DB path end to end: encrypted `app_storage`, normalized investment tables, ledger read/write overlay, KIS/Bithumb/calendar/X sync, and trade/position endpoints.
+- Found a major growth risk: full portfolio snapshot saves could rewrite `investment_transactions` and `investment_events` on every ledger save even when only positions changed.
+- Added an `include_history` switch to normalized ledger mirroring. Fast ledger saves now rebuild account/positions only; history mirroring remains available for full `/api/data` saves and sync flows.
+- Added indexes for account/symbol, transaction date, and event date so timeline/ledger reads do not degrade as records accumulate.
+- Replaced repeated manual ledger-overlay blocks with `_read_data_with_investment_ledger()` so broker sync, calendar sync, X sync, trade gate, chat gate, reasoning, and desk routes start from normalized account truth instead of stale app-storage positions.
+- Simplified `GET /api/investment/ledger` to avoid a second normalized-table read after `/api/data` overlay already applied it.
+- Added connection cleanup guards around `read_data()` and `write_data()` so failed DB setup/read/write attempts do not leak connections.
+- Added tests for fast history-skipping ledger mirror, normalized ledger overlay, DB ledger POST avoiding app-storage roundtrip, and affected sync/read endpoints.
+
 ## 2026-05-14 Fast Normalized Ledger Persistence
 
 - Removed the expensive full app-storage read/encrypt/write roundtrip from `POST /api/investment/ledger` when Supabase is configured.

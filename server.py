@@ -511,6 +511,9 @@ def _ensure_investment_tables(conn):
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
         """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_investment_positions_account_symbol ON investment_positions(account_id, symbol)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_investment_transactions_account_date ON investment_transactions(account_id, trade_date DESC)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_investment_events_account_date ON investment_events(account_id, event_date DESC)")
     conn.commit()
     _INVESTMENT_TABLES_READY = True
 
@@ -587,7 +590,7 @@ def _mirror_investment_position_to_tables(position, inv):
     finally:
         conn.close()
 
-def _mirror_investment_snapshot_to_tables(data):
+def _mirror_investment_snapshot_to_tables(data, include_history=True):
     if not DATABASE_URL:
         return False
     inv = _normalize_data(data).get('investment') or {}
@@ -603,10 +606,11 @@ def _mirror_investment_snapshot_to_tables(data):
             for position in inv.get('positions') or []:
                 if position.get('symbol'):
                     _upsert_investment_position_row(cur, account_id, position)
-            for decision in inv.get('decisions') or []:
-                _upsert_investment_transaction_row(cur, account_id, decision)
-            for event in inv.get('events') or []:
-                _upsert_investment_event_row(cur, account_id, event)
+            if include_history:
+                for decision in inv.get('decisions') or []:
+                    _upsert_investment_transaction_row(cur, account_id, decision)
+                for event in inv.get('events') or []:
+                    _upsert_investment_event_row(cur, account_id, event)
         conn.commit()
         return True
     finally:
@@ -794,6 +798,9 @@ def _overlay_investment_ledger_snapshot(data):
     })['investment']
     return data
 
+def _read_data_with_investment_ledger():
+    return _overlay_investment_ledger_snapshot(read_data())
+
 def _decode_stored_data(raw):
     if raw is None:
         return EMPTY()
@@ -840,13 +847,13 @@ def _safe_error_detail(e):
 
 def read_data() -> dict:
     if DATABASE_URL:
+        conn = None
         try:
             conn = _get_db_conn()
             data_type = _ensure_storage_ready(conn)
             with conn.cursor() as cur:
                 cur.execute("SELECT data FROM app_storage WHERE id = 1")
                 row = cur.fetchone()
-            conn.close()
             if not row:
                 log.info('DB: 데이터 없음 → 빈 구조 반환')
                 return EMPTY()
@@ -858,6 +865,9 @@ def read_data() -> dict:
         except Exception as e:
             log.error('DB 읽기 실패: %s', e, exc_info=True)
             return EMPTY()
+        finally:
+            if conn:
+                conn.close()
     # 로컬 파일 폴백
     if not os.path.exists(DATA_FILE):
         log.info('data.json 없음 → 빈 구조 반환')
@@ -894,6 +904,7 @@ def write_data(data: dict):
         raise
 
     if DATABASE_URL:
+        conn = None
         try:
             conn = _get_db_conn()
             data_type = _ensure_storage_ready(conn)
@@ -904,7 +915,6 @@ def write_data(data: dict):
                     ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
                 """, (stored_data,))
             conn.commit()
-            conn.close()
             log.debug('DB: app_storage.data type=%s', data_type)
             log.debug('DB: 데이터 저장 완료')
             return
@@ -912,6 +922,9 @@ def write_data(data: dict):
             log.error('DB 저장 실패: %s', e, exc_info=True)
             # DB 실패 시 로컬 파일로 폴백하지 않음 (데이터 일관성 유지)
             raise
+        finally:
+            if conn:
+                conn.close()
     # 로컬 파일
     try:
         with open(DATA_FILE, 'wb') as f:
@@ -1043,7 +1056,7 @@ def static_files(filename):
 @require_auth
 def get_data():
     try:
-        data = _overlay_investment_ledger_snapshot(read_data())
+        data = _read_data_with_investment_ledger()
         return jsonify(data)
     except Exception as e:
         log.error('GET /api/data 처리 실패: %s', e, exc_info=True)
@@ -1082,9 +1095,9 @@ def investment_ledger_snapshot_route():
 
             incoming = _normalize_data({'investment': payload.get('investment') or {}})['investment']
             if DATABASE_URL:
-                mirrored = _mirror_investment_snapshot_to_tables({'investment': incoming})
+                mirrored = _mirror_investment_snapshot_to_tables({'investment': incoming}, False)
             else:
-                data = _normalize_data(read_data())
+                data = _read_data_with_investment_ledger()
                 data['investment'] = incoming
                 mirrored = _mirror_investment_snapshot_to_tables(data)
                 write_data(data)
@@ -1099,35 +1112,16 @@ def investment_ledger_snapshot_route():
                 'requestId': request_id,
             })
 
-        data = _normalize_data(read_data())
+        data = _read_data_with_investment_ledger()
         inv = data['investment']
-        ledger = _read_investment_snapshot_from_tables(inv)
-        if ledger and ledger.get('positions'):
-            inv = _normalize_data({
-                'investment': {
-                    **inv,
-                    'account': { **(inv.get('account') or {}), **(ledger.get('account') or {}) },
-                    'positions': ledger['positions'],
-                    'ledgerSource': ledger.get('ledgerSource'),
-                    'ledgerSyncedAt': datetime.now().isoformat(),
-                }
-            })['investment']
-            log.info('GET /api/investment/ledger [%s] normalized positions=%d source=%s',
-                     request_id, len(inv.get('positions') or []), ledger.get('ledgerSource'))
-            return jsonify({
-                'ok': True,
-                'investment': inv,
-                'positions': inv.get('positions') or [],
-                'source': ledger.get('ledgerSource'),
-                'requestId': request_id,
-            })
-        log.info('GET /api/investment/ledger [%s] fallback positions=%d',
-                 request_id, len(inv.get('positions') or []))
+        source = inv.get('ledgerSource') or 'app-storage'
+        log.info('GET /api/investment/ledger [%s] positions=%d source=%s',
+                 request_id, len(inv.get('positions') or []), source)
         return jsonify({
             'ok': True,
             'investment': inv,
             'positions': inv.get('positions') or [],
-            'source': 'app-storage',
+            'source': source,
             'requestId': request_id,
         })
     except Exception as e:
@@ -1145,21 +1139,8 @@ def investment_desk_engine_route():
     request_id = f"idesk-{int(time.time() * 1000)}"
     payload = request.get_json(silent=True) or {}
     try:
-        data = _normalize_data(read_data())
+        data = _read_data_with_investment_ledger()
         inv = data['investment']
-        ledger = _read_investment_snapshot_from_tables(inv)
-        if ledger and ledger.get('positions'):
-            inv = _normalize_data({
-                'investment': {
-                    **inv,
-                    'account': { **(inv.get('account') or {}), **(ledger.get('account') or {}) },
-                    'positions': ledger['positions'],
-                    'ledgerSource': ledger.get('ledgerSource'),
-                    'ledgerSyncedAt': datetime.now().isoformat(),
-                }
-            })['investment']
-            data['investment'] = inv
-
         today = str(payload.get('date') or '')[:10] or None
         engine = build_investment_desk_engine(inv, today)
         inv['theses'] = {item['symbol']: item for item in engine.get('theses') or [] if item.get('symbol')}
@@ -1254,7 +1235,7 @@ def save_investment_position_route():
     try:
         raw_position = payload['position']
         raw_symbol = str(raw_position.get('symbol') or '').strip().upper()
-        data = read_data()
+        data = _read_data_with_investment_ledger()
         before_count = len(((data.get('investment') or {}).get('positions') or []))
         log.info('POST /api/investment/positions [%s] start symbol=%s before=%d', request_id, raw_symbol or '-', before_count)
         data, inv, position = upsert_position(data, raw_position, _normalize_data, _MARKET_SYMBOL_RE)
@@ -1293,7 +1274,7 @@ def create_investment_transaction_route():
     if not isinstance(tx, dict):
         return jsonify({'error': 'transaction data is required', 'requestId': request_id}), 400
     try:
-        data = _normalize_data(read_data())
+        data = _read_data_with_investment_ledger()
         inv = data['investment']
         result = _apply_transaction_to_investment_snapshot(inv, tx)
         if result.get('duplicate'):
@@ -1430,7 +1411,7 @@ def investment_order_intent_route():
     payload = request.get_json(silent=True)
     try:
         intent = build_order_intent(payload or {})
-        data = read_data()
+        data = _read_data_with_investment_ledger()
         data = _normalize_data(data)
         inv = data['investment']
         inv.setdefault('orderIntents', [])
@@ -1464,19 +1445,8 @@ def investment_trade_gate_route():
     if not isinstance(payload, dict):
         return jsonify({'ok': False, 'error': 'trade gate payload must be an object', 'requestId': request_id}), 400
     try:
-        data = _normalize_data(read_data())
+        data = _read_data_with_investment_ledger()
         inv = data['investment']
-        ledger = _read_investment_snapshot_from_tables(inv)
-        if ledger and ledger.get('positions'):
-            inv = _normalize_data({
-                'investment': {
-                    **inv,
-                    'account': { **(inv.get('account') or {}), **(ledger.get('account') or {}) },
-                    'positions': ledger['positions'],
-                    'ledgerSource': ledger.get('ledgerSource'),
-                    'ledgerSyncedAt': datetime.now().isoformat(),
-                }
-            })['investment']
         gate = evaluate_trade_intent_gate(inv, payload, payload.get('date'))
         log.info('POST /api/investment/trade-gate [%s] %s %s -> %s',
                  request_id, gate.get('symbol'), gate.get('action'), gate.get('status'))
@@ -1498,19 +1468,8 @@ def investment_chat_gate_route():
     if not isinstance(payload, dict):
         return jsonify({'ok': False, 'error': 'chat gate payload must be an object', 'requestId': request_id}), 400
     try:
-        data = _normalize_data(read_data())
+        data = _read_data_with_investment_ledger()
         inv = data['investment']
-        ledger = _read_investment_snapshot_from_tables(inv)
-        if ledger and ledger.get('positions'):
-            inv = _normalize_data({
-                'investment': {
-                    **inv,
-                    'account': { **(inv.get('account') or {}), **(ledger.get('account') or {}) },
-                    'positions': ledger['positions'],
-                    'ledgerSource': ledger.get('ledgerSource'),
-                    'ledgerSyncedAt': datetime.now().isoformat(),
-                }
-            })['investment']
         result = evaluate_chat_trade_gate(inv, payload.get('text'), payload.get('date'))
         intent = result.get('intent') or {}
         gate = result.get('gate') or {}
@@ -1534,19 +1493,8 @@ def investment_reasoning_route():
     if not isinstance(payload, dict):
         return jsonify({'ok': False, 'error': 'reasoning payload must be an object', 'requestId': request_id}), 400
     try:
-        data = _normalize_data(read_data())
+        data = _read_data_with_investment_ledger()
         inv = data['investment']
-        ledger = _read_investment_snapshot_from_tables(inv)
-        if ledger and ledger.get('positions'):
-            inv = _normalize_data({
-                'investment': {
-                    **inv,
-                    'account': { **(inv.get('account') or {}), **(ledger.get('account') or {}) },
-                    'positions': ledger['positions'],
-                    'ledgerSource': ledger.get('ledgerSource'),
-                    'ledgerSyncedAt': datetime.now().isoformat(),
-                }
-            })['investment']
         reasoning = build_investment_reasoning(payload.get('text') or '', inv, payload.get('date'))
         log.info('POST /api/investment/reasoning [%s] intent=%s action=%s symbols=%s',
                  request_id, reasoning.get('intentType'), reasoning.get('action'), ','.join(reasoning.get('mentionedSymbols') or []))
@@ -1566,7 +1514,7 @@ def investment_broker_sync_route():
     payload = request.get_json(silent=True) or {}
     days = payload.get('days', 30) if isinstance(payload, dict) else 30
     try:
-        data = _normalize_data(read_data())
+        data = _read_data_with_investment_ledger()
         result = sync_kis_account(data.get('investment') or {}, days=days)
         if not result.get('ok'):
             return jsonify(result), 400
@@ -1589,7 +1537,7 @@ def investment_bithumb_sync_route():
     payload = request.get_json(silent=True) or {}
     days = payload.get('days', 30) if isinstance(payload, dict) else 30
     try:
-        data = _normalize_data(read_data())
+        data = _read_data_with_investment_ledger()
         result = sync_bithumb_account(data.get('investment') or {}, days=days)
         if not result.get('ok'):
             return jsonify(result), 400
@@ -1613,7 +1561,7 @@ def investment_calendar_sync_route():
     payload = request.get_json(silent=True) or {}
     days = payload.get('days', 45) if isinstance(payload, dict) else 45
     try:
-        data = _normalize_data(read_data())
+        data = _read_data_with_investment_ledger()
         result = sync_investment_calendar(data.get('investment') or {}, days=days)
         data['investment'] = _normalize_data({'investment': result['investment']})['investment']
         write_data(data)
@@ -1666,7 +1614,7 @@ def investment_x_sync_route():
         return jsonify({'ok': False, 'configured': False, 'missing': ['X_BEARER_TOKEN'], 'message': 'X API bearer token is not configured'}), 400
     payload = request.get_json(silent=True) or {}
     try:
-        data = _normalize_data(read_data())
+        data = _read_data_with_investment_ledger()
         inv = data['investment']
         signals = inv.get('signals') if isinstance(inv.get('signals'), dict) else _empty_investment()['signals']
         watchlist = payload.get('watchlist') if isinstance(payload.get('watchlist'), list) else signals.get('watchlist', [])
