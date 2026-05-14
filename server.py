@@ -2966,7 +2966,14 @@ def _call_openai_for_compare(payload):
     if not resp.ok:
         return {'ok': False, 'provider': 'openai', 'status': resp.status_code, 'error': resp.text[:300]}
     data = resp.json()
-    return {'ok': True, 'provider': 'openai', 'model': clean['model'], 'text': _extract_openai_text(data)}
+    choice = (data.get('choices') or [{}])[0]
+    return {
+        'ok': True,
+        'provider': 'openai',
+        'model': clean['model'],
+        'text': _extract_openai_text(data),
+        'finishReason': choice.get('finish_reason'),
+    }
 
 @app.route('/api/investment/ai-compare', methods=['POST'])
 @require_auth
@@ -3085,6 +3092,7 @@ def analyze():
                     'provider': 'openai',
                     'model': openai_result.get('model'),
                     'fallbackFrom': 'anthropic',
+                    'finishReason': openai_result.get('finishReason'),
                     'requestId': request_id,
                 }), 200
             log.warning('POST /api/analyze [%s] OpenAI fallback failed: %s',

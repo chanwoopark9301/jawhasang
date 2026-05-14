@@ -310,39 +310,22 @@ async function continueContextChat(text) {
   });
 
   try {
-    const res = await fetch('/api/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Client-Request-Id': clientRequestId },
-      body: JSON.stringify({
-        clientRequestId,
-        model: chatPlan.model, max_tokens: chatPlan.maxTokens,
-        system: [{ type: 'text', text: sysPrompt, cache_control: { type: 'ephemeral' } }],
-        messages,
-      }),
+    const completion = await fetchContextChatCompletion({
+      clientRequestId,
+      chatPlan,
+      sysPrompt,
+      messages,
     });
-    if (!res.ok) {
-      let detail = '';
-      let friendly = '';
-      try {
-        detail = (await res.text()).slice(0, 1200);
-        friendly = friendlyAiHttpError(res.status, detail);
-      } catch (_) {
-        detail = '';
-      }
-      const error = new Error(friendly || `AI HTTP ${res.status}${detail ? ` ${detail.slice(0, 240)}` : ''}`);
-      error.aiCreditIssue = isAiCreditIssue([detail, friendly].join(' '));
-      throw error;
-    }
-    const data = await res.json();
-    const reply = data.content?.map(c => c.text || '').join('').trim();
+    const reply = completion.reply;
     if (reply) {
-      if (data.fallbackFrom === 'anthropic' && data.provider === 'openai') {
+      if (completion.fallbackFrom === 'anthropic' && completion.provider === 'openai') {
         showAiCreditWarningModal({ fallback: 'openai' });
       }
       logger.info('Context chat AI request success', {
         requestId: clientRequestId,
         view: state.view,
         replyChars: reply.length,
+        continuationCount: completion.continuationCount,
       });
       appendMessage('ai', reply);
       saveSummaryReplyAsRecord(reply);
@@ -374,6 +357,93 @@ async function continueContextChat(text) {
   } finally {
     finishContextChatTurn();
   }
+}
+
+async function fetchContextChatCompletion({ clientRequestId, chatPlan, sysPrompt, messages }) {
+  const basePayload = {
+    clientRequestId,
+    model: chatPlan.model,
+    max_tokens: chatPlan.maxTokens,
+    system: [{ type: 'text', text: sysPrompt, cache_control: { type: 'ephemeral' } }],
+  };
+  const first = await fetchContextChatAnalyze({
+    ...basePayload,
+    messages,
+  }, clientRequestId);
+  const segments = [];
+  let provider = first.provider;
+  let fallbackFrom = first.fallbackFrom;
+  let data = first;
+  let reply = extractContextChatReply(data);
+  if (reply) segments.push(reply);
+
+  const maxContinuations = shouldContinueContextChatResponse(data) ? 2 : 0;
+  for (let idx = 0; idx < maxContinuations && shouldContinueContextChatResponse(data); idx += 1) {
+    const continuationRequestId = `${clientRequestId}-cont${idx + 1}`;
+    logger.info('Context chat AI continuation requested', {
+      requestId: continuationRequestId,
+      previousChars: segments.join('\n\n').length,
+      stopReason: data.stop_reason || data.stopReason,
+    });
+    const continuationMessages = [
+      ...messages,
+      { role: 'assistant', content: segments.join('\n\n') },
+      {
+        role: 'user',
+        content: '위 답변이 길이 제한 때문에 중간에 끊겼습니다. 앞 내용을 반복하지 말고, 끊긴 지점 바로 다음부터 자연스럽게 이어서 마무리해 주세요.',
+      },
+    ];
+    data = await fetchContextChatAnalyze({
+      ...basePayload,
+      clientRequestId: continuationRequestId,
+      messages: continuationMessages,
+      max_tokens: Math.max(chatPlan.maxTokens, 900),
+    }, continuationRequestId);
+    provider = data.provider || provider;
+    fallbackFrom = data.fallbackFrom || fallbackFrom;
+    reply = extractContextChatReply(data);
+    if (!reply) break;
+    segments.push(reply);
+  }
+
+  return {
+    reply: segments.join('\n\n'),
+    provider,
+    fallbackFrom,
+    continuationCount: Math.max(0, segments.length - 1),
+    stopReason: data.stop_reason || data.stopReason || '',
+  };
+}
+
+async function fetchContextChatAnalyze(payload, requestId) {
+  const res = await fetch('/api/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Client-Request-Id': requestId },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    let detail = '';
+    let friendly = '';
+    try {
+      detail = (await res.text()).slice(0, 1200);
+      friendly = friendlyAiHttpError(res.status, detail);
+    } catch (_) {
+      detail = '';
+    }
+    const error = new Error(friendly || `AI HTTP ${res.status}${detail ? ` ${detail.slice(0, 240)}` : ''}`);
+    error.aiCreditIssue = isAiCreditIssue([detail, friendly].join(' '));
+    throw error;
+  }
+  return res.json();
+}
+
+function extractContextChatReply(data) {
+  return (data?.content || []).map(c => c.text || '').join('').trim();
+}
+
+function shouldContinueContextChatResponse(data) {
+  const reason = String(data?.stop_reason || data?.stopReason || data?.finish_reason || data?.finishReason || '').toLowerCase();
+  return reason === 'max_tokens' || reason === 'length';
 }
 
 async function resolveInvestmentChatContexts(text) {
