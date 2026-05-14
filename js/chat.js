@@ -262,13 +262,13 @@ async function continueContextChat(text) {
     }
   }
 
-  if (isInvestment && await maybeHandleInvestmentChatTradeGate(text)) {
+  if (isInvestment && shouldRunInvestmentChatTradeGate(text) && await maybeHandleInvestmentChatTradeGate(text)) {
     hideTypingIndicator();
     finishContextChatTurn();
     return;
   }
 
-  if (isInvestment) {
+  if (isInvestment && shouldSyncInvestmentLedgerBeforeChat(text)) {
     await syncInvestmentLedgerForChatPrompt();
   }
 
@@ -456,11 +456,11 @@ async function resolveInvestmentChatContexts(text) {
   const startedAt = performance.now();
   const isBriefing = isInvestmentBriefingIntent(text);
   const jobs = [
-    ['reasoning', fetchInvestmentReasoningContext],
+    shouldFetchInvestmentReasoningContext(text) ? ['reasoning', fetchInvestmentReasoningContext] : null,
     ['news', fetchInvestmentNewsContext],
     ['market', fetchInvestmentMarketContext],
     ['fx', fetchInvestmentFxContext],
-  ].filter(([, fn]) => typeof fn === 'function');
+  ].filter(job => job && typeof job[1] === 'function');
 
   const results = await Promise.allSettled(jobs.map(([key, fn]) =>
     Promise.resolve()
@@ -578,6 +578,45 @@ async function maybeHandleInvestmentChatTradeGate(text) {
     logger.warn('investment chat trade gate failed; continuing to AI', error);
     return false;
   }
+}
+
+function investmentTextHasTradeLikeIntent(text) {
+  const ask = String(text || '');
+  return /(?:\uB9E4\uC218|\uB9E4\uB3C4|\uB9E4\uB9E4|\uAC70\uB798|\uCD94\uAC00\uB9E4\uC218|\uBB3C\uD0C0\uAE30|\uC9C4\uC785|\uCCAD\uC0B0|\uC775\uC808|\uC190\uC808|\uD314\uC558|\uD314\uC544|\uC218\uC775\s*\uC2E4\uD604|buy|sell|trade|add\s+position|trim|exit)/i.test(ask);
+}
+
+function investmentTextHasPortfolioIntent(text) {
+  const ask = String(text || '');
+  return /(?:\uD3EC\uD2B8\uD3F4\uB9AC\uC624|\uC6D0\uC7A5|\uACC4\uC88C|\uBCF4\uC720|\uC218\uB7C9|\uD3C9\uB2E8|\uD604\uAE08|\uC608\uC218\uAE08|portfolio|ledger|account|holding|position|cash|shares?|avg(?:erage)?\s*price)/i.test(ask);
+}
+
+function investmentTextHasRuleIntent(text) {
+  const ask = String(text || '');
+  return /(?:\uC6D0\uCE59|\uADDC\uCE59|\uAE08\uC9C0|\uC190\uC808\s*\uC870\uAC74|\uCD94\uACA9\s*\uB9E4\uC218|\uD589\uB3D9\s*\uAE30\uC900|rule|principle|stop\s*condition|do\s*not|checklist)/i.test(ask);
+}
+
+function investmentTextHasResearchIntent(text) {
+  const ask = String(text || '');
+  return /(?:\uC804\uB9DD|\uBD84\uC11D|\uC2DC\uB098\uB9AC\uC624|\uADFC\uAC70|\uC99D\uAC70|\uCEE8\uC13C\uC11C\uC2A4|\uC560\uB110\uB9AC\uC2A4\uD2B8|\uC2E4\uC801|\uC774\uBCA4\uD2B8|\uB9AC\uC2A4\uD06C|outlook|analysis|scenario|evidence|consensus|analyst|earnings|risk)/i.test(ask);
+}
+
+function shouldRunInvestmentChatTradeGate(text) {
+  return investmentTextHasTradeLikeIntent(text);
+}
+
+function shouldFetchInvestmentReasoningContext(text) {
+  return isInvestmentBriefingIntent(text)
+    || isInvestmentDeepAnalysisIntent(text)
+    || investmentTextHasTradeLikeIntent(text)
+    || investmentTextHasPortfolioIntent(text)
+    || investmentTextHasRuleIntent(text)
+    || investmentTextHasResearchIntent(text);
+}
+
+function shouldSyncInvestmentLedgerBeforeChat(text) {
+  return shouldFetchInvestmentReasoningContext(text)
+    || shouldFetchInvestmentMarketContext(text)
+    || shouldFetchInvestmentFxContext(text);
 }
 
 function planContextChatRequest({ isInvestment, text }) {
@@ -1385,7 +1424,7 @@ let _investmentLedgerPromptSyncAt = 0;
 async function syncInvestmentLedgerForChatPrompt() {
   if (typeof apiFetchInvestmentLedgerSnapshot !== 'function') return false;
   const now = Date.now();
-  if (now - _investmentLedgerPromptSyncAt < 2000) return false;
+  if (now - _investmentLedgerPromptSyncAt < 15000) return false;
   _investmentLedgerPromptSyncAt = now;
   try {
     const data = await apiFetchInvestmentLedgerSnapshot();
