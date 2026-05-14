@@ -8,7 +8,7 @@
    - /api/*, /login, /logout: Network Only (서버 필수)
    ============================================= */
 
-const CACHE_NAME = 'jip-v166'; // Speed up normal investment chat
+const CACHE_NAME = 'jip-v167'; // Add hypothesis-first investment chat
 
 const STATIC_ASSETS = [
   '/style.css',

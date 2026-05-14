@@ -23,6 +23,19 @@ The briefing should behave like an investment control desk:
 - Added position-level core assumptions and verification checklists.
 - Added briefing LLM instructions for assumption-first analysis and no unsupported analyst/consensus numbers.
 - Added chat prompt rules that force the same quality contract in the final answer.
+- Added a hypothesis-first answer shape for ordinary investment chat, so the AI first restates the user's thesis and then separates the right-world, wrong-world, evidence, and today's forbidden behavior.
+
+## Investment Chat Answer Shape
+
+When the user asks whether an investment idea makes sense, what the next market leader could be, whether to buy/hold/sell, or how to think about an existing thesis, the answer must use this shape:
+
+1. Restate the user's investment hypothesis in one sentence.
+2. Explain the world where the hypothesis is right.
+3. Explain the world where the hypothesis is wrong.
+4. Name the evidence to check now.
+5. End with the do-not-do action today.
+
+This is meant to prevent generic checklist answers. The AI should sound like a thinking partner, but the ledger, market data, and desk engines remain the authority for account facts and behavior controls.
 
 ## Example Contract
 
